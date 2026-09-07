@@ -130,7 +130,7 @@
   function l3Body(d, unlocked) {
     if (!unlocked) { return placeholder(); }
     var u = App.ui;
-    var rows = d.anchors.map(function (a) { return App.ui.anchorRowHtml(a); }).join("");
+    var rows = d.anchors.map(function (a,i) { return App.ui.anchorRowHtml(a,i); }).join("");
     var veto = App.fn.vetoed(d)
       ? '<div class="card veto" style="margin-bottom:11px"><div class="veto-title">' + u.icon("alert", 16) + " RED FLAG · VETO</div>" +
         "<ul>" + d.redflags.map(function (r) { return "<li>" + u.esc(r) + "</li>"; }).join("") + "</ul>" +
@@ -202,7 +202,7 @@
     }
     return '<div class="anchor-state">' +
       '<span class="tag tag-warning">pending anchor (go to P1)</span>' +
-      '<button type="button" class="btn btn-sm btn-ghost" id="go-p1">' + u.icon("anchor", 12) + " Open P1 · Truth Ingest</button></div>" +
+      '<button type="button" class="btn btn-sm btn-ghost" id="go-p1">' + u.icon("anchor", 12) + " Open Evidence</button></div>" +
       howBlock(["L5 completes only after P1 anchors the four source digests into a Merkle root. The root is then shown here and in the P3 report."]);
   }
 
@@ -227,24 +227,6 @@
         return ["done", "done"];
       }
 
-      var ctaHtml = "";
-      if (s === 4 && !st.running) {
-        var cciVal = App.fn.cci(d);
-        var pdVal = App.fn.pd(cciVal);
-        ctaHtml =
-          '<div class="card audit-cta">' +
-          '<div class="cta-icon">' + ui.icon("shield", 18) + "</div>" +
-          '<div class="cta-main"><div class="cta-title">' +
-          (veto ? "VETO verdict reached" : "Analysis complete") + "</div>" +
-          '<div class="cta-sub">CCI ' + cciVal + " · PD " + pdVal.toFixed(1) +
-          "%" + (veto ? " · red flags hold the line at zero" : " · report generated from this run") +
-          "</div></div>" +
-          '<span class="spacer"></span>' +
-          '<button type="button" id="audit-report-btn" class="btn btn-primary">' +
-          ui.icon("layers", 14) + " Open Risk Report</button>" +
-          "</div>";
-      }
-
       // Wizard rendering: only unlocked layers occupy the page. L0 is
       // always visible; L1-L4 appear once auditStage reaches them; L5
       // appears after scoring (stage >= 4). The top step strip keeps
@@ -267,36 +249,20 @@
       if (s >= 4) {
         parts.push(blockCard("L4", "Score", "CCI · PD · credit · value divergence",
           l4Body(d, s >= 4, veto), statusFor("L4")[0], statusFor("L4")[1], false));
-        parts.push(blockCard("L5", "Anchor", "on-chain fingerprint from P1", l5Body(st),
+        parts.push(blockCard("L5", "Anchor", "local demo fingerprint from Evidence", l5Body(st),
           statusFor("L5")[0], statusFor("L5")[1], false));
       }
       var bodyHtml = parts.join("");
 
-      var subjects = SUBJECT_ORDER;
-      var seg = subjects.map(function (sub) {
-        var label = SUBJECTS[sub].label;
-        return '<button type="button" class="seg-btn' + (st.subject === sub ? " on" : "") + '" data-subject="' + sub + '">' +
-          '<span class="sdot dot-' + (SUBJECTS[sub].segDot || "g") + '" style="display:inline-block;margin-right:6px;vertical-align:-1px"></span>' +
-          ui.esc(label) + '<span class="seg-addr num">' +
-          ui.esc(App.fn.shortAddr(SUBJECTS[sub].address)) + "</span></button>";
-      }).join("");
-
-      host.innerHTML =
-        '<div class="view-wrap">' +
-        '<div class="page-head"><div>' +
-        '<div class="crumbs"><a href="#/landing">Landing</a><span>/</span><span class="cur">Risk · P2</span></div>' +
-        '<div class="page-title">' + ui.icon("pulse", 22) + " P2 · AI Risk Assessment</div>" +
-        '<div class="page-sub">Pipeline: collect → normalize → filter → check → score.</div></div></div>' +
-        '<div class="card" style="margin-bottom:14px"><div class="audit-bar">' +
-        '<div class="subject-seg"><span class="subj-label">SUBJECT</span><div class="seg">' + seg + "</div></div>" +
-        '<div class="spacer"></div>' +
-        '<button type="button" id="run-audit" class="btn btn-primary">' + ui.icon("pulse", 14) + " Run AI Assessment</button>" +
-        '<button type="button" id="reset-audit" class="btn btn-ghost">' + ui.icon("x", 13) + " Reset</button>" +
-        "</div>" +
-        '<div class="steps">' + stepHtml(st) + "</div></div>" +
-        bodyHtml +
-        ctaHtml +
-        "</div>";
+      var done = s === 4 && !st.running;
+      host.innerHTML = '<div class="v-page v-assessment">' + ui.pageHead('02 / ASSESSMENT', 'Understand the risk behind the activity.', 'A deterministic rule assessment, with a separate AI perspective.') +
+        (!st.anchored ? '<div class="v-notice">' + ui.icon('info',18) + '<p>Create a local proof to trace these results back to the source records. <a href="#/ingest">Review Evidence →</a></p></div>' : '') +
+        '<section class="v-panel v-run-panel"><div class="v-section-head"><div><p class="v-eyebrow">' + ui.esc(d.label) + '</p><h2>' + (done ? 'Assessment complete' : st.running ? 'Following the evidence…' : 'Ready to assess this case') + '</h2></div>' + ui.tag(done ? 'Complete' : st.running ? 'Running' : 'Not started',done?'green':'neutral') + '</div>' +
+        '<p>Normalize usage, filter synthetic activity and cross-check five risk dimensions.</p><div class="v-action-row"><button type="button" id="run-audit" class="btn ' + (done?'':'btn-primary') + '" ' + (st.running?'disabled':'') + '>' + ui.icon('pulse',17) + (st.running?' Assessing…':done?'Run Again':' Run Assessment') + '</button><button type="button" id="reset-audit" class="btn btn-ghost">Reset</button>' +
+        (done ? '<a class="btn btn-primary" href="#/report">Continue to Report & Monitor →</a>' : '') + '</div><div class="steps" aria-label="Rule engine stages">' + stepHtml(st) + '</div><p class="v-caption" role="status">' + (st.running?'Processing stage L'+s+' of the rule engine.':done?'Rule-based result ready. AI results below are independently generated.':'No assessment has been run in this session.') + '</p></section>' +
+        (done ? ui.flags(d) + '<div class="v-comparison">' + ui.ruleSummary(d) + '<div id="v-assessment-ai"></div></div><div class="v-notice">' + ui.icon('info',18) + '<p><b>Two assessments, separate conclusions.</b> Rules use fixed demo inputs and calibration. AI evaluates a saved facts snapshot with its own scoring. AI recommendations do not change the rule-based limit.</p></div><section class="v-panel"><div class="v-section-head"><h2>Five dimensions of credit risk</h2><span class="v-muted">Rule-based evidence</span></div>' + l3Body(d,true) + '</section>' : '') +
+        '<details class="v-details" id="v-assessment-details"><summary>Assessment details <span>L0–L5 · inputs, calculations & proof</span></summary><div class="v-details-body">' + bodyHtml + '</div></details></div>';
+      if (done && App.aiPanel) App.aiPanel(host.querySelector('#v-assessment-ai'), 'report');
 
       var ringSlot = host.querySelector("#ring-slot");
       var lineSlot = host.querySelector("#line-slot");

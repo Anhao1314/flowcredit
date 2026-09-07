@@ -1,131 +1,70 @@
-/* ============================================================
-   view-ai.js — offline AI verdict display (external LLM ledger).
-   Read-only: reads window.AI_LEDGER, renders cards; computes
-   nothing; frozen formulas/state untouched. ES5, no fetch.
-   ============================================================ */
+/* AI presentation: saved results and per-subject live-session provenance. */
 (function () {
-  "use strict";
-
-  var LABELS = { healthy: "Healthy Merchant", watch: "Watchlist Merchant", sybil: "Sybil Address" };
-  var ANCHOR_NAMES = {
-    efficiency: "Efficiency",
-    repayment: "Repayment",
-    customer_concentration: "Customer",
-    cost_stability: "Cost",
-    time_sybil: "Time / Sybil"
-  };
-  var STATE_TXT = { g: "PASS", y: "WARN", r: "FAIL" };
-
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
+  var App = window.App,
+    u = App.ui;
+  App.liveResults = {};
+  function html() {
+    var key = App.state.subject,
+      ledger = window.AI_LEDGER,
+      r = ledger && ledger.runs && ledger.runs[key];
+    if (!r)
+      return '<section class="v-panel ai-card ai-card-report"><h2>AI assessment</h2><p class="v-muted">No saved AI result is available for this case. The rule assessment remains available.</p></section>';
+    var live = App.liveResults[key],
+      tone = r.verdict === "reject" ? "red" : r.verdict === "watch" ? "amber" : "green";
+    return (
+      '<section class="v-panel ai-card ai-card-report" data-subject="' +
+      key +
+      '"><div class="v-section-head"><h2>AI assessment</h2>' +
+      u.tag(r.verdict.toUpperCase(), tone) +
+      '</div><p class="ai-meta">' +
+      (live ? "Live result · this session" : "Saved AI assessment") +
+      " · " +
+      u.esc(ledger.meta.model) +
+      '</p><p class="v-caption">' +
+      u.esc(live || ledger.meta.builtAtUtc) +
+      '</p><div class="v-metrics">' +
+      u.metric("Credit score", r.cci, "CCI / 1,000") +
+      u.metric("Default probability", r.pdPct + "%", "AI estimate") +
+      u.metric("Credit grade", r.grade, "AI rating") +
+      u.metric("Suggested limit", u.fmtMoney(r.creditSuggestedUsd), "Independent recommendation") +
+      '</div><details class="v-details ai-details" id="v-ai-evidence"><summary>AI evidence & explanation</summary><div class="v-details-body"><div class="v-table-wrap"><table class="ai-table"><thead><tr><th scope="col">Dimension</th><th scope="col">Score</th><th scope="col">Evidence</th></tr></thead><tbody>' +
+      (r.anchors || [])
+        .map(function (a) {
+          return (
+            '<tr><th scope="row">' +
+            u.esc(a.name.replace(/_/g, " ")) +
+            '</th><td class="num">' +
+            u.esc(a.score) +
+            "</td><td>" +
+            u.esc(a.note) +
+            '<small class="v-evidence-ref">' +
+            u.esc((a.evidence || []).join(" · ")) +
+            "</small></td></tr>"
+          );
+        })
+        .join("") +
+      "</tbody></table></div>" +
+      ((r.redflags || []).length
+        ? "<h3>AI flags</h3><ul>" +
+          r.redflags
+            .map(function (x) {
+              return "<li>" + u.esc(typeof x === "string" ? x : x.note || x.name) + "</li>";
+            })
+            .join("") +
+          "</ul>"
+        : "") +
+      '<h3>Assessment explanation</h3><p class="ai-trace">' +
+      u.esc(r.trace || "No explanation saved.") +
+      '</p><p class="v-caption v-hash">Facts snapshot ' +
+      u.esc(r.factsSha256 || "unavailable") +
+      '</p><p class="v-caption">Evidence references belong to this model run. They are not the categories in the signal dictionary.</p></div></details><p class="ai-note">AI results do not update the rule-based score or credit limit.</p></section>'
+    );
   }
-  function money(n) {
-    n = Number(n) || 0;
-    return "$" + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  }
-  function fmtPct(n) {
-    n = Number(n);
-    return (n % 1 === 0 ? String(n) : n.toFixed(1)) + "%";
-  }
-
-  function badgeCls(v) { return v === "approve" ? "ai-ok" : v === "reject" ? "ai-rej" : "ai-warn"; }
-  function stateCls(st) { return st === "g" ? "ai-ok" : st === "r" ? "ai-rej" : "ai-warn"; }
-  function flagText(f) {
-    if (f == null) return "";
-    if (typeof f === "string") return f;
-    return f.note || f.name || String(f);
-  }
-  function subjLabel(k) {
-    if (window.SUBJECTS && SUBJECTS[k] && SUBJECTS[k].label) return SUBJECTS[k].label;
-    return LABELS[k] || k;
-  }
-  function meta() {
-    var m = AI_LEDGER.meta || {};
-    return esc(String(m.model || "deepseek-chat")) +
-      (m.builtAtUtc ? " · built " + esc(m.builtAtUtc) : "");
-  }
-  function footMeta() {
-    var h = null;
-    try { var cur = App.state && App.state.subject; if (AI_LEDGER.runs[cur] && AI_LEDGER.runs[cur].factsSha256) h = AI_LEDGER.runs[cur].factsSha256; } catch (e) {}
-    if (!h) { var first = Object.keys(AI_LEDGER.runs || {})[0]; if (first) h = AI_LEDGER.runs[first].factsSha256; }
-    return h ? "facts snapshot " + esc(String(h).slice(0, 8)) : "";
-  }
-  function runOf(k) { return (AI_LEDGER.runs || {})[k]; }
-
-  function rowHtml(k, current) {
-    var r = runOf(k);
-    if (!r) return "";
-    return '<div class="ai-row' + (k === current ? " on" : "") + '">' +
-      '<span class="ai-row-l">' + esc(subjLabel(k)) + "</span>" +
-      '<span class="ai-badge ' + badgeCls(r.verdict) + '">' + esc(String(r.verdict).toUpperCase()) + "</span>" +
-      '<span class="ai-m">CCI <b>' + esc(r.cci) + "</b></span>" +
-      '<span class="ai-m">PD <b>' + esc(fmtPct(r.pdPct)) + "</b></span>" +
-      '<span class="ai-m">Credit <b>' + esc(money(r.creditSuggestedUsd)) + "</b></span></div>";
-  }
-
-  function workspaceHtml() {
-    var keys = [];
-    if (AI_LEDGER.runs) keys = Object.keys(AI_LEDGER.runs).filter(function (k) { return runOf(k); });
-    if (!keys.length) return "";
-    var current = (App.state && App.state.subject) || "";
-    var body = keys.map(function (k) { return rowHtml(k, current); }).join("");
-    return '<section class="ai-card">' +
-      '<div class="ai-head"><span class="ai-title">AI VERDICT · LIVE LLM</span><span class="ai-meta">' + meta() + "</span></div>" +
-      '<div class="ai-rows">' + body + "</div>" +
-      '<p class="ai-note">Offline batch verdicts are external LLM data; simulated CCI/PD baselines are computed independently.</p>' +
-      "</section>";
-  }
-
-  function anchorRowHtml(a, i) {
-    var w = (window.ANCHOR_W && ANCHOR_W[i] != null) ? Math.round(ANCHOR_W[i] * 100) + "%" : "";
-    return "<tr><td>" + esc(ANCHOR_NAMES[a.name] || a.name || "") + "</td><td>" +
-      '<span class="ai-st ' + stateCls(a.state) + '">' + esc(STATE_TXT[a.state] || a.state || "") + "</span>" +
-      "<td><b>" + esc(a.score) + "</b></td><td>" + (w ? esc(w) : "") + "</td><td>" +
-      esc(a.note || "") + "</td></tr>";
-  }
-
-  function reportHtml() {
-    if (!App.state || !App.state.subject) return "";
-    var k = App.state.subject;
-    var r = runOf(k);
-    if (!r) return "";
-    var flags = (r.redflags || []).map(function (f) {
-      return "<li>" + esc(flagText(f)) + "</li>";
-    }).join("");
-    var rows = (r.anchors || []).map(anchorRowHtml).join("");
-    var evid = (r.anchors || []).map(function (a) {
-      var e = (a.evidence || []).filter(Boolean).join(" ");
-      return e ? '<span class="ai-evid">' + esc(a.name) + " [" + esc(e) + "]</span>" : "";
-    }).filter(Boolean).join(" · ");
-    var hs = footMeta();
-    return '<section class="ai-card ai-card-report">' +
-      '<div class="ai-head"><span class="ai-title">AI VERDICT · LIVE LLM</span><span class="ai-meta">' + meta() + "</span></div>" +
-      '<div class="ai-summary">' +
-      '<span class="ai-badge ' + badgeCls(r.verdict) + '">' + esc(String(r.verdict).toUpperCase()) + "</span>" +
-      '<span class="ai-m">CCI <b>' + esc(r.cci) + "</b></span>" +
-      '<span class="ai-m">PD <b>' + esc(fmtPct(r.pdPct)) + "</b></span>" +
-      '<span class="ai-m">Grade <b>' + esc(r.grade) + "</b></span>" +
-      '<span class="ai-m">Credit <b>' + esc(money(r.creditSuggestedUsd)) + "</b></span></div>" +
-      "<div>" +
-      '<p class="ai-sub">FIVE ANCHORS</p>' +
-      '<table class="ai-table"><tbody>' + rows + "</tbody></table>" +
-      '<p class="ai-sub">EVIDENCE</p><p class="ai-evid-line">' + evid + "</p>" +
-      (flags ? '<p class="ai-sub">HARD RED FLAGS</p><ul class="ai-flags">' + flags + "</ul>" : "") +
-      '<details class="ai-details"><summary>REASONING TRACE</summary><p class="ai-trace">' + esc(r.trace || "") + "</p></details>" +
-      "</div>" +
-      '<p class="ai-note">External deepseek-chat verdict' + (hs ? " · " + hs : "") + ". AI caliber: hard red flags score zero; the simulated engine keeps band floors. Mock baselines above are computed independently.</p>" +
-      "</section>";
-  }
-
   App.aiPanel = function (host, ctx) {
-    if (!host || !window.AI_LEDGER || !AI_LEDGER.runs) return;
-    var html = ctx === "report" ? reportHtml() : workspaceHtml();
-    if (!html) return;
+    if (!host) return;
     var el = document.createElement("div");
-    el.className = "ai-panel" + (ctx === "report" ? " ai-panel-report" : "");
-    el.innerHTML = html;
+    el.className = "ai-panel ai-panel-report";
+    el.innerHTML = html();
     host.appendChild(el);
   };
 })();

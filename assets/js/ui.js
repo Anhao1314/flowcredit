@@ -81,7 +81,12 @@
   }
 
   /* ---------- modal ---------- */
+  var modalRelease = null, modalKey = null;
   function closeModal() {
+    if (!DOC) return;
+    if (modalKey) DOC.removeEventListener("keydown",modalKey);
+    if (modalRelease) modalRelease();
+    modalRelease=null; modalKey=null;
     var root = DOC.getElementById("layers");
     var mask = root.querySelector(".modal-mask");
     if (mask && mask.parentNode) { mask.parentNode.removeChild(mask); }
@@ -91,11 +96,15 @@
     closeModal();
     var mask = DOC.createElement("div");
     mask.className = "modal-mask";
+    mask.setAttribute("role","dialog"); mask.setAttribute("aria-modal","true"); mask.setAttribute("aria-label","Local proof verification");
     var inner = DOC.createElement("div");
     inner.className = "modal-card";
     inner.innerHTML = html;
     mask.appendChild(inner);
     DOC.getElementById("layers").appendChild(mask);
+    modalRelease=App.ui.focusDialog(mask,DOC.activeElement);
+    modalKey=function(e){if(e.key === "Escape")closeModal();};
+    DOC.addEventListener("keydown",modalKey);
     mask.addEventListener("click", function (e) { if (e.target === mask) { closeModal(); } });
   }
   // cleanup hooks: any clearTimers() call also clears transient UI
@@ -133,14 +142,14 @@
     return '<span class="bar-track">' + bandHtml + '<span class="bar-fill ' + cls + '" style="width:' + width + '%"></span></span>';
   }
   var STATE_CLS = { g: "g", y: "y", r: "r" };
-  function anchorRowHtml(a) {
+  function anchorRowHtml(a, index) {
     var name = esc(a[0]), sub = esc(a[1]), rawText = esc(a[2]);
     var score = a[3], band = a[4], st = a[5];
     return '<div class="bar-row">' +
-      '<div class="bar-name">' + name + '<span class="formula">' + sub + "</span></div>" +
+      '<div class="bar-name">' + name + '<span class="formula">' + (typeof index === 'number' ? Math.round(ANCHOR_W[index]*100) + '% weight · ' : '') + sub + "</span></div>" +
       trackHtml(score, STATE_CLS[st] || "n", band) +
       '<div class="bar-val"><span class="raw">' + rawText + '</span><span class="sub">score ' + score + "</span></div>" +
-      '<span class="sdot dot-' + st + '" title="state ' + st + '"></span></div>';
+      '<span class="bar-state v-' + ({g:'green',y:'amber',r:'red'}[st]) + '">' + ({g:'Pass',y:'Warning',r:'Flag'}[st]) + '</span></div>';
   }
   function factorRowHtml(label, score) {
     var cls = score >= 75 ? "g" : (score >= 40 ? "y" : "r");
@@ -232,5 +241,150 @@
     ring: ring, trackHtml: trackHtml, anchorRowHtml: anchorRowHtml,
     factorRowHtml: factorRowHtml, lineChart: lineChart, logTimeline: logTimeline,
     fmtInt: fmtInt, fmtMoney: fmtMoney, fmtPct1: fmtPct1
+  };
+})();
+/* Presentation primitives shared by the six demo views. */
+(function () {
+  var u = window.App.ui;
+  u.caseInfo = {
+    healthy: {
+      tag: "Stable operations",
+      icon: "shield",
+      tone: "green",
+      desc: "A compute merchant with consistent usage, diversified customers and strong repayments.",
+      question: "What makes a business creditworthy?"
+    },
+    watch: {
+      tag: "Emerging risk",
+      icon: "pulse",
+      tone: "amber",
+      desc: "A growing merchant with softening repayments, concentrated customers and incomplete evidence.",
+      question: "When should a lender stay cautious?"
+    },
+    sybil: {
+      tag: "Conflicting evidence",
+      icon: "alert",
+      tone: "red",
+      desc: "An address with inflated activity, related-party concentration and synthetic transaction patterns.",
+      question: "Can high volume hide real risk?"
+    }
+  };
+  u.tag = function (text, tone) {
+    return '<span class="v-tag v-' + (tone || "neutral") + '">' + u.esc(text) + "</span>";
+  };
+  u.pageHead = function (step, title, description) {
+    return (
+      '<header class="v-page-head"><div><p class="v-eyebrow">' +
+      u.esc(step) +
+      "</p><h1>" +
+      u.esc(title) +
+      "</h1><p>" +
+      u.esc(description) +
+      "</p></div></header>"
+    );
+  };
+  u.metric = function (label, value, note) {
+    return (
+      '<div class="v-metric"><span>' +
+      u.esc(label) +
+      '</span><strong class="num">' +
+      u.esc(value) +
+      "</strong><small>" +
+      u.esc(note || "") +
+      "</small></div>"
+    );
+  };
+  u.ruleSummary = function (d) {
+    var f = App.fn,
+      verdict = f.vetoed(d)
+        ? "Rejected · hard flags"
+        : d.verdictKind === "watch"
+          ? "Watchlist · capped credit"
+          : "Approved · demo assessment";
+    return (
+      '<section class="v-panel v-rule-summary"><div class="v-section-head"><h2>Rule-based assessment</h2>' +
+      u.tag(verdict, f.vetoed(d) ? "red" : d.verdictKind === "watch" ? "amber" : "green") +
+      '</div><div class="v-metrics">' +
+      u.metric("Credit score", f.cci(d), "CCI / 1,000") +
+      u.metric("Default probability", f.pd(f.cci(d)).toFixed(1) + "%", "PD · demo calibration") +
+      u.metric("Credit grade", f.gradeOf(d), "Rule-based rating") +
+      u.metric("Suggested limit", u.fmtMoney(f.creditLine(d)), "test USDC · no funds issued") +
+      "</div></section>"
+    );
+  };
+  u.flags = function (d) {
+    if (!d.redflags.length)
+      return (
+        '<div class="v-notice">' +
+        u.icon("info", 18) +
+        "<p>" +
+        (d.verdictKind === "watch"
+          ? "No hard veto. Partial evidence and customer concentration warrant a capped limit and closer review."
+          : "No hard flags in this illustrative case. Verify the underlying evidence before relying on any assessment.") +
+        "</p></div>"
+      );
+    return (
+      '<section class="v-flags"><h2>' +
+      u.icon("alert", 19) +
+      " Hard flags override the score</h2><ul>" +
+      d.redflags
+        .map(function (r) {
+          return "<li>" + u.esc(r) + "</li>";
+        })
+        .join("") +
+      "</ul></section>"
+    );
+  };
+  u.pending = function (title, text, href, label) {
+    return (
+      '<section class="v-panel v-empty">' +
+      u.icon("layers", 32) +
+      "<h2>" +
+      u.esc(title) +
+      "</h2><p>" +
+      u.esc(text) +
+      '</p><a class="btn btn-primary" href="' +
+      href +
+      '">' +
+      u.esc(label) +
+      " →</a></section>"
+    );
+  };
+  u.focusDialog = function (root, returnTo) {
+    var shell = document.querySelector(".shell");
+    var previousInert = shell ? shell.inert : false;
+    if (shell) shell.inert = true;
+    function trap(e) {
+      if (e.key !== "Tab") return;
+      var nodes = Array.prototype.filter.call(
+        root.querySelectorAll('a[href],button,input,select,textarea,[tabindex="0"]'),
+        function (n) {
+          return !n.disabled && n.getClientRects().length;
+        }
+      );
+      if (!nodes.length) {
+        e.preventDefault();
+        root.focus();
+        return;
+      }
+      var first = nodes[0],
+        last = nodes[nodes.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    root.addEventListener("keydown", trap);
+    root.setAttribute("tabindex", "-1");
+    var initial = root.querySelector("button");
+    (initial || root).focus();
+    return function () {
+      root.removeEventListener("keydown", trap);
+      if (shell) shell.inert = previousInert;
+      if (returnTo && returnTo.isConnected) returnTo.focus();
+    };
   };
 })();

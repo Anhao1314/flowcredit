@@ -88,15 +88,13 @@
     }).then(function (p) {
       if (!p.ok || !p.data || !p.data.verdict) throw new Error(p.data && p.data.error || "bad response");
       var L = window.AI_LEDGER;
-      if (!L.meta.batchBuiltAtUtc) L.meta.batchBuiltAtUtc = L.meta.builtAtUtc;
-      L.meta.live = true;
-      L.meta.builtAtUtc = p.data.builtAtUtc;
+      App.liveResults[subject] = p.data.builtAtUtc || "Live result · this session";
       L.runs[subject] = p.data;
       refreshPanel();
       setBusy("live re-run ok · " + p.data.builtAtUtc, false);
       setTimeout(function () { if (st) { st.textContent = ""; } }, 4000);
     }).catch(function (e) {
-      setBusy("live call failed — showing last batch", false);
+      setBusy("AI call failed — keeping the previous result. Try again.", false);
       setTimeout(function () { if (st) { st.textContent = ""; } }, 3000);
     });
   }
@@ -105,6 +103,12 @@
   function enhanceReport(host, panel) {
     var card = panel.querySelector(".ai-card-report");
     if (!card) return;
+    var rerun = document.createElement('div');
+    rerun.className = 'v-live-rerun';
+    rerun.innerHTML = '<button type="button" class="btn ai-live-btn">Re-run AI</button><span class="ai-live-status" role="status"></span>';
+    card.appendChild(rerun);
+    var subjectKey = App.state.subject;
+    rerun.querySelector('button').addEventListener('click', function(e){liveRun(subjectKey,e.currentTarget,rerun,host);});
     var box = document.createElement("section");
     box.className = "ask-ai";
     box.innerHTML =
@@ -115,10 +119,10 @@
       '<button type="button" class="ask-chip" data-q="Why does the AI verdict differ from the rule-engine baseline?">AI vs rules gap?</button>' +
       "</div>" +
       '<div class="ask-row">' +
-      '<input type="text" id="ask-ai-input" maxlength="500" placeholder="Ask about this verdict (facts F1–F12)…">' +
+      '<input type="text" id="ask-ai-input" aria-label="Question about this AI assessment" name="question" autocomplete="off" maxlength="500" placeholder="Ask about this verdict (facts F1–F12)…">' +
       '<button type="button" class="btn btn-sm" id="ask-ai-send">Ask</button>' +
       "</div>" +
-      '<div class="ask-log" id="ask-ai-log"></div>';
+      '<div class="ask-log" id="ask-ai-log" role="log" aria-live="polite"></div>';
     panel.appendChild(box);
 
     var input = box.querySelector("#ask-ai-input");
@@ -211,6 +215,7 @@
   function boot() {
     if (!window.App || !App.aiPanel) { setTimeout(boot, 80); return; }
     if (READY) return;
+    if (window.location.protocol === "file:") return;
     READY = true;
     window.__FC_ORIG_PANEL = App.aiPanel;
     App.aiPanel = function (host, ctx) {

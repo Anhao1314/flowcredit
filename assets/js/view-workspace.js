@@ -1,172 +1,124 @@
-/* ============================================================
-   view-workspace.js — product workspace (#/workspace).
-   DeepSeek-style desk: one current task, two subject ledgers,
-   one activity feed. Everything derives from App.state +
-   SUBJECTS + App.fn; empty states are safe.
-   ============================================================ */
+/* Guided case selection. Results are shown only after this session runs. */
 (function () {
-  var App = window.App = window.App || {};
-  var ui = null;
-
-  function esc(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-  function icon(n, s) { return (App.ui && App.ui.icon) ? App.ui.icon(n, s || 14) : ""; }
-  function fmtInt(n) {
-    try { return Number(n).toLocaleString("en-US"); }
-    catch (e) { return String(n); }
-  }
-
-  function currentTask(st) {
-    var d = SUBJECTS[st.subject] || SUBJECTS.healthy;
-    var veto = App.fn.vetoed(d);
-    var anchored = !!st.anchored;
-    var auditDone = st.auditStage === 4 && !st.running;
-    if (!anchored) {
-      return { title: "Anchor the four sources", sub: "P1 · build the Merkle fingerprint",
-        cta: "Anchor now", hash: "#/ingest" };
-    }
-    if (!auditDone) {
-      return { title: "Run the AI assessment", sub: "P2 · five anchors → CCI",
-        cta: "Run assessment", hash: "#/audit" };
-    }
-    if (veto) {
-      return { title: "Veto verdict — credit at $0", sub: "review the proof or switch ledger",
-        cta: "View verdict", hash: "#/report" };
-    }
-    return { title: "Open the risk report", sub: "P3 · verify on-chain & respond",
-      cta: "Open report", hash: "#/report" };
-  }
-
-  function statusChips(st) {
-    var d = SUBJECTS[st.subject] || SUBJECTS.healthy;
-    var veto = App.fn.vetoed(d);
-    var chips = [];
-    chips.push(st.anchored
-      ? '<span class="chip chip-green">' + icon("check", 10) + " anchored</span>"
-      : '<span class="chip">pending · anchor</span>');
-    chips.push((st.auditStage === 4 && !st.running)
-      ? '<span class="chip chip-teal">assessment done</span>'
-      : '<span class="chip">assessment pending</span>');
-    chips.push(veto
-      ? '<span class="chip chip-red">VETO · ' + esc(App.fn.gradeOf(d)) + "</span>"
-      : '<span class="chip chip-green">grade ' + esc(App.fn.gradeOf(d)) + "</span>");
-    return chips.join("");
-  }
-
-  function ledgerHtml(key) {
-    var d = SUBJECTS[key];
-    if (!d) { return ""; }
-    var veto = App.fn.vetoed(d);
-    var cci = App.fn.cci(d);
-    var pd = App.fn.pd(cci);
-    var on = App.state.subject === key ? " on" : "";
-    var pill = veto
-      ? '<span class="ws-pill ws-pill-rej">REJECTED</span>'
-      : '<span class="ws-pill ws-pill-ok">APPROVED</span>';
-    var credit = veto
-      ? '<span class="ws-credit ws-credit-rej">$0 · VETO</span>'
-      : '<span class="ws-credit ws-credit-ok">' + fmtInt(App.fn.creditLine(d)) + " test USDC</span>";
-    return '<button type="button" class="ws-ledger' + on + '" data-subject="' + key + '" data-go="#/audit">' +
-      '<span class="ws-lg-top"><span class="ws-lg-name">' + esc(d.label) + "</span>" + pill + "</span>" +
-      '<span class="ws-lg-metrics num">CCI ' + cci + " · PD " + pd.toFixed(1) + "% · " +
-      esc(App.fn.gradeOf(d)) + "</span>" +
-      "<span>" + credit + "</span>" +
-      '<span class="ws-lg-open" aria-hidden="true">→</span></button>';
-  }
-
-  function activityRows(st) {
-    var rows = [];
-    if (st.auditStage === 4 && !st.running) {
-      var d = SUBJECTS[st.subject];
-      rows.push({
-        kind: "Assessment complete",
-        detail: "CCI " + App.fn.cci(d) + " (" + App.fn.gradeOf(d) + ") · PD " +
-          App.fn.pd(App.fn.cci(d)).toFixed(1) + "%",
-        ic: "pulse"
-      });
-    }
-    var logs = st.chainLogs || [];
-    for (var i = 0; i < logs.length && i < 4; i++) {
-      rows.push({
-        kind: "Anchored",
-        detail: esc(logs[i].hash) + " · " + esc(logs[i].time),
-        ic: "anchor"
-      });
-    }
-    return rows;
-  }
-
+  var App = window.App;
   function render(host) {
-    if (!ui) { ui = App.ui; }
-    try {
-      var st = App.state;
-      var d = SUBJECTS[st.subject] || SUBJECTS.healthy;
-      var task = currentTask(st);
-      var ledgers = ledgerHtml("healthy") + ledgerHtml("sybil");
-      var acts = activityRows(st);
-      var actHtml = acts.length
-        ? '<div class="ws-acts">' + acts.map(function (a) {
-          return '<div class="ws-act">' +
-            '<span class="ws-act-ic">' + icon(a.ic, 13) + "</span>" +
-            '<span class="ws-act-body"><b>' + esc(a.kind) + "</b>" +
-            '<span class="num">' + a.detail + "</span></span></div>";
-        }).join("") + "</div>"
-        : '<p class="ws-empty">No activity yet — anchor data in P1 to start.</p>';
-
-      host.innerHTML =
-        '<div class="view-wrap" id="ws-root">' +
-        '<div class="page-head"><div>' +
-        '<div class="crumbs"><a href="#/landing">Landing</a><span>/</span><span class="cur">Workspace</span></div>' +
-        '<div class="page-title">' + icon("layers", 22) + " Workspace</div>" +
-        '<div class="page-sub">Your desk — pick a task, then a ledger.</div></div></div>' +
-        '<div class="card ws-task">' +
-        '<div class="ws-task-copy"><div class="ws-task-t">' + esc(task.title) + "</div>" +
-        '<div class="ws-task-s">' + esc(task.sub) + "</div></div>" +
-        '<span class="spacer"></span>' +
-        '<button type="button" class="btn btn-primary" data-go="' + task.hash + '">' +
-        icon("pulse", 14) + " " + esc(task.cta) + "</button>" +
-        '<div class="ws-chips">' + statusChips(st) + "</div>" +
-        "</div>" +
-        '<section class="ws-sec"><div class="ws-sec-head">' +
-        '<span class="ws-sec-t">Ledgers</span>' +
-        '<span class="ws-sec-s">subject · ' + esc(d.label) + "</span></div>" +
-        '<div class="ws-ledgers">' + ledgers + "</div></section>" +
-        '<section class="ws-sec"><div class="ws-sec-head">' +
-        '<span class="ws-sec-t">Activity</span>' +
-        '<span class="ws-sec-s">anchors &amp; verdicts · latest first</span></div>' +
-        actHtml + "</section>" +
-        "</div>";
-      if (App.aiPanel) { App.aiPanel(host, "workspace"); }
-      bind(host);
-    } catch (e) {
-      host.innerHTML = '<div class="view-wrap"><div class="card"><div class="card-title">Workspace — render fallback</div>' +
-        '<p class="note-italic" style="margin-top:8px">State is intact; use the top tabs to continue.</p></div></div>';
-      if (App.ui && App.ui.toast) { App.ui.toast("View error — see console", "err"); }
-    }
-  }
-
-  function bind(host) {
-    var root = host.querySelector("#ws-root");
-    if (!root || !root.addEventListener) { return; }
-    root.addEventListener("click", function (ev) {
-      var n = ev.target;
-      while (n && n !== root) {
-        if (n.nodeType === 1 && n.getAttribute) {
-          var sub = n.getAttribute("data-subject");
-          var go = n.getAttribute("data-go");
-          if (sub && App.act && App.act.switchSubject) {
-            try { App.act.switchSubject(sub); } catch (e) { /* continue to nav */ }
-          }
-          if (go && App.nav) { App.nav(go); return; }
-        }
-        n = n.parentNode;
-      }
+    var u = App.ui,
+      s = App.state,
+      d = SUBJECTS[s.subject],
+      done = s.auditStage === 4 && !s.running;
+    var next = !s.anchored
+      ? ["#/ingest", "Review evidence", "Start with the four source records."]
+      : !done
+        ? ["#/audit", "Run assessment", "Your local proof is ready. Evaluate the business."]
+        : [
+            "#/report",
+            "Explore the report",
+            "Your assessment is complete. Review the decision and response."
+          ];
+    host.innerHTML =
+      '<div class="v-page">' +
+      u.pageHead(
+        "DEMO WORKSPACE",
+        "Follow the evidence.",
+        "Choose a case and explore how operating activity becomes a credit decision."
+      ) +
+      '<section class="v-panel v-current"><div><p class="v-eyebrow">YOUR CURRENT CASE</p><h2>' +
+      u.esc(d.label) +
+      "</h2><p>" +
+      next[2] +
+      '</p></div><a class="btn btn-primary" href="' +
+      next[0] +
+      '">' +
+      (s.anchored || done ? "Continue Demo" : "Start Case") +
+      " →</a></section>" +
+      '<section><div class="v-section-head"><h2>Choose your scenario</h2><span class="v-muted">01 / 03 cases selected</span></div><p class="v-caption v-case-warning">Switching cases resets the current demo run.</p><div class="v-three-grid">' +
+      SUBJECT_ORDER.map(function (k, i) {
+        var c = u.caseInfo[k];
+        return (
+          '<button class="v-case-card ' +
+          (k === s.subject ? "selected" : "") +
+          '" type="button" data-case="' +
+          k +
+          '" aria-pressed="' +
+          (k === s.subject) +
+          '" ' +
+          (s.running ? "disabled" : "") +
+          '><span class="v-case-top"><span class="v-case-index">0' +
+          (i + 1) +
+          '</span><span class="v-' +
+          c.tone +
+          '">' +
+          u.icon(c.icon, 24) +
+          "</span></span>" +
+          u.tag(c.tag, c.tone) +
+          "<strong>" +
+          u.esc(SUBJECTS[k].label) +
+          '</strong><span class="v-case-desc">' +
+          u.esc(c.desc) +
+          '</span><span class="v-case-question">' +
+          u.esc(c.question) +
+          '</span><span class="v-case-select">' +
+          (k === s.subject ? u.icon("check", 16) + " Selected" : "Select case →") +
+          "</span></button>"
+        );
+      }).join("") +
+      "</div></section>" +
+      '<section class="v-two-grid"><div class="v-panel"><div class="v-section-head"><h2>This session</h2>' +
+      u.tag(done ? "Assessment complete" : "In progress", done ? "green" : "neutral") +
+      '</div><ol class="v-session-steps">' +
+      [
+        ["Evidence", s.anchored ? "Local proof created" : "Ready to review", s.anchored],
+        ["Assessment", done ? "Rule assessment complete" : s.running ? "Running…" : "Not started", done],
+        ["Report & Monitor", done ? "Ready to explore" : "Available after assessment", s.stress === "recover"]
+      ]
+        .map(function (x, i) {
+          return (
+            '<li><span class="v-step-number">' +
+            (x[2] ? u.icon("check", 16) : "0" + (i + 1)) +
+            "</span><div><b>" +
+            x[0] +
+            "</b><small>" +
+            x[1] +
+            "</small></div></li>"
+          );
+        })
+        .join("") +
+      '</ol></div><div class="v-panel"><div class="v-section-head"><h2>Recent activity</h2>' +
+      u.icon("clock", 18) +
+      "</div>" +
+      (!s.chainLogs.length && !done
+        ? '<div class="v-activity-empty"><p>Your case starts here.</p><span>Review the evidence and create a local proof to add your first activity.</span></div>'
+        : '<ul class="v-activity">' +
+          (done
+            ? "<li>" +
+              u.icon("check", 17) +
+              "<div><b>Assessment complete</b><small>" +
+              u.esc(d.label) +
+              " · CCI " +
+              App.fn.cci(d) +
+              "</small></div></li>"
+            : "") +
+          s.chainLogs
+            .slice(0, 4)
+            .map(function (l) {
+              return (
+                "<li>" +
+                u.icon("layers", 17) +
+                "<div><b>Local proof created</b><small>" +
+                u.esc(l.hash) +
+                " · " +
+                u.esc(l.time) +
+                "</small></div></li>"
+              );
+            })
+            .join("") +
+          "</ul>") +
+      "</div></section></div>";
+    Array.prototype.forEach.call(host.querySelectorAll("[data-case]"), function (b) {
+      b.addEventListener("click", function () {
+        App.act.switchSubject(b.getAttribute("data-case"));
+      });
     });
   }
-
-  App.views = App.views || {};
   App.views.workspace = { render: render };
 })();

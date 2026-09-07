@@ -7,9 +7,9 @@
   var App = window.App = window.App || {};
   App.wallet = { connected: false, address: "0x7F3A…9C21", balance: "10,000 test USDC" };
   var TABS = [
-    { hash: "#/ingest", key: "ingest", label: "Ingest", sub: "P1", icon: "db" },
-    { hash: "#/audit", key: "audit", label: "Risk", sub: "P2", icon: "pulse" },
-    { hash: "#/report", key: "report", label: "Monitor", sub: "P3", icon: "shield" }
+    { hash: "#/ingest", key: "ingest", label: "Evidence", sub: "01", icon: "db" },
+    { hash: "#/audit", key: "audit", label: "Assessment", sub: "02", icon: "pulse" },
+    { hash: "#/report", key: "report", label: "Report & Monitor", sub: "03", icon: "shield" }
   ];
   var rootEl = null;
   var mainEl = null;
@@ -59,8 +59,8 @@
   }
   function auditToastFor(idx) {
     var s = App.state.auditStage;
-    if (s === -1) { return "Pipeline idle — press Run AI Assessment"; }
-    if (s < idx) { return "Stage L" + idx + " unlocks as the assessment runs — press Run AI Assessment"; }
+    if (s === -1) { return "Pipeline idle — press Run Assessment"; }
+    if (s < idx) { return "Stage L" + idx + " unlocks as the assessment runs — press Run Assessment"; }
     return "Assessment reached L" + Math.min(s, 4) + " — numbers are live below";
   }
   function navTo(hash, it) {
@@ -90,7 +90,7 @@
     var toast = target.toast || "";
     if (route === "audit" && typeof target.idx === "number") { toast = auditToastFor(target.idx); }
     else if (route === "report" && it.block === "proof") {
-      toast = App.state.anchor ? "Verify on-chain proof — root matches P1 anchor" : "Anchor data in P1 first";
+      toast = App.state.anchor ? "Inspect local demo proof — root matches P1 anchor" : "Anchor data in P1 first";
     }
     if (holder.classList) {
       holder.classList.add("hp-hint");
@@ -106,65 +106,20 @@
 
   function buildShell() {
     var u = App.ui;
-    var tabs = TABS.map(function (t) {
-      return '<a class="nav-tab" href="' + t.hash + '" data-route="' + t.key + '">' +
-        u.icon(t.icon, 13) + " " + t.label + (t.sub ? " <small>" + t.sub + "</small>" : "") + "</a>";
-    }).join("");
-    rootEl.innerHTML =
-      '<div class="shell">' +
-      '<header class="topbar"><div class="topbar-inner">' +
-      '<a class="brand" href="#/landing" aria-label="FlowCredit — back to home">' + u.icon("mark", 26) +
-      '<span class="badge-testnet">Testnet</span></a>' +
-      '<nav class="nav" aria-label="pages">' + tabs + "</nav>" +
-      '<div class="top-actions">' +
-      '<div class="seg" role="group" aria-label="network mode">' +
-      '<button type="button" class="seg-btn on" id="mode-mock">Mock</button>' +
-      '<button type="button" class="seg-btn is-off" id="mode-live">Live</button></div>' +
-      '<a class="launch-cta" href="#/ingest">Launch App →</a>' +
-      '<button type="button" class="btn btn-sm wallet-btn" id="wallet-btn">' + u.icon("wallet", 13) +
-      '<span id="wallet-label">Connect Wallet</span></button>' +
-      "</div></div></header>" +
-      '<div class="demo-flow" aria-label="Assessment workflow">' +
-        '<a class="df-step" data-stage="attest" href="#/ingest">ATTEST<i class="df-lamp" data-lamp="attest" aria-hidden="true"></i></a><i class="df-arrow" aria-hidden="true">&rarr;</i>' +
-        '<a class="df-step" data-stage="score" href="#/audit">DUAL-SCORE<i class="df-lamp" data-lamp="rules" aria-hidden="true"></i><i class="df-lamp" data-lamp="ai" aria-hidden="true"></i></a><i class="df-arrow" aria-hidden="true">&rarr;</i>' +
-        '<a class="df-step" data-stage="decide" href="#/workspace">DECIDE<i class="df-lamp" data-lamp="decide" aria-hidden="true"></i></a><i class="df-arrow" aria-hidden="true">&rarr;</i>' +
-        '<a class="df-step" data-stage="anchor" href="#/report">ANCHOR<i class="df-lamp" data-lamp="anchor" aria-hidden="true"></i></a><i class="df-arrow" aria-hidden="true">&rarr;</i>' +
-        '<a class="df-step" data-stage="monitor" href="#/account">MONITOR<i class="df-lamp" data-lamp="monitor" aria-hidden="true"></i></a></div>' +
+    rootEl.innerHTML = '<div class="shell"><a class="v-skip" href="#view-main">Skip to content</a>' +
+      '<header class="v-topbar"><div class="v-top-inner"><a class="v-brand" href="#/landing" aria-label="FlowCredit home">' + u.icon('layers', 26) + '<span>FlowCredit</span></a>' + u.tag('DEMO') +
+      '<nav class="v-top-links" aria-label="Main navigation"><a href="#/workspace" data-top="workspace">Workspace</a><a href="#/account" data-top="account">Demo Account</a></nav>' +
+      '<span class="v-service" id="v-ai-service">' + u.icon('cpu', 15) + '<span>Saved AI results</span></span></div></header>' +
+      '<div class="v-context"><div class="v-case-control"><label for="v-case-select">Current case</label><select id="v-case-select" aria-describedby="v-case-note">' +
+      SUBJECT_ORDER.map(function (k) { return '<option value="' + k + '">' + u.esc(SUBJECTS[k].label) + '</option>'; }).join('') + '</select><span id="v-case-note">Switching cases resets the current demo run.</span></div>' +
+      '<nav class="v-workflow" aria-label="Assessment workflow">' + TABS.map(function (t) { return '<a href="' + t.hash + '" data-route="' + t.key + '"><span class="v-step-number">' + t.sub + '</span><span>' + t.label + '<small data-progress="' + t.key + '"></small></span>' + u.icon('check', 16) + '</a>'; }).join('') + '</nav></div>' +
       '<main class="content" id="view-main" tabindex="-1"></main>' +
-      '<footer class="foot"><div class="line1">Workflow: Attest → Dual-Score → Decide → Anchor → Monitor · Landing is the front door</div>' +
-      '<div class="line2">Testnet demo · simulated data · not financial advice · risk analytics, not a statutory audit · demo calibration</div></footer>' +
-      "</div>";
-    mainEl = rootEl.querySelector("#view-main");
-
-    var mockBtn = rootEl.querySelector("#mode-mock");
-    if (mockBtn) {
-      mockBtn.addEventListener("click", function () {
-        App.ui.toast("Network fixed to Mock — testnet demo only");
-      });
-    }
-    var liveBtn = rootEl.querySelector("#mode-live");
-    if (liveBtn) {
-      liveBtn.addEventListener("click", function () {
-        App.ui.toast("Testnet demo only — Live is disabled", "warn");
-      });
-    }
-    var walletBtn = rootEl.querySelector("#wallet-btn");
-    if (walletBtn) {
-      walletBtn.addEventListener("click", function () { toggleWallet(); });
-    }
-    // If the simulated connect is interrupted (route switch / reset /
-    // stress start all run clearTimers), restore the idle wallet button.
-    App.fn.addClearHook(function () {
-      if (!walletConnecting) { return; }
-      walletConnecting = false;
-      var b2 = rootEl && rootEl.querySelector("#wallet-btn");
-      var l2 = rootEl && rootEl.querySelector("#wallet-label");
-      if (b2) { b2.disabled = false; b2.classList.remove("is-busy"); }
-      if (l2 && !walletConnected) { l2.textContent = "Connect Wallet"; }
-    });
-    highlightTabs();
-    highlightFlow();
-
+      '<footer class="foot"><a class="v-brand" href="#/landing">FlowCredit<span> / Risk intelligence</span></a><p>Interactive demo · Simulated data · No custody or lending</p><p>Risk analytics, not a statutory audit. Not financial advice. Demo calibration.</p></footer></div>';
+    mainEl = rootEl.querySelector('#view-main');
+    rootEl.querySelector('.v-skip').addEventListener('click', function (e) { e.preventDefault(); mainEl.focus(); });
+    rootEl.querySelector('#v-case-select').addEventListener('change', function () { App.act.switchSubject(this.value); });
+    window.addEventListener('fc:live', function () { var el = document.getElementById('v-ai-service'); if (el) el.innerHTML = u.icon('cpu', 15) + '<span>Live AI available</span>'; });
+    App.fn.addClearHook(function () { walletConnecting = false; });
   }
 
   function walletConnectedUi(btn, label, u) {
@@ -177,7 +132,8 @@
       label.innerHTML = '<span class="addr">' + App.wallet.address + " · " + App.wallet.balance + "</span>" +
         '<span class="net-badge">Sepolia · simulated</span>';
     }
-    if (u && u.toast) { u.toast("Wallet connected (mock) · " + App.wallet.address); }
+    if (u && u.toast) { u.toast("Demo wallet connected · " + App.wallet.address); }
+    renderCurrent();
   }
 
   function toggleWallet() {
@@ -200,39 +156,32 @@
         btn.classList.remove("on");
         label.textContent = "Connect Wallet";
       }
-      if (u && u.toast) { u.toast("Wallet disconnected"); }
+      if (u && u.toast) { u.toast("Demo wallet disconnected"); }
+      renderCurrent();
     }
   }
 
   function highlightFlow() {
-    var route = currentRoute();
-    var map = { ingest: "attest", audit: "score", workspace: "decide", report: "anchor", account: "monitor" };
-    var active = map[route] || "";
-    document.body.setAttribute("data-route", route || "");
-    var steps = rootEl.querySelectorAll(".df-step");
-    for (var i = 0; i < steps.length; i++) {
-      var on = steps[i].getAttribute("data-stage") === active;
-      steps[i].classList.toggle("on", on);
-      if (on) { steps[i].setAttribute("aria-current", "step"); } else { steps[i].removeAttribute("aria-current"); }
+    var route = currentRoute(), st = App.state;
+    document.body.setAttribute('data-route', route);
+    var context = rootEl.querySelector('.v-context');
+    context.hidden = route === 'landing' || route === 'workspace' || route === 'account';
+    var sel = rootEl.querySelector('#v-case-select');
+    sel.value = st.subject; sel.disabled = st.running;
+    var done = st.auditStage === 4 && !st.running;
+    var progress = {ingest: st.anchored ? 'Proof created' : 'Review sources', audit: done ? 'Complete' : st.running ? 'Running…' : 'Not started', report: done ? 'Ready to explore' : 'Assessment required'};
+    var links = rootEl.querySelectorAll('.v-workflow a');
+    for (var i=0; i<links.length; i++) {
+      var key = links[i].getAttribute('data-route');
+      links[i].classList.toggle('on', key === route);
+      links[i].classList.toggle('complete', key === 'ingest' ? st.anchored : key === 'audit' ? done : st.stress === 'recover');
+      if (key === route) links[i].setAttribute('aria-current','step'); else links[i].removeAttribute('aria-current');
+      links[i].querySelector('small').textContent = progress[key];
     }
-    var strip = rootEl.querySelector(".demo-flow");
-    if (strip) { strip.classList.toggle("is-off", route === "landing"); }
-    paintFlow();
+    var tops = rootEl.querySelectorAll('[data-top]');
+    for (var j=0;j<tops.length;j++) { if (tops[j].getAttribute('data-top') === route) tops[j].setAttribute('aria-current','page'); else tops[j].removeAttribute('aria-current'); }
   }
-  function paintFlow() {
-    if (!rootEl) { return; }
-    var st = App.state || {};
-    var snap = App.flow.snapshot(st.subject || "healthy");
-    var map2 = { attest: snap.attest, rules: snap.score.rules, ai: snap.score.ai, decide: snap.decide, anchor: snap.anchor, monitor: snap.monitor };
-    var lamps = rootEl.querySelectorAll(".demo-flow .df-lamp");
-    for (var i = 0; i < lamps.length; i++) {
-      var key = lamps[i].getAttribute("data-lamp");
-      var m = map2[key];
-      if (!m) { continue; }
-      lamps[i].className = "df-lamp lamp-" + m.s;
-      lamps[i].setAttribute("title", m.txt || "");
-    }
-  }
+  function paintFlow() { if (rootEl) highlightFlow(); }
   App.flow = {
     snapshot: function (subject) {
       function stg(s2, txt) { return { s: s2, txt: txt }; }
@@ -244,17 +193,16 @@
       var rulesRun = stageNum >= 0;
       var aiRun = !!(runs[subject] && runs[subject].verdict);
       var root = !!(st.anchor && st.anchor.root);
-      var walletOn = !!(App.wallet && App.wallet.connected);
       return {
-        attest: stg(anchored ? "g" : "0", anchored ? "anchored · 事实快照已锚定" : "pending · 运行 P1 锚定"),
+        attest: stg(anchored ? "g" : "0", anchored ? "local demo proof created" : "pending · create evidence proof"),
         score: {
-          rules: stg(rulesDone ? "g" : rulesRun ? "y" : "0", rulesDone ? "L0–L5 complete" : rulesRun ? "audit in progress" : "not started"),
+          rules: stg(rulesDone ? "g" : rulesRun ? "y" : "0", rulesDone ? "L0–L5 complete" : rulesRun ? "assessment in progress" : "not started"),
           ai: stg(aiRun ? "g" : "0", aiRun ? "LLM verdict present" : "no LLM run yet")
         },
         decide: stg(rulesDone && aiRun ? "g" : (rulesRun || aiRun) ? "y" : "0",
-          rulesDone && aiRun ? "decision issued · 双引擎齐备" : (rulesRun || aiRun) ? "waiting on one engine" : "not started"),
-        anchor: stg(root ? "g" : "0", root ? "Merkle root anchored" : "not anchored"),
-        monitor: stg(walletOn ? "g" : "0", walletOn ? "wallet connected" : "wallet not connected")
+          rulesDone && aiRun ? "rule and AI assessments available" : (rulesRun || aiRun) ? "waiting on one engine" : "not started"),
+        anchor: stg(root ? "g" : "0", root ? "local demo root created" : "not anchored"),
+        monitor: stg(st.stress === "recover" ? "g" : "0", st.stress === "recover" ? "scenario complete" : "scenario not complete")
       };
     },
     refresh: function () { paintFlow(); }
@@ -278,16 +226,19 @@
     shell.classList.toggle("is-landing", currentRoute() === "landing");
   }
 
+  var lastView = '', lastSubject = '';
   function renderCurrent() {
-    if (!mainEl || !booted) { return; }
-    var route = currentRoute();
+    if (!mainEl || !booted) return;
+    var route = currentRoute(), same = lastView === route && lastSubject === App.state.subject;
+    var focused = document.activeElement, focusedId = focused && focused.id;
+    var open = same ? Array.prototype.map.call(mainEl.querySelectorAll('details[open][id]'), function(n){return n.id;}) : [];
     syncShell();
-    var view = App.views[route] || App.views.ingest;
-    view.render(mainEl);
-    highlightTabs();
-    highlightFlow();
-
-    if (mainEl.scrollTop) { window.scrollTo(0, 0); }
+    (App.views[route] || App.views.ingest).render(mainEl);
+    open.forEach(function(id){var el=document.getElementById(id);if(el)el.open=true;});
+    highlightTabs(); highlightFlow();
+    if (same && focusedId) { var next=document.getElementById(focusedId);if(next && !next.disabled)next.focus({preventScroll:true}); }
+    if (lastView && !same) { window.scrollTo(0,0); mainEl.focus({preventScroll:true}); }
+    lastView=route;lastSubject=App.state.subject;
     revealOnce();
   }
 

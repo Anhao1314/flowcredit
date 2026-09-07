@@ -1,494 +1,116 @@
-/* ============================================================
-   view-landing.js — full-screen hero landing (rebuilt).
-   Hero narrative: "data can be faked, trust must be proven".
-   Elements: risk-beacon canvas, live ledger ticker (real
-   AI_LEDGER data), blurred P1/P2 intro, typewriter headline,
-   case pills, facts-fingerprint copy pill, honesty strip.
-   ES5, no external assets, no fetch, no emoji.
-   ============================================================ */
+/* Home: evidence-led product story, with no autoplay or external assets. */
 (function () {
-  "use strict";
-  var App = window.App = window.App || {};
-  var rafId = 0, ttTimer = null, pillTimer = null, canvasCtl = null, textDone = false;
-
-  function esc(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-  function reducedMotion() {
-    try {
-      return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    } catch (e) { return false; }
-  }
-  function el(tag, cls, html) {
-    var e = document.createElement(tag);
-    if (cls) { e.className = cls; }
-    if (html != null) { e.innerHTML = html; }
-    return e;
-  }
-  function currentRoute() {
-    var h = String(window.location.hash || "");
-    var m = h.match(/^#\/([a-z-]+)/);
-    return m ? m[1] : "landing";
-  }
-
-  /* ---------- copy pill ---------- */
-  function factsHash8() {
-    try {
-      if (window.AI_LEDGER && AI_LEDGER.runs) {
-        var keys = Object.keys(AI_LEDGER.runs);
-        for (var i = 0; i < keys.length; i++) {
-          var r = AI_LEDGER.runs[keys[i]];
-          if (r && r.factsSha256) { return String(r.factsSha256).slice(0, 8); }
-        }
-      }
-    } catch (e) { /* fallback constant below */ }
-    return "4dbcfda8";
-  }
-  function factsHashFull() {
-    try {
-      if (window.AI_LEDGER && AI_LEDGER.runs) {
-        var keys = Object.keys(AI_LEDGER.runs);
-        for (var i = 0; i < keys.length; i++) {
-          var r = AI_LEDGER.runs[keys[i]];
-          if (r && r.factsSha256) { return String(r.factsSha256); }
-        }
-      }
-    } catch (e) { /* fallback */ }
-    return "4dbcfda80d888cbafacts-snapshot";
-  }
-  function FINGERPRINT_LABEL() {
-    return "Facts fingerprint: " + factsHash8() + "\u2026";
-  }
-  function bindCopyPill(host) {
-    var btn = host.querySelector("#nld-fp");
-    if (!btn) { return; }
-    var label = btn.querySelector(".nld-fp-label");
-    btn.addEventListener("click", function () {
-      var done = false;
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(factsHashFull()).then(function () {
-            flashCopied();
-          }, function () { fallbackCopy(); flashCopied(); });
-        } else { fallbackCopy(); flashCopied(); }
-      } catch (e) { fallbackCopy(); flashCopied(); }
-      function fallbackCopy() {
-        try {
-          var ta = document.createElement("textarea");
-          ta.value = factsHashFull();
-          ta.style.position = "fixed";
-          ta.style.opacity = "0";
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand("copy");
-          document.body.removeChild(ta);
-        } catch (e2) { /* display-only state below */ }
-      }
-      function flashCopied() {
-        if (!label) { return; }
-        label.textContent = "copied \u2014 verifiable on re-run";
-        pillTimer = App.fn.timeout(function () {
-          if (label) { label.textContent = FINGERPRINT_LABEL(); }
-        }, 1600);
-      }
-    });
-  }
-
-  /* ---------- canvas: risk-beacon lattice ---------- */
-  function startBeacon(host) {
-    var cv = host.querySelector("#nld-beacon");
-    if (!cv || !cv.getContext) { return; }
-    var ctx = cv.getContext("2d");
-    var W = 0, H = 0, dpr = 1;
-    var mouse = { x: -9999, y: -9999, tx: -9999, ty: -9999 };
-    var nodes = [];
-    var i;
-    for (i = 0; i < 18; i++) {
-      var rx = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
-      var ry = Math.abs(Math.sin(i * 78.233) * 12543.8214) % 1;
-      var risk = i < 2 ? "high" : i < 6 ? "mid" : "low";
-      nodes.push({ x: rx, y: ry, r: 1.8 + (i % 3) * 0.6, risk: risk, ph: (i * 1.7) % 6.28 });
-    }
-    function size() {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = window.innerWidth; H = window.innerHeight;
-      cv.width = Math.floor(W * dpr);
-      cv.height = Math.floor(H * dpr);
-      cv.style.width = W + "px";
-      cv.style.height = H + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    function COLOR(risk, a) {
-      var base = risk === "high" ? "248,113,113" : risk === "mid" ? "245,158,11" : "52,211,153";
-      return "rgba(" + base + "," + a + ")";
-    }
-    function frame(t) {
-      if (canvasCtl && canvasCtl.dead) { return; }
-      var x, y, j;
-      for (x = 0; x < nodes.length; x++) {
-        nodes[x].x += 0.02 * Math.sin(t / 1800 + nodes[x].ph);
-        nodes[x].y += 0.02 * Math.cos(t / 2400 + nodes[x].ph);
-        if (nodes[x].x < 0.02) { nodes[x].x = 0.02; }
-        if (nodes[x].x > 0.98) { nodes[x].x = 0.98; }
-        if (nodes[x].y < 0.02) { nodes[x].y = 0.02; }
-        if (nodes[x].y > 0.98) { nodes[x].y = 0.98; }
-      }
-      ctx.clearRect(0, 0, W, H);
-      for (x = 0; x < nodes.length; x++) {
-        for (y = x + 1; y < nodes.length; y++) {
-          var dx = nodes[x].x - nodes[y].x, dy = nodes[x].y - nodes[y].y;
-          var d = Math.sqrt(dx * dx + dy * dy);
-          if (d > 0.21) { continue; }
-          var mRisk = (nodes[x].risk === "high" || nodes[y].risk === "high") ? 0.2 :
-            (nodes[x].risk === "mid" || nodes[y].risk === "mid") ? 0.14 : 0.1;
-          ctx.strokeStyle = "rgba(45,212,191," + (0.08 + 0.22 * (1 - d / 0.21) + mRisk * 0.3) + ")";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(nodes[x].x * W, nodes[x].y * H);
-          ctx.lineTo(nodes[y].x * W, nodes[y].y * H);
-          ctx.stroke();
-        }
-      }
-      for (x = 0; x < nodes.length; x++) {
-        var px = nodes[x].x * W, py = nodes[x].y * H;
-        var mdx = px - mouse.x, mdy = py - mouse.y;
-        var md = Math.sqrt(mdx * mdx + mdy * mdy);
-        if (md < 110 && md > 0.001) {
-          var pr = (1 - md / 110) * 2.2;
-          nodes[x].x += (mdx / md) * pr / W;
-          nodes[x].y += (mdy / md) * pr / H;
-        }
-        var pulse = 1 + 0.35 * Math.sin(t / 900 + nodes[x].ph) * (nodes[x].risk === "high" ? 1.6 : nodes[x].risk === "mid" ? 1.25 : 1);
-        ctx.beginPath();
-        ctx.arc(px, py, nodes[x].r * pulse, 0, 6.2832);
-        ctx.fillStyle = COLOR(nodes[x].risk, 0.78);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(45,212,191,.35)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      mouse.x += (mouse.tx - mouse.x) * 0.12;
-      mouse.y += (mouse.ty - mouse.y) * 0.12;
-      rafId = App.fn.raf(function () { frame(t + 16); });
-    }
-    function onMove(e) {
-      mouse.tx = e.clientX;
-      mouse.ty = e.clientY;
-    }
-    size();
-    if (reducedMotion()) {
-      ctx.clearRect(0, 0, W, H);
-      for (j = 0; j < nodes.length; j++) {
-        ctx.beginPath();
-        ctx.arc(nodes[j].x * W, nodes[j].y * H, nodes[j].r, 0, 6.2832);
-        ctx.fillStyle = COLOR(nodes[j].risk, 0.7);
-        ctx.fill();
-      }
-    } else {
-      rafId = App.fn.raf(function () { frame(Date.now()); });
-      window.addEventListener("mousemove", onMove, { passive: true });
-      canvasCtl = {
-        dead: false,
-        off: function () {
-          canvasCtl.dead = true;
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("resize", size);
-        }
-      };
-      window.addEventListener("resize", size);
-    }
-    return canvasCtl;
-  }
-
-  /* ---------- typewriter ---------- */
-  function startTypewriter(host) {
-    var target = host.querySelector("#nld-typing");
-    if (!target) { return; }
-    var text = target.getAttribute("data-text") || "";
-    var reduced = reducedMotion();
-    if (reduced) {
-      target.textContent = text;
-      textDone = true;
-      return;
-    }
-    var i = 0;
-    ttTimer = App.fn.timeout(function tick() {
-      i++;
-      target.textContent = text.slice(0, i);
-      if (i < text.length) {
-        ttTimer = App.fn.timeout(tick, 34);
-      } else {
-        textDone = true;
-        var cr = host.querySelector("#nld-cursor");
-        if (cr) { cr.style.display = "none"; }
-      }
-    }, 700);
-  }
-  /* ---------- ask the risk desk (live AI via FC_AI client) ---------- */
-  var askBusy = false;
-  var askListeners = [];
-  function routeSubject(q) {
-    q = String(q || "");
-    if (/sybil|reject|address/i.test(q)) return "sybil";
-    if (/watch|recover|decline/i.test(q)) return "watch";
-    return "healthy";
-  }
-  function askHtml() {
-    return '<div class="nld-ask" id="nld-ask" hidden>' +
-      '<div class="nld-ask-head">ASK THE RISK DESK · live deepseek-chat</div>' +
-      '<div class="nld-ask-chips">' +
-      '<button type="button" class="nld-ask-chip" data-subject="sybil">Why was the sybil address rejected?</button>' +
-      '<button type="button" class="nld-ask-chip" data-subject="healthy">How much credit should a healthy merchant get?</button>' +
-      '<button type="button" class="nld-ask-chip" data-subject="healthy">What does the Merkle fingerprint prove?</button>' +
-      "</div>" +
-      '<div class="nld-ask-row">' +
-      '<input type="text" id="nld-ask-input" maxlength="500" placeholder="ask: why was the sybil address rejected?" />' +
-      '<button type="button" id="nld-ask-send" aria-label="ask">' +
-      '<svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h9M8 3.5 12 7l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-      "</button></div>" +
-      '<div class="nld-ask-log" id="nld-ask-log"></div></div>';
-  }
-  function bindAsk(host) {
-    var box = host.querySelector("#nld-ask");
-    if (!box) { return; }
-    var input = host.querySelector("#nld-ask-input");
-    var send = host.querySelector("#nld-ask-send");
-    var log = host.querySelector("#nld-ask-log");
-    var chips = box.querySelectorAll(".nld-ask-chip");
-
-    function setBusy(b) {
-      askBusy = b;
-      if (input) { input.disabled = b; }
-      if (send) { send.disabled = b; send.classList.toggle("is-busy", b); }
-      for (var i = 0; i < chips.length; i++) { chips[i].disabled = b; }
-    }
-    function trimLog() {
-      while (log.children.length > 12) { log.removeChild(log.firstChild); }
-    }
-    function hhmmss() {
-      var d = new Date();
-      function p2(n) { return (n < 10 ? "0" : "") + n; }
-      return p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
-    }
-    function ask(q, subject) {
-      q = String(q == null ? "" : q).trim();
-      if (!q || askBusy) { return; }
-      if (!window.FC_AI || !FC_AI.ask) { return; }
-      subject = subject || routeSubject(q);
-      setBusy(true);
-      var qd = document.createElement("div");
-      qd.className = "nld-ask-q";
-      qd.textContent = q;
-      log.appendChild(qd);
-      trimLog();
-      var st = document.createElement("div");
-      st.className = "nld-ask-status";
-      st.textContent = "asking deepseek-chat…";
-      log.appendChild(st);
-      log.scrollTop = log.scrollHeight;
-      window.FC_AI.ask(subject, q).then(function (p) {
-        if (!p.ok || !p.data || !p.data.answer) { throw new Error(p.data && p.data.error || "bad response"); }
-        st.remove();
-        var card = document.createElement("div");
-        card.className = "nld-ask-a";
-        var meta = document.createElement("div");
-        meta.className = "nld-ask-meta";
-        meta.textContent = "answered · " + hhmmss() + " · deepseek-chat";
-        var body = document.createElement("p");
-        body.className = "nld-ask-body";
-        body.textContent = p.data.answer;
-        card.appendChild(meta);
-        card.appendChild(body);
-        var cites = p.data.citations || [];
-        if (cites.length) {
-          var c = document.createElement("div");
-          c.className = "nld-ask-cites";
-          var hs = [];
-          for (var i = 0; i < cites.length; i++) {
-            hs.push('<span class="nld-ask-cite">' + esc(cites[i]) + "</span>");
-          }
-          c.innerHTML = hs.join(" ");
-          card.appendChild(c);
-        }
-        var link = document.createElement("a");
-        link.className = "nld-ask-dl";
-        link.href = "#/audit";
-        link.textContent = "Open this case on the P2 desk →";
-        link.addEventListener("click", function (ev) {
-          if (ev && ev.preventDefault) { ev.preventDefault(); }
-          try { if (App.act && App.act.switchSubject) { App.act.switchSubject(subject); } } catch (e) { /* href fallback */ }
-          if (App.nav) { App.nav("#/audit"); }
-        });
-        card.appendChild(link);
-        log.appendChild(card);
-        log.scrollTop = log.scrollHeight;
-        trimLog();
-        setBusy(false);
-      }).catch(function () {
-        st.textContent = "ask failed — try again";
-        App.fn.timeout(function () { if (st.parentNode) { st.remove(); } }, 3000);
-        setBusy(false);
-      });
-    }
-    var chipFn = [];
-    for (var c2 = 0; c2 < chips.length; c2++) {
-      (function (chip) {
-        var fn = function () { ask(chip.textContent, chip.getAttribute("data-subject")); };
-        chip.addEventListener("click", fn);
-        chipFn.push(fn);
-      })(chips[c2]);
-    }
-    send.addEventListener("click", function () { ask(input.value, ""); });
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { ask(input.value, ""); }
-    });
-    box.hidden = !window.FC_AI;
-    var onLive = function () { box.hidden = false; };
-    var offLive = function () { box.hidden = true; if (askBusy) { setBusy(false); } };
-    window.addEventListener("fc:live", onLive);
-    window.addEventListener("fc:live-off", offLive);
-    askListeners.push([onLive, offLive]);
-  }
-
-  function bindCases(host) {
-    var els = host.querySelectorAll(".nld-case[data-subject]");
-    for (var i = 0; i < els.length; i++) {
-      (function (e) {
-        e.addEventListener("click", function (ev) {
-          var key = e.getAttribute("data-subject");
-          if (!App.act || !App.act.switchSubject || !App.nav) { return; }
-          if (ev && ev.preventDefault) { ev.preventDefault(); }
-          try { App.act.switchSubject(key); } catch (err) { /* still navigate */ }
-          App.nav("#/audit");
-        });
-      })(els[i]);
-    }
-  }
-  function bindBurger(host) {
-    var btn = host.querySelector("#nld-burger");
-    var menu = host.querySelector("#nld-menu");
-    if (!btn || !menu) { return; }
-    btn.addEventListener("click", function () {
-      var open = menu.classList.toggle("nld-open");
-      btn.classList.toggle("nld-x", open);
-      btn.setAttribute("aria-expanded", open ? "true" : "false");
-    });
-    var links = menu.querySelectorAll("a");
-    for (var i = 0; i < links.length; i++) {
-      links[i].addEventListener("click", function () {
-        menu.classList.remove("nld-open");
-        btn.classList.remove("nld-x");
-      });
-    }
-  }
-
-  /* ---------- shell html ---------- */
-  function badge(k) {
-    var runs = (window.AI_LEDGER && AI_LEDGER.runs) || {};
-    var r = runs[k];
-    var label = k === "healthy" ? "HEALTHY" : k === "watch" ? "WATCHLIST" : "SYBIL: REJECTED";
-    var cls = k === "healthy" ? "nld-b-green" : k === "watch" ? "nld-b-amber" : "nld-b-red";
-    return '<span class="nld-badge ' + cls + '">' + esc(label) +
-      (r && r.verdict ? " \u00b7 " + esc(String(r.verdict).toUpperCase()) : "") + "</span>";
-  }
-  function tickerHtml() {
-    var m = (window.AI_LEDGER && AI_LEDGER.meta) || {};
-    var model = m.model || "deepseek-chat";
-    var built = m.builtAtUtc || "batch pending \u2014 run ./verify.sh";
-    return '<div class="nld-ticker">' +
-      '<div class="nld-ticker-l1">' + esc(model) + "  \u00b7  batch " + esc(built) + "</div>" +
-      '<div class="nld-ticker-l2">' + badge("healthy") + badge("watch") + badge("sybil") + "</div></div>";
-  }
-  function navLink(label, hash) {
-    var on = currentRoute() === hash.replace("#/", "");
-    return '<a class="nld-navlink' + (on ? " on" : "") + '" href="' + esc(hash) + '">' + esc(label) + "</a>";
-  }
-  function navHtml() {
-    return '<nav class="nld-nav">' +
-      '<div class="nld-nav-in">' +
-      '<a class="nld-logo" href="#/landing" aria-label="FlowCredit \u2014 home">' +
-      '<svg class="nld-mark" viewBox="0 0 22 22" width="22" height="22" aria-hidden="true">' +
-      '<rect x="1" y="1" width="20" height="20" rx="5" fill="none" stroke="#2DD4BF" stroke-width="1.5"/>' +
-      '<text x="11" y="15" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="10" fill="#2DD4BF">FC</text></svg>' +
-      '<span class="nld-logo-t">FlowCredit</span>' +
-      '<span class="nld-testnet">TESTNET</span></a>' +
-      '<div class="nld-links">' +
-      navLink("Landing", "#/landing") +
-      navLink("Workspace", "#/workspace") +
-      navLink("Ingest", "#/ingest") +
-      navLink("Run AI Assessment", "#/audit") +
-      navLink("Report", "#/report") +
-      navLink("Account", "#/account") +
-      "</div>" +
-      '<a class="nld-cta" href="#/workspace">Launch App \u2192</a>' +
-      '<button type="button" class="nld-burger" id="nld-burger" aria-label="menu" aria-expanded="false">' +
-      "<span></span><span></span><span></span></button>" +
-      "</div>" +
-      '<div class="nld-menu" id="nld-menu">' +
-      navLink("Landing", "#/landing") + navLink("Workspace", "#/workspace") +
-      navLink("Ingest", "#/ingest") + navLink("Run AI Assessment", "#/audit") +
-      navLink("Report", "#/report") + navLink("Account", "#/account") +
-      '<a class="nld-cta" href="#/workspace">Launch App \u2192</a></div>' +
-      "</nav>";
-  }
-  function heroHtml() {
-    return '<div class="nld-root" id="nld-root">' +
-      '<canvas id="nld-beacon" aria-hidden="true"></canvas>' +
-      navHtml() +
-      '<section class="nld-hero"><div class="nld-hero-in">' +
-      tickerHtml() +
-      '<div class="nld-blur" aria-hidden="true">P1 ATTEST \u2014 12 FACTS, 4 SOURCES, ONE MERKLE FINGERPRINT<br>' +
-      "P2 SCORE \u2014 RULE ENGINE AND LLM, INDEPENDENT VERDICTS</div>" +
-      '<h1 class="nld-h1"><span id="nld-typing" data-text="Volume can be faked. Trust must be proven."></span>' +
-      '<span class="nld-cursor" id="nld-cursor" aria-hidden="true"></span></h1>' +
-      '<p class="nld-sub">AI-compute merchants pitch numbers. We pin them to evidence: compute, API, funds, and chain \u2014 then two independent engines score the truth.</p>' +
-      '<div class="nld-pills">' +
-      '<a class="nld-pill nld-case" data-subject="healthy" href="#/audit"><i class="nld-dot nld-d-green"></i>Case: Healthy merchant</a>' +
-      '<a class="nld-pill nld-case" data-subject="watch" href="#/audit"><i class="nld-dot nld-d-amber"></i>Case: Watchlist merchant</a>' +
-      '<a class="nld-pill nld-case" data-subject="sybil" href="#/audit"><i class="nld-dot nld-d-red"></i>Case: Sybil address</a>' +
-      '<button type="button" class="nld-pill nld-fp" id="nld-fp">' +
-      '<span class="nld-fp-label">' + FINGERPRINT_LABEL() + "</span>" +
-      '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">' +
-      '<rect x="2.5" y="2.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>' +
-      '<rect x="5.2" y="5.2" width="7" height="7" rx="1" fill="#0B1220" stroke="currentColor" stroke-width="1.2"/></svg></button>' +
-      "</div>" +
-      askHtml() +
-      '<div class="nld-honesty"><span>testnet demo</span><span>synthetic data + public-disclosure composites</span>' +
-      "<span>risk analytics, not a statutory audit</span><span>no custody, no lending</span></div>" +
-      "</div></section></div>";
-  }
-
+  var App = window.App;
   function render(host) {
-    if (!host) { return; }
-    host.innerHTML = heroHtml();
-    bindCases(host);
-    bindBurger(host);
-    bindCopyPill(host);
-    bindAsk(host);
-    var ctl = startBeacon(host);
-    if (!reducedMotion() && ctl) { canvasCtl = ctl; }
-    startTypewriter(host);
+    var u = App.ui;
+    var cases = SUBJECT_ORDER.map(function (k, i) {
+      var c = u.caseInfo[k];
+      return (
+        '<a class="v-preview-row" href="#/workspace"><span class="v-case-index">0' +
+        (i + 1) +
+        "</span><span><b>" +
+        u.esc(SUBJECTS[k].label) +
+        "</b><small>" +
+        u.esc(c.tag) +
+        '</small></span><span class="v-' +
+        c.tone +
+        '">' +
+        u.icon(c.icon, 20) +
+        "</span></a>"
+      );
+    }).join("");
+    host.innerHTML =
+      '<div class="v-home"><section class="v-hero"><div class="v-hero-copy"><p class="v-eyebrow"><span class="v-dot"></span> CREDIT INTELLIGENCE / AI ECONOMY</p><h1>Volume is a claim.<br><em>Trust is evidence.</em></h1><p class="v-hero-deck">Evidence-backed credit risk for AI businesses.</p><p class="v-hero-text">Connect compute, cash flow and on-chain activity. See how verifiable evidence informs a credit decision — and how that decision responds to risk.</p><div class="v-hero-actions"><a class="btn btn-primary" href="#/workspace">Start Demo <span aria-hidden="true">↗</span></a><a class="v-text-link" href="#v-how" id="v-how-link">Explore the workflow ↓</a></div><p class="v-caption">Interactive demo · Simulated data · No funds required</p></div>' +
+      '<div class="v-terminal"><div class="v-terminal-bar"><span>' +
+      u.icon("pulse", 16) +
+      " FLOWCREDIT / RISK DESK</span>" +
+      u.tag("CASE PREVIEW") +
+      '</div><div class="v-terminal-body"><div class="v-section-head"><div><p class="v-eyebrow">THE EVIDENCE LAYER</p><h2>Behind every number.</h2></div>' +
+      u.icon("layers", 28) +
+      '</div><p class="v-muted">Four sources. One traceable assessment.</p><div class="v-source-map">' +
+      [
+        ["cpu", "Compute"],
+        ["db", "API usage"],
+        ["cash", "Cash flow"],
+        ["link", "On-chain"]
+      ]
+        .map(function (x) {
+          return "<div>" + u.icon(x[0], 22) + "<span>" + x[1] + "</span></div>";
+        })
+        .join("") +
+      '</div><div class="v-signal-line"><span>Evidence</span><i></i><b>Cross-check</b><i></i><span>Decision</span></div><div class="v-preview-cases">' +
+      cases +
+      '</div><div class="v-terminal-note">' +
+      u.icon("info", 15) +
+      " Three scenarios. Explore the evidence behind each.</div></div></div></section>" +
+      '<section class="v-home-strip"><span>BUILT AROUND THE FULL CREDIT CYCLE</span><b>Verify the inputs</b><b>Understand the risk</b><b>Respond to change</b></section>' +
+      '<section class="v-home-section" id="v-how"><div class="v-section-intro"><p class="v-eyebrow">FROM EVIDENCE TO ACTION</p><h2>A clear path to a defensible decision.</h2><p>Walk through a case at your own pace. Every result has a source, and every step has a next action.</p></div><div class="v-three-grid">' +
+      [
+        [
+          "01",
+          "db",
+          "Build the evidence",
+          "Review four operating data sources and create a local proof of the selected case."
+        ],
+        [
+          "02",
+          "pulse",
+          "Assess the business",
+          "Run the rule engine. Compare its conclusion with an independently saved AI assessment."
+        ],
+        [
+          "03",
+          "shield",
+          "Explore the response",
+          "Read the risk report and see a credit facility respond to a simulated market shock."
+        ]
+      ]
+        .map(function (x) {
+          return (
+            '<article class="v-process-card"><div><span class="num">' +
+            x[0] +
+            "</span>" +
+            u.icon(x[1], 24) +
+            "</div><h3>" +
+            x[2] +
+            "</h3><p>" +
+            x[3] +
+            "</p></article>"
+          );
+        })
+        .join("") +
+      "</div></section>" +
+      '<section class="v-home-section v-case-section"><div class="v-section-intro"><p class="v-eyebrow">THREE SIDES OF CREDIT RISK</p><h2>Same framework. Different evidence.</h2></div><div class="v-three-grid">' +
+      SUBJECT_ORDER.map(function (k) {
+        var c = u.caseInfo[k];
+        return (
+          '<article class="v-case-teaser">' +
+          u.tag(c.tag, c.tone) +
+          "<h3>" +
+          u.esc(SUBJECTS[k].label) +
+          "</h3><p>" +
+          u.esc(c.desc) +
+          "</p><strong>" +
+          u.esc(c.question) +
+          "</strong></article>"
+        );
+      }).join("") +
+      "</div></section>" +
+      '<section class="v-home-section"><details class="v-details" id="v-method"><summary>Demo methodology & current capabilities <span>Read the details</span></summary><div class="v-details-body"><div class="v-two-grid"><div><h3>What runs here</h3><p>Deterministic rules, local Merkle proofs, illustrative cases and a preset stress scenario. AI assessments were generated externally and saved for this demo.</p></div><div><h3>What requires integration</h3><p>Real operating data, cryptographic attestations, lending execution and live model calls require additional services. This static site does not hold or issue funds.</p></div></div><p class="v-caption">' +
+      (window.AI_LEDGER
+        ? u.esc(AI_LEDGER.meta.model) + " · Batch " + u.esc(AI_LEDGER.meta.builtAtUtc)
+        : "Saved AI results unavailable") +
+      '</p><p class="v-caption">Illustrative composite cases based on public-disclosure structures. Risk analytics, not a statutory audit.</p></div></details></section>' +
+      '<section class="v-closing"><div><p class="v-eyebrow">SEE THE REASONING FOR YOURSELF</p><h2>Start with a case.<br>Follow the evidence.</h2></div><a class="btn btn-primary" href="#/workspace">Start Demo ↗</a></section></div>';
+    host.querySelector("#v-how-link").addEventListener("click", function (e) {
+      e.preventDefault();
+      host
+        .querySelector("#v-how")
+        .scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+        });
+    });
   }
-
-  /* ---------- cleanup (route switch / reset) ---------- */
-  function cleanup() {
-    if (raftId) { try { cancelAnimationFrame(raftId); } catch (e) { /* noop */ } raftId = 0; }
-    if (ttTimer) { try { clearTimeout(ttTimer); } catch (e) { /* noop */ } ttTimer = null; }
-    if (pillTimer) { try { clearTimeout(pillTimer); } catch (e) { /* noop */ } pillTimer = null; }
-    for (var li = 0; li < askListeners.length; li++) {
-      window.removeEventListener("fc:live", askListeners[li][0]);
-      window.removeEventListener("fc:live-off", askListeners[li][1]);
-    }
-    askListeners = [];
-    askBusy = false;
-    if (canvasCtl && canvasCtl.off) { canvasCtl.off(); }
-    canvasCtl = null;
-    textDone = false;
-  }
-  if (App.fn && App.fn.addClearHook) { App.fn.addClearHook(cleanup); }
-
   App.views = App.views || {};
   App.views.landing = { render: render };
 })();

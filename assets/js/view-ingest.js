@@ -73,10 +73,10 @@
     catch (e) { return true; }
   }
   function txStatusText(stage, st) {
-    if (stage === "signing") { return "Signing attestation · gas est. 0.00001 test ETH"; }
-    if (stage === "submitted") { return "Submitted · mempool (simulated)"; }
-    if (stage === "mined") { return "Block #" + (st.blockHeight + 2) + " mined"; }
-    if (stage === "confirmed") { return "3 confirmations · anchored ✓"; }
+    if (stage === "signing") { return "Preparing local source digests…"; }
+    if (stage === "submitted") { return "Building local proof…"; }
+    if (stage === "mined") { return "Simulating block #" + (st.blockHeight + 2); }
+    if (stage === "confirmed") { return "Local demo proof created"; }
     return "";
   }
   function txStatusCls(stage) {
@@ -120,7 +120,7 @@
       '<details class="arch"><summary>' + u.icon("layers", 13) +
       " Web3 reference architecture · mock → production</summary>" +
       '<div class="arch-body"><div class="arch-flow">' + flow + "</div>" +
-      '<pre class="arch-pre">' + ARCH_PRE + "</pre></div>" +
+      '<pre class="arch-pre" tabindex="0" aria-label="Proposed production interface">' + ARCH_PRE + "</pre></div>" +
       "</details></div>";
   }
   function proofPanelHtml(st) {
@@ -195,7 +195,7 @@
         '<p class="dict-quote">Raw token volume is only one signal: it can be faked. ' +
         "Credit needs legacy fundamentals, and every claim must survive cross-source consistency checks.</p>" +
         '<details class="dict-details"><summary>P0 required signals · ' + total + " (" + liveN +
-        " live in this demo · " + nextN + " next in MVP)</summary>" +
+        " included in this demo · " + nextN + " planned for MVP)</summary>" +
         '<div class="dict-groups">' + groups + "</div></details>" +
         '<div class="dict-foot">Display-only overview · not part of this batch\'s Merkle root · ' +
         "scoring weights frozen for the demo</div>" +
@@ -207,14 +207,14 @@
 
   function cardHtml(card, idx, signed, fp) {
     var u = App.ui;
-    var fields = card.fields.map(function (f) {
+    var fields = card.fields.slice(0,4).map(function (f) {
       return '<span class="kv"><span class="l">' + u.esc(f[0]) + '</span><span class="v num">' + u.esc(f[1]) + "</span></span>";
     }).join("");
     var sig = signed
-      ? '<div class="sig"><b>' + u.icon("check", 10) + "</b> fingerprint " + u.esc(fp || "signature recorded · testnet mock") + "</div>"
-      : '<div class="sig"><b></b>signature recorded · testnet mock</div>';
+      ? '<div class="sig"><b>' + u.icon("check", 10) + "</b> fingerprint " + u.esc(fp || "Illustrative source · local demo") + "</div>"
+      : '<div class="sig"><b></b>Illustrative source · local demo</div>';
     var tag = signed
-      ? u.icon("check", 10) + " signed · timestamped"
+      ? u.icon("check", 10) + " local digest created"
       : "raw record";
     var issue = card.issue || null;
     var issueHtml = issue
@@ -300,53 +300,18 @@
           treeSvgHtml(st.anchor) +
           '<div class="root-hash num">' + ui.esc(st.anchor.root) + "</div></div>"
         : '<div class="tree-box"><div class="note-italic">Tree appears after the first anchor — 4 source digests, data + timestamp + nonce.</div></div>';
-      var metaHtml = anchored
-        ? '<div class="anchor-state"><span class="chip chip-green">' + ui.icon("check", 10) + " anchored</span>" +
-          '<span class="mono" style="font-size:11px;color:var(--text2)">block ' + ui.fmtInt(st.anchor.block) +
-          " · " + ui.esc(st.anchor.time) + " · nonce " + st.anchor.nonce + "</span></div>"
-        : '<div class="anchor-state"><span class="chip chip-amber">not anchored yet</span></div>';
       var proofHtml = txOn ? proofPanelHtml(st) : "";
       var archHtml = archCardHtml();
-      var statusHtml = '<div id="tx-status" class="tx-status' + (txOn ? " tx-conf" : "") + '">' +
-        (txOn ? txStatusText("confirmed", st) : "") + "</div>";
-
-      host.innerHTML =
-        '<div class="view-wrap">' +
-        '<div class="page-head">' +
-        '<div><div class="crumbs"><a href="#/landing">Landing</a><span>/</span><span class="cur">Ingest · P1</span></div>' +
-        '<div class="page-title">' + ui.icon("db", 22) + " P1 · Truth Ingest</div>" +
-        '<div class="page-sub">Four signed sources → one Merkle root. Only the fingerprint goes on-chain.</div></div>' +
-        '<span class="chip">subject · ' + ui.esc(d.label) + "</span>" +
-        '<span class="chip subj-addr num">' + ui.esc(App.fn.shortAddr(d.address)) + "</span>" +
-        "</div>" +
-        dictOverviewHtml() +
-        '<div class="ingest-cols">' +
-        '<div class="col-main">' +
-        '<div class="card"><div class="card-h"><div class="card-title">' + ui.icon("layers", 15) + " Data sources</div>" +
-        "</div>" +
-        '<div class="src-grid">' + cardHtmls + "</div></div>" +
-        '<div class="card"><div class="card-h">' +
-        '<div class="card-title"><span class="no">P1</span>Anchor pipeline</div>' +
-        '<div class="spacer"></div>' + metaHtml.replace('<div class="anchor-state">', '<div class="anchor-state">') +
-        "</div>" +
-        '<div class="anchor-flow">' +
-        '<div><button type="button" id="anchor-btn" class="btn btn-primary">' +
-        (anchored ? "" : "") +
-        '<span id="anchor-btn-label">' + (anchored ? "Anchor Again" : "Connect &amp; Anchor") + "</span></button>" +
-        '<span class="note-italic" style="margin-left:10px">repeatable · each anchor uses a fresh nonce · logs accumulate</span></div>' +
-        statusHtml +
-        treeHtml +
-        '<div class="sec-l">Chain log · latest first</div><div id="chain-log"></div>' +
-        proofHtml +
-        '<details class="how"><summary>How it works</summary><div class="how-body">' +
-        '<span class="fml">root = Merkle( 4 × source digest(data | timestamp | nonce) )</span><br>' +
-        "Each leaf digests one signed source record together with the anchor timestamp and an incrementing nonce, " +
-        "so every anchor produces a different root. Interior nodes hash their two children; the root is the " +
-        "testnet fingerprint. No raw detail, no key material — mock only.</div></details>" +
-        "</div></div>" +
-        archHtml +
-        "</div>" +
-        "</div>";
+      host.innerHTML = '<div class="v-page v-evidence">' + ui.pageHead('01 / EVIDENCE', 'Good decisions start with good evidence.', 'Review four operating sources, then create a local proof of this case.') +
+        '<div class="v-section-head"><h2>Source records</h2>' + ui.tag('Illustrative data') + '</div><div class="src-grid">' + cardHtmls + '</div>' +
+        '<section class="v-panel v-proof-action"><div class="v-section-head"><div><p class="v-eyebrow">LOCAL DEMO PROOF</p><h2>' + (anchored ? 'Your evidence has a fingerprint.' : 'Make the evidence traceable.') + '</h2></div>' + ui.tag(anchored ? 'Proof created' : 'Not created', anchored ? 'green' : 'neutral') + '</div>' +
+        '<p>Bundle the four source records into one local Merkle root. This demo does not send a blockchain transaction.</p>' +
+        '<div class="v-action-row"><button type="button" id="anchor-btn" class="btn ' + (anchored ? '' : 'btn-primary') + '"><span id="anchor-btn-label">' + (anchored ? 'Create Another Proof' : 'Create Demo Proof') + '</span></button>' +
+        (anchored ? '<a class="btn btn-primary" href="#/audit">Continue to Assessment →</a>' : '') + '</div>' +
+        '<div id="tx-status" class="tx-status" role="status" aria-live="polite">' + (anchored ? 'Created locally · ' + ui.esc(st.anchor.time) : '') + '</div>' +
+        (anchored ? '<details class="v-details" id="v-proof-details"><summary>Inspect Proof <span>Merkle tree & verification</span></summary><div class="v-details-body">' + treeHtml + proofHtml + '<h3>Local proof history</h3><div id="chain-log"></div></div></details>' : '<p class="v-caption">A fresh timestamp and nonce produce a new root on each run.</p>') + '</section>' +
+        '<details class="v-details" id="v-evidence-fields"><summary>Full source records <span>All fields in this proof</span></summary><div class="v-details-body">' + cards.map(function(c){return '<h3>' + ui.esc(c.name) + '</h3><dl class="v-records">' + c.fields.map(function(f){return '<div><dt>' + ui.esc(f[0]) + '</dt><dd class="num">' + ui.esc(f[1]) + '</dd></div>';}).join('') + '</dl>';}).join('') + '</div></details>' +
+        '<details class="v-details" id="v-evidence-method"><summary>Assessment methodology <span>Signal dictionary & integration roadmap</span></summary><div class="v-details-body">' + dictOverviewHtml() + archHtml + '</div></details></div>';
 
       var logEl = host.querySelector("#chain-log");
       if (logEl) { App.ui.logTimeline(logEl, st.chainLogs); }
@@ -378,7 +343,7 @@
   }
 
   function runAnchor(host) {
-    if (local.busy) { App.ui.toast("Anchoring in progress", "warn"); return; }
+    if (local.busy) { App.ui.toast("Local proof in progress", "warn"); return; }
     var st = App.state;
     var btn = host.querySelector("#anchor-btn");
     var label = host.querySelector("#anchor-btn-label");
@@ -388,7 +353,7 @@
     st.txStage = "idle";
     if (btn) { btn.classList.add("is-busy"); }
     if (btn) { btn.disabled = true; }
-    if (label) { label.textContent = "Anchoring…"; }
+    if (label) { label.textContent = "Creating proof…"; }
     if (status) { status.textContent = ""; status.className = "tx-status"; }
     var cards = host.querySelectorAll(".src-card");
     for (var i = 0; i < cards.length; i++) {
@@ -398,7 +363,7 @@
           card.classList.add("signed");
           var sig = card.querySelector(".sig");
           if (sig) {
-            sig.innerHTML = "<b>" + App.ui.icon("check", 10) + "</b> signature recorded · testnet mock";
+            sig.innerHTML = "<b>" + App.ui.icon("check", 10) + "</b> Illustrative source · local demo";
             sig.style.opacity = "1";
           }
         }, 250 * (idx + 1));
