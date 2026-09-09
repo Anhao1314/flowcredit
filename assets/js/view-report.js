@@ -395,15 +395,17 @@
               ["Result source", "CCI", "PD", "Grade", "Suggested limit"],
               [
                 [
-                  App.liveResults[st.subject] ? "Live session" : "Saved batch",
-                  AI_LEDGER.runs[st.subject].cci,
-                  AI_LEDGER.runs[st.subject].pdPct + "%",
-                  AI_LEDGER.runs[st.subject].grade,
-                  u.fmtMoney(AI_LEDGER.runs[st.subject].creditSuggestedUsd)
+                  App.liveResults[st.subject] ? "Live v0.2 · " + String(AI_LEDGER.runs[st.subject].decisionStatus || "manual review").replace(/-/g, " ") : "Saved v0.1 batch",
+                  AI_LEDGER.runs[st.subject].cci == null ? "Not computable" : AI_LEDGER.runs[st.subject].cci,
+                  AI_LEDGER.runs[st.subject].pdPct == null ? "Not calibrated" : AI_LEDGER.runs[st.subject].pdPct + "%",
+                  AI_LEDGER.runs[st.subject].grade == null ? "Not computable" : AI_LEDGER.runs[st.subject].grade,
+                  AI_LEDGER.runs[st.subject].creditSuggestedUsd == null ? "Manual only" : u.fmtMoney(AI_LEDGER.runs[st.subject].creditSuggestedUsd)
                 ]
               ]
             ) +
-            "<p>AI results use separate reasoning and calibration. They do not replace the rule-based decision or the case limit. Review the AI evidence panel for its references and explanation.</p>"
+            (App.liveResults[st.subject]
+              ? "<p>The live v0.2 result is a conservative manual-review screen. It does not produce a calibrated PD, numeric limit or automatic approval. The offline v0.1 demo baseline remains unchanged.</p>"
+              : "<p>The saved v0.1 result uses separate demo reasoning and calibration. It does not replace the rule-based decision or the case limit.</p>")
           : "<p>No AI result available. The rule assessment remains valid as a demo output.</p>")
     );
     body += section(

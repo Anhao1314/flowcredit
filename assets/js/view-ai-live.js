@@ -1,6 +1,6 @@
 /* ============================================================
    view-ai-live.js — gated live-AI enhancer (same-origin sidecar).
-   Boots ONLY when /fc/ai/config responds (sidecar on this origin);
+   Boots ONLY when /fc/ai/v0.2/config responds (sidecar on this origin);
    otherwise exits silently and the offline ledger cards are untouched.
    Session-only: live results live in memory, never written to
    ai-ledger.js or the git chain. ES5, no module.
@@ -10,8 +10,9 @@
   if (window.__FC_LIVE_LOADED) return;
   window.__FC_LIVE_LOADED = true;
 
-  var BASE = "/fc/ai";
+  var BASE = "/fc/ai/v0.2";
   var READY = false;
+  var MODEL_LABEL = "AI";
   var lastHost = null;
   var lastCtx = null;
 
@@ -78,7 +79,7 @@
       if (btn) { btn.disabled = busy; btn.classList.toggle("is-busy", busy); }
     }
     if (btn && btn.disabled) return;
-    setBusy("invoking deepseek-chat…", true);
+    setBusy("invoking " + MODEL_LABEL + "…", true);
     fetchTimeout(BASE + "/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -134,7 +135,7 @@
       send.disabled = true; input.disabled = true;
       var status = document.createElement("div");
       status.className = "ask-status";
-      status.textContent = "asking deepseek-chat…";
+      status.textContent = "asking " + MODEL_LABEL + "…";
       log.appendChild(status);
       log.scrollTop = log.scrollHeight;
       var subject = (window.App.state && App.state.subject) || keysOrder()[0] || "healthy";
@@ -226,9 +227,10 @@
       enhance(host, ctx === "report" ? "report" : "workspace", false);
     };
     fetchTimeout(BASE + "/config", { method: "GET" }, 1500).then(function (r) {
-      return r.json().then(function () { return r; });
-    }).then(function (r) {
-      if (r && r.ok) {
+      return r.json().then(function (j) { return { response: r, data: j }; });
+    }).then(function (p) {
+      if (p && p.response && p.response.ok) {
+        if (p.data && p.data.model) MODEL_LABEL = String(p.data.model);
         window.FC_LIVE = true;
         window.FC_AI = {
           ask: function (subject, question) {

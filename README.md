@@ -12,8 +12,8 @@ FlowCredit 是一个面向 AI 原生企业（GPU / API / 链上地址）的「�
 
 ```bash
 # 方式 A：git clone
-git clone https://github.com/Anhao1314/DEMO.FlowCredit.git
-cd DEMO.FlowCredit
+git clone https://github.com/Anhao1314/FC.demo2.git
+cd FC.demo2
 
 # 方式 B：GitHub 网页 Download ZIP 后解压
 ```
@@ -51,7 +51,7 @@ cd DEMO.FlowCredit
 1. 仓库需为 public（免费账号下 Pages 不支持 private 仓库）。
 2. 仓库 Settings → Pages → Source：Deploy from a branch。
 3. 分支 main，目录 / (root)，Save。
-4. 上线地址：https://Anhao1314.github.io/DEMO.FlowCredit/
+4. 上线地址：https://Anhao1314.github.io/FC.demo2/
 5. 站点使用 hash 路由 + 相对路径，子路径部署无需改任何代码。
 
 其它静态托管同样适用（Netlify Drop / Vercel / Cloudflare Pages / OSS+CDN / nginx）：发布整个仓库目录即可。
@@ -70,6 +70,9 @@ assets/js/view-audit.js    P2 AI 风险评估流水线
 assets/js/view-report.js   P3 验证报告与压力响应
 assets/js/view-workspace.js Workspace 工作台（#/workspace）
 assets/js/view-account.js  Account 账户页（#/account）
+agent/                     本机 AI 侧车源码、v0.1/v0.2 规则、测试和 Docker 配置
+docs/flowcredit-rules-v0.2.md v0.2 保守型初筛规则表
+CHANGELOG.md              版本更新记录
 ```
 
 ## 6. 自检（可选，需 Node 18+）
@@ -93,17 +96,26 @@ node --check assets/js/data.js
 - 本仓库由本机 autosync 守护自动 commit/push（提交信息以 [autosync] 开头）；改完文件等待同步，最终工作区应为 clean。
 
 
-## 8. 现场演示（一分钟起跑）
+## 8. 实时 Agent
 
-- 一键真跑闭环（真实 LLM 三主体 + 基线回归 + 健康摘要）：
+- `agent/` 保存可审查的侧车源码；凭据和运行日志保存在仓库外 `/Users/yimingyang/fc-agent/runtime/`。
+- `/fc/ai/*` 保留 v0.1 兼容接口；页面实时 Re-run 使用 `/fc/ai/v0.2/*` 保守型初筛接口。
+- v0.2 不产生自动批准、校准 PD、预期损失或数值额度，详情见 `docs/flowcredit-rules-v0.2.md`。
 
-      cd ~/fc/agent && ./verify.sh
+```bash
+cd /Users/yimingyang/fc.v1/agent
+/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node scripts/set-key.js
+docker compose up --build -d
+open http://127.0.0.1:8787/
+```
 
-  最后一行显示 **MVP HEALTH: PASS** 即可上台；新批次 AI VERDICT 卡会随账本提交进入仓库。
-- 启动演示站（Live AI 侧车，同源托管页面 + AI 接口）：
+## 9. 现场演示检查
 
-      node ~/fc/agent/ai-live-server.js
+```bash
+cd /Users/yimingyang/fc.v1/agent
+/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node --test test/*.test.js
+docker compose up --build -d
+curl http://127.0.0.1:8787/health
+```
 
-  浏览器打开 http://127.0.0.1:8000：页面自动点亮工作台 AI 卡逐行 Re-run 与报告页 Ask the AI（实时调用 deepseek-chat，仅会话内生效，不写账本）。
-  断网/无侧车预案：双击 index.html 或 python3 -m http.server 8000，全部功能离线可用、自动静默降级。
-- 健康检查独立脚本：agent/regress.js（16 项基线断言）、agent/sync-check.js（facts <=> data.js 单一事实源校验）。
+浏览器打开 http://127.0.0.1:8787/。侧车在线时 Workspace Re-run 和 Report Ask the AI 使用 v0.2；侧车或网络不可用时保留离线 v0.1 结果。双击 index.html 仍可运行纯离线演示。

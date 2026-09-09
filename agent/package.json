@@ -1,0 +1,21 @@
+{
+  "name": "flowcredit-agent-sidecar",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "cli": "node src/cli.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/*.js && node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-sdk-client": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.1.2-rc.1"
+  }
+}

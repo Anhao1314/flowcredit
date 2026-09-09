@@ -1,0 +1,27 @@
+services:
+  flowcredit-agent:
+    build:
+      context: .
+    container_name: flowcredit-agent
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - /Users/yimingyang/fc.v1:/site:ro
+      - ../../fc-agent/runtime/dsh-home:/runtime/dsh-home
+      - ../../fc-agent/runtime/logs:/runtime/logs
+      - ../../fc-agent/runtime/workspace:/runtime/workspace
+    environment:
+      FC_MODEL: deepseek-v4-flash
+      DSH_TELEMETRY_MODE: DISABLED
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

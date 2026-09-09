@@ -15,8 +15,8 @@
 
 ## 1.2 实时 AI 会话态原则
 
-- 页面实时 AI（view-ai-live.js + 仓库外的 agent/ai-live-server.js 侧车）只更新会话内存，绝不写 ai-ledger.js；ai-ledger.js 与 git 提交链仅由离线批跑（agent/run-audit.sh）生成。
-- 侧车代码、密钥、运行日志均位于仓库外（agent/ 目录），不进入本仓库。
+- 页面实时 AI（view-ai-live.js + 本仓库 agent/ 源码构建的本机侧车）只更新会话内存，绝不写 ai-ledger.js；ai-ledger.js 与 git 提交链仅由离线批跑生成。
+- 侧车源码、配置和测试统一位于本仓库 `agent/` 子目录；API 密钥、node_modules、会话、运行日志和其他 runtime 数据必须位于仓库外 `/Users/yimingyang/fc-agent/`，不得提交。
 
 ## 2. 核心冻结区（默认一字不改；任务书明确点名才动）
 - 文件：assets/js/data.js、assets/js/ui.js、assets/js/app.js、assets/js/state.js、assets/js/view-landing.js。
