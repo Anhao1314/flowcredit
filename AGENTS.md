@@ -3,8 +3,8 @@
 本文件约束在此仓库工作的协助者（AI 或人）。README.md 是项目说明；本文件是改动铁律。与任务书冲突时以任务书为准。
 
 ## 1. 项目本质
-- 零构建静态站：原生 HTML/CSS/JS，普通 script 按序加载（data→state→ui→view-landing→view-ingest→view-audit→view-report→view-workspace→view-account→ai-ledger→view-ai→view-ai-live→app），无 module/defer/CDN/npm。
-- fetch 唯一豁免：view-ai-live.js 允许同源 /fc/ai/* 三处调用（config/run/ask），必须带 try/catch、短超时、探测失败静默退出；其余所有文件仍禁 fetch。EOF
+- 零构建静态站：原生 HTML/CSS/JS，普通 script 按序加载（data→state→ui→intake-v03→view-landing→view-ingest→view-audit→view-report→view-workspace→view-account→ai-ledger→view-ai→view-ai-live→app），无 module/defer/CDN/npm。
+- fetch 唯一豁免：view-ai-live.js 允许同源 `/fc/ai/*` 的版本化 config/schema/run/extract/assess/ask 调用，必须带 try/catch、短超时、探测失败静默退出；其余所有文件仍禁 fetch。
 - 双击 index.html 以 file:// 离线可跑；UI 文案全英文；无 emoji（允许 → ← ✓ · σ ± 等符号）；图标只用 App.ui.icon 内联 SVG；数字 mono + tabular-nums。
 
 ## 1.1 对外措辞纪律（合规红线）
@@ -20,6 +20,7 @@
 
 ## 2. 核心冻结区（默认一字不改；任务书明确点名才动）
 - 文件：assets/js/data.js、assets/js/ui.js、assets/js/app.js、assets/js/state.js、assets/js/view-landing.js。
+- v0.3 任务书对 app.js 的唯一例外：导航可见标签改为 New Assessment，并只读 FC_INTAKE 进度；路由、状态机、ID、计时和事件绑定继续冻结。
 - 内容：SUBJECTS / ANCHOR_W / STRESS_FRAMES / 全部公式与 mock 数值 / 路由 hash（landing|workspace|ingest|audit|report|account）/ 状态机语义 / 元素 id / 事件绑定 / 演示节奏（audit 350ms 步进、stress 约 2s 时序、ring 600ms、动画 200–350ms）。
 - id 清单（保留）：run-audit / reset-audit / anchor-btn / anchor-btn-label / verify-btn / stress-btn / recover-btn / go-p1 / ring-slot / line-slot / chain-log。
 - L1 口径：Raw Token = d.l0.compute.Raw（healthy 80.0M / sybil 108.0M）；rawNT_M 是「已乘 w_model/w_task 后的 NT」（96.0M / 108.0M），只用于 L2「毛 NT」，绝不顶替 Raw Token。
@@ -41,7 +42,7 @@
 - 动画 200–350ms（ring 600ms）；prefers-reduced-motion 下静态完整；≤420px 无横向滚动；flex/grid 用 auto-fit minmax。
 
 ## 6. 修改流程与提交
-- 完成后自检：node --check 全部 13 个 JS；CSS 花括号配平；静态扫描仅 view-ai-live.js 可含 fetch 与 /fc/ai/（且必须有门控判定），其余文件无 fetch/外链/module/emoji。
+- 完成后自检：node --check 全部前端 JS；CSS 花括号配平；静态扫描仅 view-ai-live.js 可含 fetch 与 /fc/ai/（且必须有门控判定），其余文件无 fetch/外链/module/emoji。
 - 回归断言脚本放系统临时目录（不入库）；涉及渲染需 stub window/document 后按序加载 JS。
 - 本机 autosync 守护会自动 commit + push（提交信息以 [autosync] 开头）；不要手动 commit；交付前确认 git status clean；GitHub 网络中断时守护会自动等恢复后补推。
 - 交付说明列出：改动文件清单、每文件改动点、冻结区零改动核对、验收结果。

@@ -6,13 +6,14 @@ The configured default model is `deepseek-v4-flash`.
 
 ## Safety boundary
 
-- The v0.1 and v0.2 engines remain available for compatibility. The v0.2.1 `flowcredit.risk_result/v0.2.1` engine is the live-page default.
+- The v0.3.1 intake product uses the unchanged v0.2.1 `flowcredit.risk_result/v0.2.1` engine. Deterministic assessment remains available when DeepSeek extraction or explanation is unavailable. Earlier engines remain available for compatibility.
 - v0.2.1 calculates AI Token Activity Index before applying a 40% Token contribution to CCI.
 - v0.2 and v0.2.1 never emit an automatic approval, calibrated PD, expected loss, or numeric limit.
 - DeepSeek Harness is pinned to `0.1.2-rc.1`; its profile advertises only versioned FlowCredit normalization, computation, and validation tools.
 - No shell, file, web, transaction, subagent, or editor tool is exposed to the model.
 - The site mount is read-only. Live results stay in memory and never update `assets/js/ai-ledger.js`.
 - Persistent logs are metadata-only JSONL. Harness session content is directed to container-temporary storage.
+- Guided and JSON intake are deterministic by default. Raw descriptive text reaches DeepSeek only with explicit `modelConsent=true`.
 
 ## First run
 
@@ -45,6 +46,9 @@ curl -X POST http://127.0.0.1:8787/fc/ai/v0.2/run \
   -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
 curl -X POST http://127.0.0.1:8787/fc/ai/v0.2.1/run \
   -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
+curl http://127.0.0.1:8787/fc/ai/v0.3/schema
+curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
+  -H 'Content-Type: application/json' -d '{"draft":{"label":"Example","inputTokensM":10,"outputTokensM":8,"validRatePct":90}}'
 ```
 
 Set `"requireModel": true` on POST requests when a missing or failed model must return an HTTP error instead of a deterministic degraded result.

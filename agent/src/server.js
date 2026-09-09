@@ -17,6 +17,7 @@ import { computeRisk } from "./risk-core.js";
 import { computeRiskV02 } from "./risk-core-v02.js";
 import { computeRiskV021 } from "./risk-core-v021.js";
 import { SessionStore } from "./session-store.js";
+import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, buildEvidenceCoverageV03, buildRequiredActionsV03, sanitizeExtractedDraftV03, validateDraftV03 } from "./intake-v03.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
@@ -258,11 +259,12 @@ async function assessV02WithOptionalBrain(input, requestId, requireModel = false
   return { normalized, result, modelLayer, harnessStatus };
 }
 
-async function assessV021WithOptionalBrain(input, requestId, requireModel = false) {
+async function assessV021WithOptionalBrain(input, requestId, requireModel = false, useModel = true) {
   const normalized = normalizeEvidenceV021(input);
   const result = computeRiskV021(normalized);
   let modelLayer = null;
-  let harnessStatus = "unconfigured";
+  let harnessStatus = useModel ? "unconfigured" : "not-requested";
+  if (!useModel) return { normalized, result, modelLayer, harnessStatus };
   try {
     modelLayer = await brain.assessV021(normalized, result, requestId);
     harnessStatus = "ok";
@@ -297,7 +299,7 @@ async function route(req, res, requestId) {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
-    return sendJson(res, 200, { ok: true, service: "flowcredit-agent", model: MODEL, ruleVersion: RULE_VERSION, ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02, v021: RULE_VERSION_V021 }, dshVersion: DSH_VERSION, harness }, requestId);
+    return sendJson(res, 200, { ok: true, service: "flowcredit-agent", model: MODEL, productVersions: { v03: PRODUCT_VERSION_V03 }, ruleVersion: RULE_VERSION, ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02, v021: RULE_VERSION_V021 }, dshVersion: DSH_VERSION, harness }, requestId);
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/config") {
     const harness = await brain.status();
@@ -310,6 +312,83 @@ async function route(req, res, requestId) {
   if (req.method === "GET" && url.pathname === "/fc/ai/v0.2.1/config") {
     const harness = await brain.status();
     return sendJson(res, 200, { ok: true, enabled: true, model: MODEL, ruleVersion: RULE_VERSION_V021, dshVersion: DSH_VERSION, harnessReady: harness.ready, tokenMetering: true, calibratedPd: false, automatedApproval: false }, requestId);
+  }
+  if (req.method === "GET" && url.pathname === "/fc/ai/v0.3/config") {
+    const harness = await brain.status();
+    return sendJson(res, 200, {
+      ok: true, enabled: true, productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021,
+      model: MODEL, harnessReady: harness.ready, deterministicByDefault: true,
+      deterministicStatus: "ready", extractionStatus: harness.ready ? "available" : harness.configured ? "unavailable" : "unconfigured",
+      privacy: { browserDrafts: true, rawFilesUploaded: false, modelConsentRequired: true }
+    }, requestId);
+  }
+  if (req.method === "GET" && url.pathname === "/fc/ai/v0.3/schema") {
+    return sendJson(res, 200, INTAKE_SCHEMA_V03, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/extract") {
+    const body = await readJson(req);
+    if (body.modelConsent !== true) return sendJson(res, 400, { error: "modelConsent must be true before sending case text to DeepSeek" }, requestId);
+    if (typeof body.text !== "string" || !body.text.trim() || body.text.length > 10000) return sendJson(res, 400, { error: "text must contain 1 to 10000 characters" }, requestId);
+    const extracted = await brain.extractV03(body.text.trim(), requestId);
+    let primaryWindowDerived = false;
+    const extractedDraft = extracted?.draft && typeof extracted.draft === "object" ? extracted.draft : extracted;
+    if (Array.isArray(extractedDraft?.monthlySeries) && extractedDraft.monthlySeries.length) {
+      const lastPeriod = String(extractedDraft.monthlySeries.at(-1)?.period || "");
+      const currentDays = (Date.parse(extractedDraft.periodEnd || "") - Date.parse(extractedDraft.periodStart || "")) / 86400000;
+      const match = lastPeriod.match(/^(\d{4})-(\d{2})$/);
+      if (match && (!Number.isFinite(currentDays) || currentDays < 27 || currentDays > 31)) {
+        const year = Number(match[1]), month = Number(match[2]);
+        extractedDraft.periodStart = `${match[1]}-${match[2]}-01`;
+        extractedDraft.periodEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+        primaryWindowDerived = true;
+      }
+    }
+    const cleaned = sanitizeExtractedDraftV03(extracted);
+    const validation = validateDraftV03(extracted);
+    const confidence = extracted?.fieldConfidence && typeof extracted.fieldConfidence === "object"
+      ? Object.fromEntries(Object.entries(extracted.fieldConfidence).filter(([key]) => Object.hasOwn(validation.draft, key)))
+      : {};
+    return sendJson(res, 200, {
+      productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021,
+      draftId: typeof body.draftId === "string" && body.draftId.length <= 80 ? body.draftId : requestId,
+      draft: validation.draft, fieldConfidence: confidence,
+      missingInputs: validation.missingInputs, missingByGroup: validation.missingByGroup,
+      warnings: [...validation.warnings, ...(primaryWindowDerived ? ["Primary scoring window was derived from the latest explicitly supplied monthly period."] : []), ...(Array.isArray(extracted?.warnings) ? extracted.warnings.slice(0, 10).map(String) : [])],
+      ignoredInputs: [...new Set([...cleaned.ignoredInputs, ...validation.ignoredInputs])], model: MODEL
+    }, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/assess") {
+    const body = await readJson(req);
+    if (!body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) return sendJson(res, 400, { error: "draft must be an object" }, requestId);
+    const validation = validateDraftV03(body.draft);
+    if (validation.errors.length) return sendJson(res, 400, {
+      error: "Review the highlighted assessment fields", fieldErrors: validation.errors,
+      missingByGroup: validation.missingByGroup, warnings: validation.warnings, ignoredInputs: validation.ignoredInputs
+    }, requestId);
+    const useModel = body.modelConsent === true;
+    const { normalized, result, modelLayer, harnessStatus } = await assessV021WithOptionalBrain(validation.draft, requestId, false, useModel);
+    const evidenceCoverage = buildEvidenceCoverageV03(validation.draft);
+    const requiredActions = buildRequiredActionsV03(validation, result, evidenceCoverage);
+    const sessionId = typeof body.sessionId === "string" && body.sessionId.length <= 80 ? body.sessionId : requestId;
+    sessions.set(`v03:${sessionId}`, { version: "v0.3.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
+    return sendJson(res, 200, {
+      ...result, productVersion: PRODUCT_VERSION_V03, draftId: body.draftId || sessionId, model: MODEL,
+      modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null,
+      validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [], ignoredInputs: validation.ignoredInputs },
+      readinessStatus: validation.readinessStatus, missingByGroup: validation.missingByGroup,
+      evidenceCoverage, requiredActions, harnessStatus, sessionId
+    }, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/ask") {
+    const body = await readJson(req);
+    if (body.modelConsent !== true) return sendJson(res, 400, { error: "modelConsent must be true before sending assessment facts to DeepSeek" }, requestId);
+    if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) return sendJson(res, 400, { error: "question must contain 1 to 500 characters" }, requestId);
+    if (typeof body.sessionId !== "string" || !body.sessionId) return sendJson(res, 400, { error: "sessionId is required" }, requestId);
+    const session = sessions.get(`v03:${body.sessionId}`);
+    if (!session) return sendJson(res, 400, { error: "no v0.3 assessment found for this session" }, requestId);
+    const response = await brain.ask({ ruleVersion: RULE_VERSION_V021, ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
+    const citations = Array.isArray(response.citations) ? response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value)) : [];
+    return sendJson(res, 200, { answer: String(response.answer || ""), citations, harnessStatus: "ok", model: MODEL, productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021 }, requestId);
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/run") {
     const body = await readJson(req);

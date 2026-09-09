@@ -26,8 +26,22 @@
       return '<div class="fc-score-row"><div class="fc-score-head"><span>' + u.esc(words(item.name)) +
         (weights && weights[item.name] ? '<small> · ' + weights[item.name] + '</small>' : '') +
         '</span><b class="num">' + (computable ? u.esc(item.score) : "Not computable") +
-        '</b></div><span class="fc-score-track"><span class="fc-score-fill fc-state-' + u.esc(item.state || "y") + '" style="width:' + width + '%"></span></span></div>';
+        '</b></div><span class="fc-score-track"><span class="fc-score-fill fc-state-' + u.esc(item.state || "y") + '" style="width:' + width + '%"></span></span>' + (!computable && item.reason ? '<small class="fc-score-reason">' + u.esc(item.reason) + '</small>' : '') + '</div>';
     }).join("");
+  }
+  function coverageHtml(coverage) {
+    if (!coverage) return '<p class="v-caption">Field-level evidence coverage is unavailable for this result.</p>';
+    return '<div class="fc-coverage-summary" aria-label="Evidence coverage summary">' +
+      '<span><b class="num">' + u.esc(coverage.covered) + '</b><small>Covered</small></span>' +
+      '<span><b class="num">' + u.esc(coverage.missingEvidence) + '</b><small>Needs evidence</small></span>' +
+      '<span><b class="num">' + u.esc(coverage.missingData) + '</b><small>Missing data</small></span>' +
+      '<span><b class="num">' + u.esc(coverage.serverDerived) + '</b><small>Server-derived</small></span></div>' +
+      '<p class="v-caption">Coverage is measured across ' + u.esc(coverage.total) + ' decision fields; evidence quality also considers provenance, recency, consistency and source independence.</p>';
+  }
+  function actionsHtml(actions) {
+    var items = actions || [];
+    return '<section class="fc-result-section fc-next-actions"><div class="v-section-head"><h3>What to provide next</h3><span class="v-muted">Prioritized completion path</span></div>' +
+      (items.length ? '<ol>' + items.map(function (item) { return '<li><span class="num">P' + u.esc(item.priority) + '</span><div><b>' + u.esc(words(item.category)) + '</b><p>' + u.esc(item.message) + '</p>' + (item.fields && item.fields.length ? '<small>' + u.esc(item.fields.join(' · ')) + '</small>' : '') + '</div></li>'; }).join('') + '</ol>' : '<p>No additional input is required by the current deterministic screen.</p>') + '</section>';
   }
   function tokenChain(run) {
     var m = run.tokenMetrics || {}, correlation = m.tokenRevenueCorrelation;
@@ -68,10 +82,10 @@
       scoreRows(run.anchors, weights) + '</section></div>' +
       '<div class="fc-result-grid"><section class="fc-result-section fc-evidence"><div class="v-section-head"><h3>Evidence quality</h3>' + u.tag(String(run.evidenceStrength || "not-rated").toUpperCase(), run.evidenceStrength === "high" ? "green" : "neutral") + '</div>' +
       '<p><b>' + u.esc(evidenceValue) + '</b> · ' + u.esc(run.evidenceStrength === "simulated" ? "Source independence not rated for simulations" : eq.independentDomains == null ? "Source count not rated" : eq.independentDomains + " independent non-self domains") + '</p>' +
-      '<p class="v-caption">' + u.esc((eq.caps || []).join(" · ") || "No evidence-quality cap recorded") + '</p></section>' +
+      '<p class="v-caption">' + u.esc((eq.caps || []).join(" · ") || "No evidence-quality cap recorded") + '</p>' + coverageHtml(run.evidenceCoverage) + '</section>' +
       '<section class="fc-result-section fc-integrity"><div class="v-section-head"><h3>Integrity findings</h3>' + u.tag(veto ? "CONFIRMED VETO" : "NO CONFIRMED VETO", veto ? "red" : "green") + '</div>' +
       (signals.length ? '<ul>' + signals.map(function (x) { return '<li><b>Signal</b> · ' + u.esc(itemText(x)) + '</li>'; }).join("") + '</ul>' : '<p>No ordinary integrity signal recorded.</p>') +
-      (confirmed.length ? '<ul class="fc-confirmed-list">' + confirmed.map(function (x) { return '<li><b>Confirmed</b> · ' + u.esc(itemText(x)) + '</li>'; }).join("") + '</ul>' : '') + '</section></div>' +
+      (confirmed.length ? '<ul class="fc-confirmed-list">' + confirmed.map(function (x) { return '<li><b>Confirmed</b> · ' + u.esc(itemText(x)) + '</li>'; }).join("") + '</ul>' : '') + '</section></div>' + actionsHtml(run.requiredActions) +
       '<section class="fc-ai-review"><div class="v-section-head"><h3>AI explanation and review</h3><span class="v-muted">Non-scoring layer</span></div><p class="ai-trace">' + u.esc(run.trace || "No explanation available.") + '</p>' +
       '<p class="v-caption v-hash">Facts snapshot ' + u.esc(run.factsSha256 || "unavailable") + '</p></section>' +
       '<details class="v-details fc-limitations"><summary>Method limits and evidence references</summary><div class="v-details-body"><ul>' +
@@ -110,4 +124,5 @@
     el.innerHTML = html();
     host.appendChild(el);
   };
+  App.liveResultHtml = liveHtml;
 })();

@@ -7,7 +7,7 @@
   var App = window.App = window.App || {};
   App.wallet = { connected: false, address: "0x7F3A…9C21", balance: "10,000 test USDC" };
   var TABS = [
-    { hash: "#/ingest", key: "ingest", label: "Evidence", sub: "01", icon: "db" },
+    { hash: "#/ingest", key: "ingest", label: "New Assessment", sub: "01", icon: "db" },
     { hash: "#/audit", key: "audit", label: "Assessment", sub: "02", icon: "pulse" },
     { hash: "#/report", key: "report", label: "Report & Monitor", sub: "03", icon: "shield" }
   ];
@@ -118,7 +118,7 @@
     mainEl = rootEl.querySelector('#view-main');
     rootEl.querySelector('.v-skip').addEventListener('click', function (e) { e.preventDefault(); mainEl.focus(); });
     rootEl.querySelector('#v-case-select').addEventListener('change', function () { App.act.switchSubject(this.value); });
-    window.addEventListener('fc:live', function () { var el = document.getElementById('v-ai-service'); if (el) el.innerHTML = u.icon('cpu', 15) + '<span>Live AI available</span>'; });
+    window.addEventListener('fc:live', function (event) { var el = document.getElementById('v-ai-service'), service = event.fcDetail && event.fcDetail.serviceStatus || window.FC_SERVICE_STATUS || {}; if (el) el.innerHTML = u.icon('cpu', 15) + '<span>Risk engine ready · AI extraction ' + (service.aiExtraction === 'ready' ? 'available' : service.aiExtraction) + '</span>'; });
     App.fn.addClearHook(function () { walletConnecting = false; });
   }
 
@@ -167,14 +167,20 @@
     var context = rootEl.querySelector('.v-context');
     context.hidden = route === 'landing' || route === 'workspace' || route === 'account';
     var sel = rootEl.querySelector('#v-case-select');
+    var customDraft = window.FC_INTAKE && FC_INTAKE.active ? FC_INTAKE.active() : null;
+    var caseControl = rootEl.querySelector('.v-case-control');
+    if (caseControl) caseControl.hidden = route === 'ingest' || !!customDraft;
     sel.value = st.subject; sel.disabled = st.running;
     var done = st.auditStage === 4 && !st.running;
-    var progress = {ingest: st.anchored ? 'Proof created' : 'Review sources', audit: done ? 'Complete' : st.running ? 'Running…' : 'Not started', report: done ? 'Ready to explore' : 'Assessment required'};
+    var customDone = !!(customDraft && customDraft.status === 'complete' && customDraft.result);
+    var progress = customDraft
+      ? {ingest: customDone ? 'Input confirmed' : customDraft.status === 'running' ? 'Assessing…' : 'Draft in progress', audit: customDone ? 'Complete' : 'Not started', report: customDone ? 'Ready to explore' : 'Assessment required'}
+      : {ingest: st.anchored ? 'Proof created' : 'Review sources', audit: done ? 'Complete' : st.running ? 'Running…' : 'Not started', report: done ? 'Ready to explore' : 'Assessment required'};
     var links = rootEl.querySelectorAll('.v-workflow a');
     for (var i=0; i<links.length; i++) {
       var key = links[i].getAttribute('data-route');
       links[i].classList.toggle('on', key === route);
-      links[i].classList.toggle('complete', key === 'ingest' ? st.anchored : key === 'audit' ? done : st.stress === 'recover');
+      links[i].classList.toggle('complete', customDraft ? (key === 'ingest' || ((key === 'audit' || key === 'report') && customDone)) : key === 'ingest' ? st.anchored : key === 'audit' ? done : st.stress === 'recover');
       if (key === route) links[i].setAttribute('aria-current','step'); else links[i].removeAttribute('aria-current');
       links[i].querySelector('small').textContent = progress[key];
     }

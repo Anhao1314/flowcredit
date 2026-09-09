@@ -4,7 +4,7 @@ FlowCredit 是一个面向 AI 原生企业（GPU / API / 链上地址）的「�
 
 > Testnet demo · simulated data · not financial advice · demo calibration
 
-纯前端静态站：**零构建、零依赖、零网络请求**，双击 index.html 即可在 file:// 下完整运行。
+前端保持零构建、零依赖；双击 index.html 可查看静态体验。本机 Agent 模式提供自定义输入、确定性评估和经授权的 DeepSeek 解释。
 
 ---
 
@@ -27,19 +27,19 @@ cd FC.demo2
 | --- | --- | --- | --- |
 | #/landing | Landing 门面 | （无，默认落地） | 对外介绍；入口：Go to Workspace / My Account |
 | #/workspace | Workspace 工作台 | （无） | 当前任务 + 双主体 Ledgers + 活动流（Landing 入口进入） |
-| #/ingest | P1 · Truth Ingest | Ingest P1 | 四源签名 → Merkle 指纹上链（每次 Anchor 新 root） |
+| #/ingest | New Assessment | New Assessment | 描述、JSON 或引导表单 → 确认草稿 → 可选本地证明 |
 | #/audit | P2 · AI Risk Assessment | Risk P2 | L0→L5 流水线：归一化 / 过滤 / 锚点核验 / veto / CCI 评分 |
 | #/report | P3 · Risk Monitoring & Response | Monitor P3 | 链上凭证验证 + 压力测试（shock → de-risk → recover） |
 | #/account | Account 账户页 | （无） | 机构档案 + 钱包（mock）+ 授信 + 活动流（Landing 入口进入） |
 
-- 顶栏三 Tab（Ingest / Risk / Monitor）是产品页切换入口；Workspace / Account 由 Landing 双入口进入，页面内用返回胶囊回 Landing。
+- 顶栏三 Tab（New Assessment / Assessment / Report）是产品页切换入口；Workspace 以 Start a new assessment 为主任务。
 - 两条演示线：Healthy Merchant（approved 全流程）与 Sybil Address（veto 终局、额度 0）。
 - 默认落地页 #/landing；无 hash / 非法 hash 自动回到对应路由；刷新保页、前进后退正常。
 
 ## 3. 技术说明
 
 - 原生 HTML + CSS + JS（ES5 风格，普通 script 按序加载，无 module/defer）。
-- 脚本顺序：data → state → ui → view-landing → view-ingest → view-audit → view-report → view-workspace → view-account → app。
+- 脚本顺序：data → state → ui → intake-v03 → views → ai-ledger → view-ai → view-ai-live → app。
 - 全局契约：window.App（state / fn / act / ui / views / nav / navTo）。
 - 派生数值全部纯函数现算：cci / pd / validNT_M / efficiency / scuOf / creditLine / vetoed / deviation / ntM / stressMeta。
 - L1 口径锁定：Raw Token 取自 l0.compute.Raw（80.0M / 108.0M）；rawNT_M 是「已乘 w_model/w_task 后的 NT」（96.0M / 108.0M），不得顶替 Raw Token；L2 毛 NT 才用 rawNT_M。
@@ -65,7 +65,8 @@ assets/js/data.js          SUBJECTS 双案例 mock 数据 + ANCHOR_W（冻结）
 assets/js/state.js         state / App.fn 纯函数 / STRESS_FRAMES（冻结）
 assets/js/ui.js            icon/toast/ring/bar/lineChart/logTimeline（冻结）
 assets/js/view-landing.js  Landing 门面（冻结）
-assets/js/view-ingest.js   P1 数据签名与锚定
+assets/js/intake-v03.js    标签页草稿、校验、LRU 与自定义结果状态
+assets/js/view-ingest.js   v0.3 描述、JSON、引导表单与本地证明
 assets/js/view-audit.js    P2 AI 风险评估流水线
 assets/js/view-report.js   P3 验证报告与压力响应
 assets/js/view-workspace.js Workspace 工作台（#/workspace）
@@ -73,6 +74,7 @@ assets/js/view-account.js  Account 账户页（#/account）
 agent/                     本机 AI 侧车源码、v0.1/v0.2 规则、测试和 Docker 配置
 docs/flowcredit-rules-v0.2.md v0.2 保守型初筛规则表
 docs/flowcredit-rules-v0.2.1.md AI Token 计量增强型规则表
+docs/flowcredit-intake-v0.3.md v0.3 产品、输入契约与隐私边界
 CHANGELOG.md              版本更新记录
 ```
 
@@ -100,6 +102,7 @@ for file in assets/js/*.js; do node --check "$file" || exit 1; done
 
 - `agent/` 保存可审查的侧车源码；凭据和运行日志保存在仓库外 `/Users/yimingyang/fc-agent/runtime/`。
 - `/fc/ai/*` 与 `/fc/ai/v0.2/*` 保留兼容；页面实时 Re-run 使用 `/fc/ai/v0.2.1/*`。
+- `/fc/ai/v0.3/*` 提供 v0.3.1 Intake schema、自然语言提取、自定义评估和会话隔离问答；浏览器与服务端共享校验语义，DeepSeek 不可用时确定性风险评估仍可运行，风险规则版本仍为 v0.2.1。
 - v0.2.1 先计算 AI Token Activity Index，再以 40% 权重纳入 CCI；详情见 `docs/flowcredit-rules-v0.2.1.md`。
 - v0.2.1 不产生自动批准、校准 PD、预期损失或数值额度。
 
@@ -119,4 +122,4 @@ docker compose up --build -d
 curl http://127.0.0.1:8787/health
 ```
 
-浏览器打开 http://127.0.0.1:8787/。侧车在线时，一次 Assessment 同时启动原演示流水线与 v0.2.1 Token 风险筛查；页面以 TAI、CCI、证据质量和完整性结论为主，PD、额度与压力场景收纳在 Legacy v0.1 appendix。侧车或网络不可用时保留离线 v0.1 结果；双击 index.html 仍可运行纯离线演示。
+浏览器打开 http://127.0.0.1:8787/。Workspace 可创建真实自定义草稿，表单与 JSON 默认只执行确定性 v0.2.1；自然语言提取和 AI 解释必须单独授权。GitHub Pages 和 file:// 可准备草稿及运行预置模拟案例，但不会发送自定义评估请求。

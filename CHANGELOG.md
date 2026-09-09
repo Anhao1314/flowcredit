@@ -2,6 +2,32 @@
 
 本文件记录 FlowCredit 的主要功能、规则与工程变更。
 
+## 2026-09-10 — v0.3.1 客户可完成性修复
+
+- 产品标识升级为 `flowcredit.intake/v0.3.1`，继续复用未改动的 `flowcredit.risk_result/v0.2.1` 风险规则。
+- 修复浏览器导入 `R`、`C`、月度序列、Token 分类桶及 Evidence 时的数据结构破坏；空草稿立即显示 `LIMITED`，非法字段显示 `NOT READY`。
+- 前后端统一主评分窗口、字段范围、GPU 类别和分组缺失校验；H100 别名由服务端规范为 `h100-equivalent` 并选择受控 Peer Profile。
+- Evidence 支持 `fields[]` 批量覆盖并展开为逐字段记录；Assessment 和 Report 新增 24 字段覆盖摘要及优先补件清单。
+- DeepSeek 提取与解释状态和确定性风险引擎状态分离；模型不可用时评估仍返回确定性结果，输入与结果不会丢失。
+- `/fc/ai/v0.3/assess` 兼容增加 `readinessStatus`、`missingByGroup`、`evidenceCoverage`、`requiredActions` 和 `harnessStatus`；400 错误返回具体字段定位。
+
+## 2026-09-09 — v0.3 Apple 式 Assessment Intake
+
+### 新增
+
+- 新增任务优先的 Assessment Intake：自然语言描述、JSON 导入和引导表单统一生成可确认草稿。
+- 新增 `flowcredit.intake/v0.3` 及 `/fc/ai/v0.3/config|schema|extract|assess|ask`，风险计算继续使用 v0.2.1。
+- 新增浏览器标签页草稿管理，最多保留 5 个最近任务；不写数据库、仓库或离线 AI 账本。
+- 新增明确授权后的 DeepSeek 信息提取和自定义会话问答；表单与 JSON 默认只运行确定性规则。
+- 新增自定义案例 Assessment、六节 Report、本地证据指纹与 grouped Ready Check。
+
+### 安全与兼容
+
+- 客户端评分、Peer、权重、Normalized Token、TAI、CCI、PD、等级、额度和批准字段全部忽略。
+- 自定义输入强制为 real assessment；缺失数据返回受限结果，不猜测或重新分配权重。
+- GitHub Pages 只准备草稿并提示 Local Agent required；本机 127.0.0.1:8787 提供完整功能。
+- v0.1、v0.2、v0.2.1 接口、三个模拟案例及确定性公式保持不变。
+
 ## 2026-09-09 — v0.2.1 AI Token 计量增强型风险评估
 
 ### 新增

@@ -8,6 +8,7 @@ import { validateAssessmentV02 } from "./validate-v02.js";
 import { normalizeEvidenceV021 } from "./normalize-v021.js";
 import { computeRiskV021 } from "./risk-core-v021.js";
 import { validateAssessmentV021 } from "./validate-v021.js";
+import { validateDraftV03 } from "./intake-v03.js";
 
 export const name = "flowcredit-restricted-tools";
 export const inject = ["tools", "systemPrompt"];
@@ -120,5 +121,14 @@ export function apply(ctx) {
       const value = parse(args.payload);
       return JSON.stringify(validateAssessmentV021(value.input, value.modelAssessment));
     }
+  }));
+  ctx.tools.register(defineTool({
+    name: "validate_intake_v03",
+    description: "Validate and whitelist a FlowCredit v0.3 intake draft. Scoring fields and unknown inputs are ignored.",
+    parameters: PARAMS,
+    output: OUTPUT,
+    timeoutMs: 2000,
+    isConcurrencySafe: () => true,
+    execute: args => JSON.stringify(validateDraftV03(parse(args.payload)))
   }));
 }

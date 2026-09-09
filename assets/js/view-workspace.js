@@ -1,127 +1,23 @@
-/* Guided case selection. Results are shown only after this session runs. */
+/* FlowCredit v0.3.1 task-first workspace with session-only drafts. */
 (function () {
+  "use strict";
   var App = window.App;
   function render(host) {
-    var u = App.ui,
-      s = App.state,
-      d = SUBJECTS[s.subject],
-      done = s.auditStage === 4 && !s.running,
-      liveRun = App.liveResults && App.liveResults[s.subject] && window.AI_LEDGER && AI_LEDGER.runs[s.subject] && AI_LEDGER.runs[s.subject].ruleVersion === "flowcredit.risk_result/v0.2.1" ? AI_LEDGER.runs[s.subject] : null,
-      liveReady = window.FC_LIVE === true;
-    var next = !s.anchored
-      ? ["#/ingest", "Review evidence", "Start with the four source records."]
-      : !done
-        ? ["#/audit", "Run assessment", "Your local proof is ready. Evaluate the business."]
-        : [
-            "#/report",
-            "Explore the report",
-            "Your assessment is complete. Review the decision and response."
-          ];
-    host.innerHTML =
-      '<div class="v-page">' +
-      u.pageHead(
-        "DEMO WORKSPACE",
-        "Follow Token activity into risk.",
-        "Evidence → Token metering → Risk screen → Report."
-      ) +
-      '<section class="v-panel v-current"><div><p class="v-eyebrow">YOUR CURRENT CASE</p><h2>' +
-      u.esc(d.label) +
-      '</h2><div class="fc-runtime-line">' +
-      (liveReady ? u.tag("LIVE v0.2.1", "green") + '<span>' + u.esc(window.FC_AI && FC_AI.model || "Configured model") + '</span>' + u.tag("SIMULATION", "neutral") : u.tag("OFFLINE v0.1 BASELINE", "neutral")) +
-      '</div><p>' +
-      next[2] +
-      '</p></div><a class="btn btn-primary" href="' +
-      next[0] +
-      '">' +
-      (s.anchored || done ? "Continue Demo" : "Start Case") +
-      " →</a></section>" +
-      '<section><div class="v-section-head"><h2>Choose your scenario</h2><span class="v-muted">01 / 03 cases selected</span></div><p class="v-caption v-case-warning">Switching cases resets the current demo run.</p><div class="v-three-grid">' +
-      SUBJECT_ORDER.map(function (k, i) {
-        var c = u.caseInfo[k];
-        return (
-          '<button class="v-case-card ' +
-          (k === s.subject ? "selected" : "") +
-          '" type="button" data-case="' +
-          k +
-          '" aria-pressed="' +
-          (k === s.subject) +
-          '" ' +
-          (s.running ? "disabled" : "") +
-          '><span class="v-case-top"><span class="v-case-index">0' +
-          (i + 1) +
-          '</span><span class="v-' +
-          c.tone +
-          '">' +
-          u.icon(c.icon, 24) +
-          "</span></span>" +
-          u.tag(c.tag, c.tone) +
-          "<strong>" +
-          u.esc(SUBJECTS[k].label) +
-          '</strong><span class="v-case-desc">' +
-          u.esc(c.desc) +
-          '</span><span class="v-case-question">' +
-          u.esc(c.question) +
-          '</span><span class="v-case-select">' +
-          (k === s.subject ? u.icon("check", 16) + " Selected" : "Select case →") +
-          "</span></button>"
-        );
-      }).join("") +
-      "</div></section>" +
-      '<section class="v-two-grid"><div class="v-panel"><div class="v-section-head"><h2>This session</h2>' +
-      u.tag(done ? "Assessment complete" : "In progress", done ? "green" : "neutral") +
-      '</div><ol class="v-session-steps">' +
-      [
-        ["Evidence", s.anchored ? "Local proof created" : "Ready to review", s.anchored],
-        ["Token metering", done ? "Metering pipeline complete" : s.running ? "Running…" : "Not started", done],
-        ["Risk screen & report", done ? "Ready to explore" : "Available after assessment", s.stress === "recover"]
-      ]
-        .map(function (x, i) {
-          return (
-            '<li><span class="v-step-number">' +
-            (x[2] ? u.icon("check", 16) : "0" + (i + 1)) +
-            "</span><div><b>" +
-            x[0] +
-            "</b><small>" +
-            x[1] +
-            "</small></div></li>"
-          );
-        })
-        .join("") +
-      '</ol></div><div class="v-panel"><div class="v-section-head"><h2>Recent activity</h2>' +
-      u.icon("clock", 18) +
-      "</div>" +
-      (!s.chainLogs.length && !done
-        ? '<div class="v-activity-empty"><p>Your case starts here.</p><span>Review the evidence and create a local proof to add your first activity.</span></div>'
-        : '<ul class="v-activity">' +
-          (done
-            ? "<li>" +
-              u.icon("check", 17) +
-              "<div><b>" + (liveRun ? "Live Token screen complete" : "Assessment complete") + "</b><small>" +
-              u.esc(d.label) +
-              (liveRun ? " · TAI " + u.esc(liveRun.tai) + " · CCI " + u.esc(liveRun.cci) + " · Grade " + u.esc(liveRun.grade) : " · CCI " + App.fn.cci(d)) +
-              "</small></div></li>"
-            : "") +
-          s.chainLogs
-            .slice(0, 4)
-            .map(function (l) {
-              return (
-                "<li>" +
-                u.icon("layers", 17) +
-                "<div><b>Local proof created</b><small>" +
-                u.esc(l.hash) +
-                " · " +
-                u.esc(l.time) +
-                "</small></div></li>"
-              );
-            })
-            .join("") +
-          "</ul>") +
-      "</div></section></div>";
-    Array.prototype.forEach.call(host.querySelectorAll("[data-case]"), function (b) {
-      b.addEventListener("click", function () {
-        App.act.switchSubject(b.getAttribute("data-case"));
-      });
-    });
+    var u = App.ui, drafts = window.FC_INTAKE ? FC_INTAKE.list() : [], live = window.FC_LIVE === true;
+    function metric(draft) {
+      if (!draft.result) return Object.keys(draft.missingByGroup || {}).length ? "Limited data" : "Draft";
+      return "TAI " + (draft.result.tai == null ? "—" : draft.result.tai) + " · CCI " + (draft.result.cci == null ? "—" : draft.result.cci) + " · " + (draft.result.grade || "Not rated");
+    }
+    host.innerHTML = '<div class="v-page workspace-v03">' + u.pageHead('WORKSPACE', 'Assess the operating credibility of an AI business.', 'Describe or import evidence, confirm the facts, then run a deterministic Token-adjusted risk screen.') +
+      '<section class="v-panel workspace-primary"><div><p class="v-eyebrow">FLOWCREDIT INTAKE v0.3.1</p><h2>Start with the business, not the model.</h2><p>One guided task turns supplied operating evidence into TAI, CCI and a manual-review decision.</p><div class="fc-runtime-line">' + (live ? u.tag('RISK ENGINE READY', 'green') + '<span>AI extraction ' + u.esc(window.FC_SERVICE_STATUS && FC_SERVICE_STATUS.aiExtraction || 'unavailable') + '</span>' : u.tag('LOCAL AGENT REQUIRED', 'amber') + '<span>Draft preparation remains available.</span>') + '</div></div><button class="btn btn-primary" id="workspace-new" type="button">Start a new assessment →</button></section>' +
+      '<section><div class="v-section-head"><div><p class="v-eyebrow">THIS TAB</p><h2>Recent assessments</h2></div>' + (drafts.length ? '<button class="btn btn-ghost" id="workspace-clear" type="button">Clear all session data</button>' : '<span class="v-muted">Up to 5 drafts</span>') + '</div>' +
+      (drafts.length ? '<div class="workspace-drafts">' + drafts.map(function (draft) { return '<article class="v-panel workspace-draft"><div><span class="status-chip">' + u.esc(String(draft.status || 'draft').toUpperCase()) + '</span><h3>' + u.esc(draft.input && draft.input.label || 'Untitled assessment') + '</h3><p class="num">' + u.esc(metric(draft)) + '</p><small>' + u.esc(new Date(draft.updatedAt).toLocaleString()) + '</small></div><div class="v-action-row"><button class="btn" type="button" data-open-draft="' + u.esc(draft.draftId) + '">' + (draft.status === 'complete' ? 'Open result' : 'Continue') + '</button><button class="btn btn-ghost" type="button" data-delete-draft="' + u.esc(draft.draftId) + '">Remove</button></div></article>'; }).join('') + '</div>' : '<div class="v-panel workspace-empty"><h3>No assessment in this tab</h3><p>Your drafts and results appear here without being written to the repository or a database.</p></div>') + '</section>' +
+      '<section><div class="v-section-head"><div><p class="v-eyebrow">TRY AN EXAMPLE</p><h2>Explore simulated cases</h2></div><span class="v-muted">Legacy demo path</span></div><div class="v-three-grid">' + SUBJECT_ORDER.map(function (key, index) { var c = u.caseInfo[key]; return '<button class="v-case-card" type="button" data-example="' + key + '"><span class="v-case-top"><span class="v-case-index">0' + (index + 1) + '</span><span class="v-' + c.tone + '">' + u.icon(c.icon, 24) + '</span></span>' + u.tag(c.tag, c.tone) + '<strong>' + u.esc(SUBJECTS[key].label) + '</strong><span class="v-case-desc">' + u.esc(c.desc) + '</span><span class="v-case-select">Open simulated case →</span></button>'; }).join('') + '</div></section></div>';
+    host.querySelector('#workspace-new').addEventListener('click', function () { FC_INTAKE.deactivate(); App.nav('#/ingest'); });
+    var clear = host.querySelector('#workspace-clear'); if (clear) clear.addEventListener('click', function () { if (window.confirm('Clear every draft and result in this browser tab?')) FC_INTAKE.clear(); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-open-draft]'), function (button) { button.addEventListener('click', function () { var draft = FC_INTAKE.choose(button.getAttribute('data-open-draft')); App.nav(draft && draft.status === 'complete' ? '#/audit' : '#/ingest'); }); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-delete-draft]'), function (button) { button.addEventListener('click', function () { FC_INTAKE.remove(button.getAttribute('data-delete-draft')); }); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-example]'), function (button) { button.addEventListener('click', function () { FC_INTAKE.deactivate(); App.act.switchSubject(button.getAttribute('data-example')); App.nav('#/audit'); }); });
   }
   App.views.workspace = { render: render };
 })();

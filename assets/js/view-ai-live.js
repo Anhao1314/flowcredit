@@ -4,7 +4,7 @@
   if (window.__FC_LIVE_LOADED) return;
   window.__FC_LIVE_LOADED = true;
 
-  var BASE = "/fc/ai/v0.2.1", MODEL_LABEL = "AI", RUNS = {}, controllers = [], lastHost = null, lastCtx = null;
+  var BASE = "/fc/ai/v0.2.1", V03_BASE = "/fc/ai/v0.3", MODEL_LABEL = "AI", RUNS = {}, controllers = [], lastHost = null, lastCtx = null;
 
   function esc(text) {
     return String(text == null ? "" : text).replace(/[&<>"']/g, function (c) {
@@ -35,6 +35,37 @@
       if (ctrl) removeController(ctrl);
       throw error;
     });
+  }
+  function requestJson(url, options, ms) {
+    return fetchTimeout(url, options, ms).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok) {
+          var error = new Error(data && data.error || "Request failed");
+          error.status = response.status; error.data = data; throw error;
+        }
+        return data;
+      });
+    });
+  }
+  function extractDraft(draftId, value) {
+    return requestJson(V03_BASE + "/extract", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftId: draftId, text: value, modelConsent: true })
+    }, 60000);
+  }
+  function intakeConfig() { return requestJson(V03_BASE + "/config", { method: "GET" }, 3000); }
+  function intakeSchema() { return requestJson(V03_BASE + "/schema", { method: "GET" }, 3000); }
+  function assessDraft(draft) {
+    return requestJson(V03_BASE + "/assess", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftId: draft.draftId, draft: draft.input, modelConsent: draft.modelConsent === true })
+    }, 60000);
+  }
+  function askDraft(sessionId, question) {
+    return requestJson(V03_BASE + "/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: sessionId, question: question, modelConsent: true })
+    }, 60000);
   }
   function status(subject) {
     var entry = RUNS[subject];
@@ -156,20 +187,26 @@
       return response.json().then(function (data) { return { ok: response.ok, data: data }; });
     }).then(function (packet) {
       if (!packet.ok) throw new Error("Live configuration unavailable");
-      MODEL_LABEL = String(packet.data.model || "AI");
+      return intakeConfig().catch(function () { return { deterministicStatus: "ready", extractionStatus: "unavailable", model: packet.data.model }; }).then(function (intake) { return { legacy: packet.data, intake: intake }; });
+    }).then(function (configuration) {
+      MODEL_LABEL = String(configuration.intake.model || configuration.legacy.model || "AI");
       window.FC_LIVE = true;
+      window.FC_SERVICE_STATUS = { riskEngine: "ready", aiExtraction: configuration.intake.extractionStatus || "unavailable" };
       window.FC_AI = {
-        model: MODEL_LABEL, ruleVersion: packet.data.ruleVersion || "flowcredit.risk_result/v0.2.1",
+        model: MODEL_LABEL, ruleVersion: configuration.legacy.ruleVersion || "flowcredit.risk_result/v0.2.1", productVersion: configuration.intake.productVersion || "flowcredit.intake/v0.3.1",
+        serviceStatus: window.FC_SERVICE_STATUS,
         run: run, status: status,
-        ask: askRequest
+        ask: askRequest, intakeConfig: intakeConfig, intakeSchema: intakeSchema,
+        extractDraft: extractDraft, assessDraft: assessDraft, askDraft: askDraft
       };
       var pending = window.FC_PENDING_RUN;
       window.FC_PENDING_RUN = null;
-      emit("fc:live", { model: MODEL_LABEL, ruleVersion: packet.data.ruleVersion });
+      emit("fc:live", { model: MODEL_LABEL, ruleVersion: configuration.legacy.ruleVersion, serviceStatus: window.FC_SERVICE_STATUS });
       App.setState({});
       if (pending) run(pending).catch(function () { /* live status exposes retry */ });
     }).catch(function () {
       window.FC_LIVE = false;
+      window.FC_SERVICE_STATUS = { riskEngine: "unavailable", aiExtraction: "unavailable" };
       emit("fc:live-off", {});
       App.setState({});
     });
