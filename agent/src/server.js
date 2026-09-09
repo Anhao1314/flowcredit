@@ -6,13 +6,16 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DSH_VERSION, MODEL, RULE_VERSION } from "./constants.js";
 import { RULE_VERSION_V02 } from "./rules-v02.js";
+import { RULE_VERSION_V021 } from "./rules-v021.js";
 import { HarnessBrain } from "./harness.js";
 import { SafeLogger } from "./logger.js";
 import { normalizeEvidence } from "./normalize.js";
 import { normalizeEvidenceV02 } from "./normalize-v02.js";
-import { getPreset, getPresetV02 } from "./presets.js";
+import { normalizeEvidenceV021 } from "./normalize-v021.js";
+import { getPreset, getPresetV02, getPresetV021 } from "./presets.js";
 import { computeRisk } from "./risk-core.js";
 import { computeRiskV02 } from "./risk-core-v02.js";
+import { computeRiskV021 } from "./risk-core-v021.js";
 import { SessionStore } from "./session-store.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -99,6 +102,23 @@ function factsForV02(data, result) {
   ];
 }
 
+function factsForV021(data, result) {
+  return [
+    `F1 window=${data.periodStart ?? "missing"}..${data.periodEnd ?? "missing"}, normalizationProfile=${data.normalizationProfileId ?? "missing"}`,
+    `F2 rawTokensM=${result.tokenMetrics.meteredRawTokensM ?? "not-computable"}, inputTokensM=${data.inputTokensM ?? "missing"}, outputTokensM=${data.outputTokensM ?? "missing"}`,
+    `F3 normalizedTokensM=${result.tokenMetrics.normalizedTokensM ?? "not-computable"}`,
+    `F4 validRatePct=${result.tokenMetrics.validRatePct ?? "not-computable"}, validNT_M=${result.tokenMetrics.validNT_M ?? "not-computable"}`,
+    `F5 validEfficiency=${result.tokenMetrics.validEfficiency_NT_per_GPUh ?? "not-computable"}, peer=${data.peerProfileId ?? "missing"}`,
+    `F6 revenuePerValidNTM=${result.tokenMetrics.revenuePerValidNTM ?? "not-computable"}, computeSpendPerValidNTM=${result.tokenMetrics.computeSpendPerValidNTM ?? "not-computable"}`,
+    `F7 tokenVolatilityPct=${result.tokenMetrics.tokenVolatilityPct ?? "not-computable"}, tokenRevenueCorrelation=${result.tokenMetrics.tokenRevenueCorrelation ?? "not-computable"}`,
+    `F8 TAI=${result.TAI ?? "not-computable"}, tokenActivityBand=${result.tokenActivityBand ?? "not-computable"}, meteringStatus=${result.tokenMeteringStatus}`,
+    `F9 CCI=${result.CCI ?? "not-computable"}, riskGrade=${result.riskGrade ?? "not-computable"}`,
+    `F10 repaymentRatePct=${data.repaymentRatePct ?? "missing"}, overdue30Pct=${data.overdue30Pct ?? "missing"}, payingCustomers=${data.payingCustomers ?? "missing"}, top5ConcentrationPct=${data.top5ConcentrationPct ?? "missing"}`,
+    `F11 evidenceStrength=${result.evidenceStrength}, decisionStatus=${result.decisionStatus}, confirmedIntegrityEvents=${result.confirmedIntegrityEvents.length}`,
+    "F12 TAI is activity coherence; PD, expected loss, numeric limit and automatic approval are not produced"
+  ];
+}
+
 function ledgerCompatible(subject, data, result, modelLayer = null) {
   const names = { efficiency: "efficiency", repayment: "repayment", customer: "customer_concentration", cost: "cost_stability", timeSybil: "time_sybil" };
   const anchors = Object.entries(result.anchorScores).map(([key, score], index) => ({
@@ -160,6 +180,54 @@ function ledgerCompatibleV02(subject, data, result, modelLayer = null) {
   };
 }
 
+function ledgerCompatibleV021(subject, data, result, modelLayer = null) {
+  const names = { tokenActivity: "ai_token_activity", repayment: "repayment_quality", customer: "customer_resilience", economics: "unit_economics", continuity: "operating_continuity" };
+  const evidenceIds = { tokenActivity: "F8", repayment: "F10", customer: "F10", economics: "F6", continuity: "F7" };
+  const anchors = Object.entries(result.dimensionScores).map(([key, score]) => ({
+    name: names[key], score, state: score === null ? "y" : score >= 75 ? "g" : score >= 50 ? "y" : "r",
+    evidence: [evidenceIds[key]], note: modelLayer?.analysis?.creditOpinions?.[key] || "Deterministic v0.2.1 rule result"
+  }));
+  const tokenComponents = Object.entries(result.tokenComponentScores).map(([key, score]) => ({
+    name: key, score, state: score === null ? "y" : score >= 75 ? "g" : score >= 50 ? "y" : "r",
+    evidence: [key === "reconciliation" ? "F2" : key === "validity" ? "F4" : key === "physical" ? "F5" : key === "commercial" ? "F6" : "F7"],
+    note: modelLayer?.analysis?.tokenOpinions?.[key] || "Deterministic Token metering component"
+  }));
+  return {
+    subjectId: data.subjectId || subject,
+    verdict: result.verdict,
+    decisionStatus: result.decisionStatus,
+    simulatedDecisionStatus: result.simulatedDecisionStatus,
+    assessmentMode: result.assessmentMode,
+    tai: result.TAI,
+    tokenActivityBand: result.tokenActivityBand,
+    tokenMeteringStatus: result.tokenMeteringStatus,
+    tokenMetrics: result.tokenMetrics,
+    tokenComponents,
+    cci: result.CCI,
+    pdPct: null,
+    pdStatus: result.pdStatus,
+    grade: result.riskGrade,
+    creditSuggestedUsd: null,
+    currentExposure: result.currentExposure,
+    vetoApplied: result.vetoApplied,
+    integritySignals: result.integritySignals,
+    confirmedIntegrityEvents: result.confirmedIntegrityEvents,
+    limitations: result.limitations,
+    redflags: [...result.integritySignals, ...result.confirmedIntegrityEvents],
+    anchors,
+    evidenceQuality: result.evidenceQuality,
+    trace: modelLayer?.review?.correctedExplanation || modelLayer?.analysis?.explanation || result.summary,
+    factsSha256: result.inputHash,
+    promptSha256: modelLayer ? hash(modelLayer) : "deterministic",
+    builtAtUtc: stamp(),
+    model: MODEL,
+    ruleVersion: RULE_VERSION_V021,
+    evidenceStrength: result.evidenceStrength,
+    modelLayer,
+    deterministic: true
+  };
+}
+
 async function assessWithOptionalBrain(input, requestId, requireModel = false) {
   const normalized = normalizeEvidence(input);
   const result = computeRisk(normalized, { normalized: true });
@@ -182,6 +250,21 @@ async function assessV02WithOptionalBrain(input, requestId, requireModel = false
   let harnessStatus = "unconfigured";
   try {
     modelLayer = await brain.assessV02(normalized, result, requestId);
+    harnessStatus = "ok";
+  } catch (error) {
+    if (requireModel) throw error;
+    harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
+  }
+  return { normalized, result, modelLayer, harnessStatus };
+}
+
+async function assessV021WithOptionalBrain(input, requestId, requireModel = false) {
+  const normalized = normalizeEvidenceV021(input);
+  const result = computeRiskV021(normalized);
+  let modelLayer = null;
+  let harnessStatus = "unconfigured";
+  try {
+    modelLayer = await brain.assessV021(normalized, result, requestId);
     harnessStatus = "ok";
   } catch (error) {
     if (requireModel) throw error;
@@ -214,7 +297,7 @@ async function route(req, res, requestId) {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
-    return sendJson(res, 200, { ok: true, service: "flowcredit-agent", model: MODEL, ruleVersion: RULE_VERSION, ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02 }, dshVersion: DSH_VERSION, harness }, requestId);
+    return sendJson(res, 200, { ok: true, service: "flowcredit-agent", model: MODEL, ruleVersion: RULE_VERSION, ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02, v021: RULE_VERSION_V021 }, dshVersion: DSH_VERSION, harness }, requestId);
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/config") {
     const harness = await brain.status();
@@ -223,6 +306,54 @@ async function route(req, res, requestId) {
   if (req.method === "GET" && url.pathname === "/fc/ai/v0.2/config") {
     const harness = await brain.status();
     return sendJson(res, 200, { ok: true, enabled: true, model: MODEL, ruleVersion: RULE_VERSION_V02, dshVersion: DSH_VERSION, harnessReady: harness.ready, calibratedPd: false, automatedApproval: false }, requestId);
+  }
+  if (req.method === "GET" && url.pathname === "/fc/ai/v0.2.1/config") {
+    const harness = await brain.status();
+    return sendJson(res, 200, { ok: true, enabled: true, model: MODEL, ruleVersion: RULE_VERSION_V021, dshVersion: DSH_VERSION, harnessReady: harness.ready, tokenMetering: true, calibratedPd: false, automatedApproval: false }, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/run") {
+    const body = await readJson(req);
+    const preset = getPresetV021(body.subject);
+    if (!preset) return sendJson(res, 400, { error: "subject must be healthy, watch, or sybil" }, requestId);
+    const { normalized, result, modelLayer, harnessStatus } = await assessV021WithOptionalBrain(preset, requestId, body.requireModel === true);
+    sessions.set(`v021:${body.subject}`, { version: "v0.2.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
+    return sendJson(res, 200, { ...ledgerCompatibleV021(body.subject, normalized, result, modelLayer), harnessStatus }, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/assess") {
+    const body = await readJson(req);
+    if (!("input" in body)) return sendJson(res, 400, { error: "input is required" }, requestId);
+    const { normalized, result, modelLayer, harnessStatus } = await assessV021WithOptionalBrain(body.input, requestId, body.requireModel === true);
+    const sessionId = body.sessionId || requestId;
+    sessions.set(`v021:${sessionId}`, { version: "v0.2.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
+    return sendJson(res, 200, { ...result, model: MODEL, modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null, validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [] }, harnessStatus, sessionId }, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/ask") {
+    const body = await readJson(req);
+    if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) return sendJson(res, 400, { error: "question must contain 1 to 500 characters" }, requestId);
+    const key = body.sessionId || body.subject;
+    let session = sessions.get(`v021:${key}`);
+    if (!session && getPresetV021(body.subject)) {
+      const input = normalizeEvidenceV021(getPresetV021(body.subject));
+      const assessment = computeRiskV021(input);
+      session = { version: "v0.2.1", input, assessment, modelLayer: null, facts: factsForV021(input, assessment) };
+      sessions.set(`v021:${body.subject}`, session);
+    }
+    if (!session) return sendJson(res, 400, { error: "no v0.2.1 assessment found for this session or subject" }, requestId);
+    let answer = `${session.assessment.summary} The answer is limited to v0.2.1 supplied evidence.`;
+    let citations = session.facts.slice(0, 4).map(fact => fact.split(" ")[0]);
+    let harnessStatus = "unavailable";
+    try {
+      const response = await brain.ask({ ruleVersion: RULE_VERSION_V021, ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
+      if (typeof response.answer === "string" && Array.isArray(response.citations)) {
+        answer = response.answer;
+        citations = response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value));
+        harnessStatus = "ok";
+      }
+    } catch (error) {
+      if (body.requireModel === true) throw error;
+      harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
+    }
+    return sendJson(res, 200, { answer, citations, harnessStatus, model: MODEL, ruleVersion: RULE_VERSION_V021 }, requestId);
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.2/run") {
     const body = await readJson(req);

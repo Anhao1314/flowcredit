@@ -255,14 +255,25 @@
       var bodyHtml = parts.join("");
 
       var done = s === 4 && !st.running;
-      host.innerHTML = '<div class="v-page v-assessment">' + ui.pageHead('02 / ASSESSMENT', 'Understand the risk behind the activity.', 'A deterministic rule assessment, with a separate AI perspective.') +
+      var liveMode = window.FC_LIVE === true;
+      var liveState = liveMode && window.FC_AI && FC_AI.status ? FC_AI.status(st.subject) : { state: "offline" };
+      var liveBusy = liveState.state === "running";
+      var completedResults = '';
+      if (done && liveMode) {
+        completedResults = '<div id="v-assessment-ai"></div><details class="v-details fc-legacy" id="v-legacy-assessment"><summary>Legacy v0.1 demo baseline <span>PD, limit and original L0–L5 method</span></summary><div class="v-details-body">' +
+          ui.flags(d) + ui.ruleSummary(d) + '<div class="v-notice">' + ui.icon('info',18) + '<p><b>Historical demonstration only.</b> These fixed inputs, PD calibration and suggested limit are not part of the live v0.2.1 decision.</p></div>' +
+          '<section class="v-panel"><div class="v-section-head"><h2>Legacy five-dimension baseline</h2><span class="v-muted">Offline v0.1</span></div>' + l3Body(d,true) + '</section>' + bodyHtml + '</div></details>';
+      } else if (done) {
+        completedResults = ui.flags(d) + '<div class="v-comparison">' + ui.ruleSummary(d) + '<div id="v-assessment-ai"></div></div><div class="v-notice">' + ui.icon('info',18) + '<p><b>Two assessments, separate conclusions.</b> Rules use fixed demo inputs and calibration. Saved AI results do not change the rule-based limit.</p></div><section class="v-panel"><div class="v-section-head"><h2>Five dimensions of credit risk</h2><span class="v-muted">Rule-based evidence</span></div>' + l3Body(d,true) + '</section>';
+      }
+      host.innerHTML = '<div class="v-page v-assessment">' + ui.pageHead('02 / ASSESSMENT', liveMode ? 'Measure Token activity before screening risk.' : 'Understand the risk behind the activity.', liveMode ? 'Live v0.2.1 is primary; the offline v0.1 baseline remains available for comparison.' : 'A deterministic rule assessment, with a separate saved AI perspective.') +
         (!st.anchored ? '<div class="v-notice">' + ui.icon('info',18) + '<p>Create a local proof to trace these results back to the source records. <a href="#/ingest">Review Evidence →</a></p></div>' : '') +
         '<section class="v-panel v-run-panel"><div class="v-section-head"><div><p class="v-eyebrow">' + ui.esc(d.label) + '</p><h2>' + (done ? 'Assessment complete' : st.running ? 'Following the evidence…' : 'Ready to assess this case') + '</h2></div>' + ui.tag(done ? 'Complete' : st.running ? 'Running' : 'Not started',done?'green':'neutral') + '</div>' +
         '<p>Normalize usage, filter synthetic activity and cross-check five risk dimensions.</p><div class="v-action-row"><button type="button" id="run-audit" class="btn ' + (done?'':'btn-primary') + '" ' + (st.running?'disabled':'') + '>' + ui.icon('pulse',17) + (st.running?' Assessing…':done?'Run Again':' Run Assessment') + '</button><button type="button" id="reset-audit" class="btn btn-ghost">Reset</button>' +
-        (done ? '<a class="btn btn-primary" href="#/report">Continue to Report & Monitor →</a>' : '') + '</div><div class="steps" aria-label="Rule engine stages">' + stepHtml(st) + '</div><p class="v-caption" role="status">' + (st.running?'Processing stage L'+s+' of the rule engine.':done?'Rule-based result ready. AI results below are independently generated.':'No assessment has been run in this session.') + '</p></section>' +
-        (done ? ui.flags(d) + '<div class="v-comparison">' + ui.ruleSummary(d) + '<div id="v-assessment-ai"></div></div><div class="v-notice">' + ui.icon('info',18) + '<p><b>Two assessments, separate conclusions.</b> Rules use fixed demo inputs and calibration. AI evaluates a saved facts snapshot with its own scoring. AI recommendations do not change the rule-based limit.</p></div><section class="v-panel"><div class="v-section-head"><h2>Five dimensions of credit risk</h2><span class="v-muted">Rule-based evidence</span></div>' + l3Body(d,true) + '</section>' : '') +
-        '<details class="v-details" id="v-assessment-details"><summary>Assessment details <span>L0–L5 · inputs, calculations & proof</span></summary><div class="v-details-body">' + bodyHtml + '</div></details></div>';
-      if (done && App.aiPanel) App.aiPanel(host.querySelector('#v-assessment-ai'), 'report');
+        (done ? (liveBusy ? '<button type="button" class="btn btn-primary" disabled>Live Token screen running…</button>' : '<a class="btn btn-primary" href="#/report">Continue to Report & Monitor →</a>') : '') + '</div><div class="steps" aria-label="Rule engine stages">' + stepHtml(st) + '</div><p class="v-caption" role="status">' + (st.running?'Processing stage L'+s+' of the rule engine.':done && liveBusy?'Offline baseline ready; waiting for the live v0.2.1 screen.':done && liveMode?'Token-adjusted result ready. The v0.1 baseline remains in the Legacy section.':done?'Rule-based result ready. Saved AI results remain separate.':'No assessment has been run in this session.') + '</p></section>' +
+        completedResults +
+        (!liveMode ? '<details class="v-details" id="v-assessment-details"><summary>Assessment details <span>L0–L5 · inputs, calculations & proof</span></summary><div class="v-details-body">' + bodyHtml + '</div></details>' : '') + '</div>';
+      if (done && App.aiPanel) App.aiPanel(host.querySelector('#v-assessment-ai'), 'assessment');
 
       var ringSlot = host.querySelector("#ring-slot");
       var lineSlot = host.querySelector("#line-slot");
@@ -287,7 +298,15 @@
       });
     }
     var run = host.querySelector("#run-audit");
-    if (run) { run.addEventListener("click", function () { App.act.runAudit(); }); }
+    if (run) { run.addEventListener("click", function () {
+      var subject = App.state.subject;
+      App.act.runAudit();
+      window.FC_PENDING_RUN = subject;
+      if (window.FC_AI && FC_AI.run) {
+        window.FC_PENDING_RUN = null;
+        FC_AI.run(subject).catch(function () { /* live status owns the retry message */ });
+      }
+    }); }
     var reset = host.querySelector("#reset-audit");
     if (reset) { reset.addEventListener("click", function () { App.act.resetAudit(); }); }
     var goP1 = host.querySelector("#go-p1");

@@ -120,6 +120,11 @@
     return "recovered · limit " + u.fmtInt(credit);
   }
 
+  function liveV021(subject) {
+    var run = window.AI_LEDGER && AI_LEDGER.runs && AI_LEDGER.runs[subject];
+    return App.liveResults && App.liveResults[subject] && run && run.ruleVersion === "flowcredit.risk_result/v0.2.1" ? run : null;
+  }
+
   function render(host) {
     if (!ui) { ui = App.ui; }
     try {
@@ -132,6 +137,7 @@
       var veto = App.fn.vetoed(d);
       var meta = App.fn.stressMeta(st.stress);
       var anchored = !!st.anchor;
+      var liveRun = liveV021(st.subject);
 
       var proofHtml = anchored
         ? '<div class="proof-row"><span class="proof-label">Local demo proof · Merkle root</span>' +
@@ -187,11 +193,12 @@
           "</div>";
       }
 
-      host.innerHTML = '<div class="v-page v-monitor">' + bannerHtml(st.stress) +
-        ui.pageHead('03 / REPORT & MONITOR', 'A decision you can examine.', 'Read the evidence behind the recommendation, then explore how risk changes the response.') +
+      host.innerHTML = '<div class="v-page v-monitor">' + (liveRun ? '' : bannerHtml(st.stress)) +
+        ui.pageHead('03 / REPORT & MONITOR', liveRun ? 'A Token-adjusted screen you can examine.' : 'A decision you can examine.', liveRun ? 'Live v0.2.1 is primary. Legacy PD, limits and stress remain available as an offline demo appendix.' : 'Read the evidence behind the recommendation, then explore how risk changes the response.') +
         '<div class="v-section-head"><h2>' + ui.esc(d.label) + '</h2><button type="button" class="btn" id="report-open-btn">' + ui.icon('layers',17) + ' Open Full Report</button></div>' +
-        ui.ruleSummary(d) + ui.flags(d) + '<section class="v-panel"><div class="v-section-head"><h2>Evidence integrity</h2>' + ui.tag(anchored ? 'Local proof created' : 'Proof not created',anchored?'green':'neutral') + '</div>' + proofHtml + '</section>' + stressHtml +
-        '<details class="v-details" id="v-monitor-ai"><summary>Independent AI assessment <span>Supplementary perspective</span></summary><div class="v-details-body" id="v-monitor-ai-slot"></div></details></div>';
+        (liveRun
+          ? '<div id="v-monitor-ai-slot"></div><section class="v-panel"><div class="v-section-head"><h2>Evidence integrity</h2>' + ui.tag(anchored ? 'Local proof created' : 'Proof not created',anchored?'green':'neutral') + '</div>' + proofHtml + '</section><details class="v-details fc-legacy" id="v-report-legacy"><summary>Legacy v0.1 demo baseline and response <span>PD, limit and stress simulation</span></summary><div class="v-details-body">' + bannerHtml(st.stress) + ui.ruleSummary(d) + ui.flags(d) + stressHtml + '</div></details>'
+          : ui.ruleSummary(d) + ui.flags(d) + '<section class="v-panel"><div class="v-section-head"><h2>Evidence integrity</h2>' + ui.tag(anchored ? 'Local proof created' : 'Proof not created',anchored?'green':'neutral') + '</div>' + proofHtml + '</section>' + stressHtml + '<details class="v-details" id="v-monitor-ai"><summary>Saved AI assessment <span>Offline perspective</span></summary><div class="v-details-body" id="v-monitor-ai-slot"></div></details>') + '</div>';
       if (App.aiPanel) App.aiPanel(host.querySelector('#v-monitor-ai-slot'), 'report');
       var stressControl = host.querySelector('#stress-btn');
       if (stressControl && App.fn.stressFlying()) stressControl.disabled = true;
@@ -269,6 +276,39 @@
       '<section class="v-paper-section" id="report-' + id + '"><h2>' + title + "</h2>" + body + "</section>"
     );
   }
+  function aiPerspective(u, subject) {
+    var run = window.AI_LEDGER && AI_LEDGER.runs && AI_LEDGER.runs[subject];
+    if (!run) return "<p>No AI result available. The rule assessment remains valid as a demo output.</p>";
+    var live = App.liveResults[subject];
+    if (live && run.ruleVersion === "flowcredit.risk_result/v0.2.1") {
+      return table(
+        ["Result source", "TAI", "Valid NT", "CCI", "Grade"],
+        [[
+          "Live v0.2.1 · " + String(run.decisionStatus || "manual review").replace(/-/g, " "),
+          run.tai == null ? "Not computable" : run.tai + " / 100 · " + (run.tokenActivityBand || "not rated"),
+          run.tokenMetrics && run.tokenMetrics.validNT_M != null ? run.tokenMetrics.validNT_M + "M" : "Not computable",
+          run.cci == null ? "Not computable" : run.cci,
+          run.grade == null ? "Not computable" : run.grade
+        ]]
+      ) + "<p>Live v0.2.1 first converts reported Token consumption into server-normalized, filtered activity, then gives TAI a 40% role in CCI. TAI measures activity coherence; it is not revenue, a probability of default or a credit limit.</p>";
+    }
+    if (live) {
+      return table(
+        ["Result source", "CCI", "PD", "Grade", "Suggested limit"],
+        [[
+          "Live v0.2 · " + String(run.decisionStatus || "manual review").replace(/-/g, " "),
+          run.cci == null ? "Not computable" : run.cci,
+          run.pdPct == null ? "Not calibrated" : run.pdPct + "%",
+          run.grade == null ? "Not computable" : run.grade,
+          run.creditSuggestedUsd == null ? "Manual only" : u.fmtMoney(run.creditSuggestedUsd)
+        ]]
+      ) + "<p>The live v0.2 result is a conservative manual-review screen. It does not produce a calibrated PD, numeric limit or automatic approval.</p>";
+    }
+    return table(
+      ["Result source", "CCI", "PD", "Grade", "Suggested limit"],
+      [["Saved v0.1 batch", run.cci, run.pdPct + "%", run.grade, u.fmtMoney(run.creditSuggestedUsd)]]
+    ) + "<p>The saved v0.1 result is an offline demo baseline. It does not replace the rule-based decision or the case limit.</p>";
+  }
   function close() {
     if (!overlay) return;
     document.removeEventListener("keydown", onKey);
@@ -277,12 +317,63 @@
     if (release) release();
     release = null;
   }
+  function reportWords(value) { return String(value || "not rated").replace(/[-_]/g, " "); }
+  function reportValue(value, suffix) { return value == null ? "Not computable" : String(value) + (suffix || ""); }
+  function openLiveReport(run) {
+    var u = App.ui, f = App.fn, st = App.state, d = SUBJECTS[st.subject], anchor = st.anchor;
+    var returned = document.activeElement, captured = f.nowStamp(), m = run.tokenMetrics || {}, eq = run.evidenceQuality || {};
+    var sections = [["summary","Executive decision"],["metering","Token metering"],["tai","TAI composition"],["risk","Credit-risk screen"],["evidence","Evidence and integrity"],["appendix","Methodology and limitations"]];
+    var evidenceValue = run.evidenceStrength === "simulated" ? "Simulated" : eq.score == null ? reportWords(run.evidenceStrength) : eq.score + " / 100";
+    var integrityRows = (run.integritySignals || []).map(function (item) { return ["Signal", item.code || "Risk signal", item.message || item.note || "Review required"]; }).concat(
+      (run.confirmedIntegrityEvents || []).map(function (item) { return ["Confirmed event", item.code || "Integrity event", item.message || item.note || "Confirmed evidence recorded"]; })
+    );
+    if (!integrityRows.length) integrityRows.push(["None", "No recorded signal", "No confirmed integrity Veto"]);
+    var body = section("summary", "Executive decision",
+      "<p>This live screen evaluates <b>" + u.esc(d.label) + "</b> under the v0.2.1 AI Token metering standard. Deterministic rules own every score; the model supplies explanation and review only.</p>" +
+      table(["Decision status","Scenario outcome","TAI","CCI","Grade","Integrity"], [[reportWords(run.decisionStatus), run.simulatedDecisionStatus ? reportWords(run.simulatedDecisionStatus) + " · simulation" : "Not applicable", reportValue(run.tai," / 100 · " + reportWords(run.tokenActivityBand)), reportValue(run.cci," / 1,000"), reportValue(run.grade), run.vetoApplied ? "Confirmed Veto" : "No confirmed Veto"]]) +
+      "<p>This is a manual-review screen. It does not produce an automatic approval, calibrated PD, expected loss or numeric credit limit.</p>");
+    body += section("metering", "01 / Token metering",
+      table(["Stage","Value","Authority"], [["Reported raw",reportValue(m.reportedRawTokensM,"M"),"Applicant billing claim"],["Metered raw",reportValue(m.meteredRawTokensM,"M"),"Input + output reconciliation"],["Normalized",reportValue(m.normalizedTokensM,"M"),"Server model and task profile"],["Valid NT",reportValue(m.validNT_M,"M"),m.validRatePct == null ? "Validity not computable" : m.validRatePct + "% classified valid"],["Physical efficiency",reportValue(m.validEfficiency_NT_per_GPUh," NT/GPUh"),"Trusted peer comparison"],["Revenue per Valid NTM",reportValue(m.revenuePerValidNTM," USD"),"Commercial linkage"],["Token–revenue correlation",reportValue(m.tokenRevenueCorrelation),"Six-period continuity"]]) +
+      "<p>Applicant-supplied weights and normalized claims cannot alter the server calculation.</p>");
+    body += section("tai", "02 / TAI composition",
+      table(["Component","Weight","Score","Evidence"], (run.tokenComponents || []).map(function (item) { var weights={reconciliation:"10%",validity:"35%",physical:"25%",commercial:"20%",continuity:"10%"}; return [reportWords(item.name),weights[item.name] || "—",reportValue(item.score),(item.evidence || []).join(" · ")]; })) +
+      "<p>Missing components make TAI not computable; weights are never redistributed.</p>");
+    body += section("risk", "03 / Credit-risk screen",
+      table(["Dimension","Weight","Score","Evidence"], (run.anchors || []).map(function (item) { var weights={ai_token_activity:"40%",repayment_quality:"25%",customer_resilience:"15%",unit_economics:"10%",operating_continuity:"10%"}; return [reportWords(item.name),weights[item.name] || "—",reportValue(item.score),(item.evidence || []).join(" ·")]; })) +
+      "<p>TAI contributes 40% to CCI but does not independently determine creditworthiness. All five dimensions must be computable.</p>");
+    body += section("evidence", "04 / Evidence and integrity",
+      table(["Evidence strength","EQS","Independent domains","Metering status"], [[reportWords(run.evidenceStrength),evidenceValue,run.evidenceStrength === "simulated" ? "Not rated for simulations" : eq.independentDomains == null ? "Not rated" : eq.independentDomains,reportWords(run.tokenMeteringStatus)]]) +
+      table(["Type","Finding","Explanation"], integrityRows) +
+      "<h3>Local proof snapshot</h3><p>" + (anchor ? "Created " + u.esc(anchor.time) + " · nonce " + anchor.nonce + "." : "No local proof was created for this session.") + "</p>" +
+      (anchor ? '<p class="v-hash num">' + u.esc(anchor.root) + '</p><button type="button" class="btn" id="v-report-verify">Verify Snapshot Proof</button><p id="v-report-proof-result" role="status"></p>' : "<p>Return to Evidence to create a local proof.</p>") +
+      '<p class="v-hash num">Facts snapshot ' + u.esc(run.factsSha256 || "unavailable") + "</p>");
+    body += section("appendix", "05 / Methodology and limitations",
+      "<ul>" + (run.limitations || []).map(function (item) { return "<li>" + u.esc(item) + "</li>"; }).join("") + "</ul>" +
+      "<p>TAI measures activity coherence. It is not revenue, a probability of default or a credit limit. This report is for demonstration and reference only; it is not financial advice, a statutory audit or an audit opinion.</p>" +
+      '<details class="v-details fc-legacy"><summary>Legacy v0.1 demo appendix <span>Historical PD, limit and stress assumptions</span></summary><div class="v-details-body">' + u.ruleSummary(d) + u.flags(d) +
+      table(["Legacy metric","Value"], [["CCI",f.cci(d)],["Illustrative PD",f.pd(f.cci(d)).toFixed(1)+"%"],["Suggested demo limit",u.fmtMoney(f.creditLine(d))],["Expected loss",u.fmtMoney(f.expectedLoss(d))]]) +
+      "<p>These values belong only to the historical v0.1 demonstration and are not part of the live v0.2.1 result.</p></div></details>");
+    overlay = document.createElement("div");
+    overlay.className = "v-report-overlay";
+    overlay.setAttribute("role","dialog"); overlay.setAttribute("aria-modal","true"); overlay.setAttribute("aria-label","Token-adjusted risk assessment report");
+    overlay.innerHTML = '<div class="v-report-frame"><header class="v-report-toolbar"><span>' + u.icon("layers",20) + ' Token-adjusted risk assessment report</span>' + u.tag("LIVE v0.2.1") + '<button class="btn" id="v-report-close">Close ' + u.icon("x",16) + '</button></header><div class="v-report-layout"><nav aria-label="Report sections">' + sections.map(function (item) { return '<a href="#report-' + item[0] + '">' + item[1] + '</a>'; }).join("") + '</nav><article class="v-paper" tabindex="0" aria-label="Report content"><header class="v-paper-head"><p class="v-eyebrow">FLOWCREDIT / TOKEN RISK DESK</p><h1>Token-adjusted risk assessment</h1><h2>' + u.esc(d.label) + '</h2><p>Generated ' + captured + ' · Live session result</p></header>' + body + '<footer>Snapshot of the live browser session at report creation. Reopen to capture updated results.</footer></article></div></div>';
+    document.getElementById("layers").appendChild(overlay);
+    overlay.querySelector("#v-report-close").addEventListener("click",close);
+    overlay.querySelectorAll("nav a").forEach(function (link) { link.addEventListener("click",function (event) { event.preventDefault(); var target=overlay.querySelector(link.getAttribute("href")); target.setAttribute("tabindex","-1"); target.focus({preventScroll:true}); target.scrollIntoView({block:"start"}); }); });
+    var verify=overlay.querySelector("#v-report-verify");
+    if (verify && anchor) verify.addEventListener("click",function () { var valid=anchor.levels[0].every(function (leaf,index) { var proof=f.merkleProof(anchor.levels,index); return f.verifyProof(leaf,proof.path,anchor.root); }); overlay.querySelector("#v-report-proof-result").textContent=valid ? "All four paths match this captured local root." : "Proof mismatch in this snapshot."; });
+    onKey=function (event) { if (event.key === "Escape") close(); };
+    document.addEventListener("keydown",onKey);
+    release=u.focusDialog(overlay,returned);
+  }
   function open() {
     if (App.state.auditStage !== 4 || App.state.running) {
       App.ui.toast("Run the assessment first.", "warn");
       return;
     }
     close();
+    var liveRun = window.AI_LEDGER && AI_LEDGER.runs && App.liveResults && App.liveResults[App.state.subject] ? AI_LEDGER.runs[App.state.subject] : null;
+    if (liveRun && liveRun.ruleVersion === "flowcredit.risk_result/v0.2.1") { openLiveReport(liveRun); return; }
     var u = App.ui,
       f = App.fn,
       st = App.state,
@@ -390,23 +481,7 @@
         f.volatilityPct(d) +
         "%. These are illustrative series, not independently verified on-chain measurements.</p>" +
         "<h3>Independent AI perspective</h3>" +
-        (window.AI_LEDGER && AI_LEDGER.runs[st.subject]
-          ? table(
-              ["Result source", "CCI", "PD", "Grade", "Suggested limit"],
-              [
-                [
-                  App.liveResults[st.subject] ? "Live v0.2 · " + String(AI_LEDGER.runs[st.subject].decisionStatus || "manual review").replace(/-/g, " ") : "Saved v0.1 batch",
-                  AI_LEDGER.runs[st.subject].cci == null ? "Not computable" : AI_LEDGER.runs[st.subject].cci,
-                  AI_LEDGER.runs[st.subject].pdPct == null ? "Not calibrated" : AI_LEDGER.runs[st.subject].pdPct + "%",
-                  AI_LEDGER.runs[st.subject].grade == null ? "Not computable" : AI_LEDGER.runs[st.subject].grade,
-                  AI_LEDGER.runs[st.subject].creditSuggestedUsd == null ? "Manual only" : u.fmtMoney(AI_LEDGER.runs[st.subject].creditSuggestedUsd)
-                ]
-              ]
-            ) +
-            (App.liveResults[st.subject]
-              ? "<p>The live v0.2 result is a conservative manual-review screen. It does not produce a calibrated PD, numeric limit or automatic approval. The offline v0.1 demo baseline remains unchanged.</p>"
-              : "<p>The saved v0.1 result uses separate demo reasoning and calibration. It does not replace the rule-based decision or the case limit.</p>")
-          : "<p>No AI result available. The rule assessment remains valid as a demo output.</p>")
+        aiPerspective(u, st.subject)
     );
     body += section(
       "monitor",

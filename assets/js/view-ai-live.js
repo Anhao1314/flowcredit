@@ -1,255 +1,185 @@
-/* ============================================================
-   view-ai-live.js — gated live-AI enhancer (same-origin sidecar).
-   Boots ONLY when /fc/ai/v0.2/config responds (sidecar on this origin);
-   otherwise exits silently and the offline ledger cards are untouched.
-   Session-only: live results live in memory, never written to
-   ai-ledger.js or the git chain. ES5, no module.
-   ============================================================ */
+/* Same-origin v0.2.1 session controller. Live results never update ai-ledger.js on disk. */
 (function () {
   "use strict";
   if (window.__FC_LIVE_LOADED) return;
   window.__FC_LIVE_LOADED = true;
 
-  var BASE = "/fc/ai/v0.2";
-  var READY = false;
-  var MODEL_LABEL = "AI";
-  var lastHost = null;
-  var lastCtx = null;
+  var BASE = "/fc/ai/v0.2.1", MODEL_LABEL = "AI", RUNS = {}, controllers = [], lastHost = null, lastCtx = null;
 
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+  function esc(text) {
+    return String(text == null ? "" : text).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-  function money(n) {
-    n = Number(n) || 0;
-    return "$" + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  function later(fn, ms) { return App.fn.timeout(fn, ms); }
+  function emit(name, detail) {
+    try { var event = new Event(name); event.fcDetail = detail || {}; window.dispatchEvent(event); } catch (e) { /* optional session signal */ }
   }
-  function keysOrder() {
-    if (!window.AI_LEDGER || !AI_LEDGER.runs) return [];
-    return Object.keys(AI_LEDGER.runs).filter(function (k) { return AI_LEDGER.runs[k]; });
+  function removeController(ctrl) {
+    var index = controllers.indexOf(ctrl);
+    if (index >= 0) controllers.splice(index, 1);
   }
   function fetchTimeout(url, opts, ms) {
-    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, ms) : null;
-    var o = opts || {};
-    if (ctrl) o.signal = ctrl.signal;
-    return fetch(url, o).then(function (r) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var options = opts || {}, timer = null;
+    if (ctrl) {
+      controllers.push(ctrl); options.signal = ctrl.signal;
+      timer = later(function () { ctrl.abort(); }, ms);
+    }
+    return fetch(url, options).then(function (response) {
       if (timer) clearTimeout(timer);
-      return r;
-    }, function (e) {
+      if (ctrl) removeController(ctrl);
+      return response;
+    }, function (error) {
       if (timer) clearTimeout(timer);
-      throw e;
+      if (ctrl) removeController(ctrl);
+      throw error;
     });
   }
-
-  /* ---------- workspace: per-row Re-run ---------- */
-  function enhanceWorkspace(host, panel) {
-    var rows = panel.querySelectorAll(".ai-row");
-    var keys = keysOrder();
-    for (var i = 0; i < rows.length; i++) {
-      var k = keys[i];
-      if (!k) continue;
-      var row = rows[i];
-      row.setAttribute("data-subject", k);
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "ai-live-btn";
-      btn.textContent = "Re-run";
-      var st = document.createElement("span");
-      st.className = "ai-live-status";
-      st.setAttribute("data-subject", k);
-      st.textContent = "";
-      (function (rowEl, k2) {
-        btn.addEventListener("click", function (e) {
-          var rowNow = rowEl || (e.currentTarget ? e.currentTarget.parentNode : null);
-          var s2 = (rowNow && rowNow.getAttribute("data-subject")) || k2;
-          liveRun(s2, e.currentTarget || btn, rowNow || row, host);
-        });
-      })(row, k);
-      row.appendChild(btn);
-      row.appendChild(st);
-    }
+  function status(subject) {
+    var entry = RUNS[subject];
+    return entry ? { state: entry.state, error: entry.error || null } : { state: "ready", error: null };
   }
-
-  function liveRun(subject, btn, row, host) {
-    var st = row.querySelector(".ai-live-status");
-    function setBusy(txt, busy) {
-      if (st) { st.textContent = txt; st.setAttribute("data-state", busy ? "busy" : "ok"); }
-      if (btn) { btn.disabled = busy; btn.classList.toggle("is-busy", busy); }
-    }
-    if (btn && btn.disabled) return;
-    setBusy("invoking " + MODEL_LABEL + "…", true);
-    fetchTimeout(BASE + "/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: subject })
-    }, 52000).then(function (r) {
-      return r.json().then(function (j) { return { ok: r.ok, data: j }; });
-    }).then(function (p) {
-      if (!p.ok || !p.data || !p.data.verdict) throw new Error(p.data && p.data.error || "bad response");
-      var L = window.AI_LEDGER;
-      App.liveResults[subject] = p.data.builtAtUtc || "Live result · this session";
-      L.runs[subject] = p.data;
-      refreshPanel();
-      setBusy("live re-run ok · " + p.data.builtAtUtc, false);
-      setTimeout(function () { if (st) { st.textContent = ""; } }, 4000);
-    }).catch(function (e) {
-      setBusy("AI call failed — keeping the previous result. Try again.", false);
-      setTimeout(function () { if (st) { st.textContent = ""; } }, 3000);
+  function cleanup(host) {
+    var panels = host ? host.querySelectorAll(".ai-panel") : [];
+    for (var i = 0; i < panels.length; i++) panels[i].remove();
+  }
+  function refreshPanel() {
+    if (!lastHost || !lastCtx || !window.__FC_ORIG_PANEL) return;
+    cleanup(lastHost);
+    window.__FC_ORIG_PANEL(lastHost, lastCtx);
+    enhance(lastHost, lastCtx);
+  }
+  function run(subject) {
+    var current = RUNS[subject];
+    if (current && current.state === "running") return current.promise;
+    RUNS[subject] = { state: "running", error: null, promise: null };
+    emit("fc:live-start", { subject: subject });
+    refreshPanel();
+    var promise = fetchTimeout(BASE + "/run", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: subject })
+    }, 60000).then(function (response) {
+      return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+    }).then(function (packet) {
+      if (!packet.ok || !packet.data || packet.data.ruleVersion !== "flowcredit.risk_result/v0.2.1") throw new Error(packet.data && packet.data.error || "Invalid live response");
+      App.liveResults[subject] = packet.data.builtAtUtc || "Live result · this session";
+      window.AI_LEDGER.runs[subject] = packet.data;
+      RUNS[subject] = { state: "success", error: null, promise: null };
+      emit("fc:live-result", { subject: subject });
+      if (App.state.route === "#/workspace" || App.state.route === "#/audit") App.setState({});
+      else refreshPanel();
+      return packet.data;
+    }).catch(function (error) {
+      RUNS[subject] = { state: "error", error: error && error.name === "AbortError" ? "Request timed out or was cancelled" : "Live screen unavailable", promise: null };
+      emit("fc:live-error", { subject: subject });
+      if (App.state.route === "#/audit") App.setState({});
+      else refreshPanel();
+      throw error;
+    });
+    RUNS[subject].promise = promise;
+    return promise;
+  }
+  function askRequest(subject, question) {
+    return fetchTimeout(BASE + "/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: subject, question: question })
+    }, 36000).then(function (response) {
+      return response.json().then(function (data) { return { ok: response.ok, data: data }; });
     });
   }
-
-  /* ---------- report: Ask the AI ---------- */
-  function enhanceReport(host, panel) {
-    var card = panel.querySelector(".ai-card-report");
+  function appendAnswer(log, answer, citations) {
+    var node = document.createElement("div"), refs = document.createElement("div");
+    node.className = "ask-a"; node.textContent = answer;
+    refs.className = "ask-cites";
+    refs.innerHTML = (citations || []).map(function (citation) { return '<span class="ask-cite">' + esc(citation) + '</span>'; }).join(" ");
+    node.appendChild(refs); log.appendChild(node);
+    while (log.children.length > 10) log.removeChild(log.firstChild);
+    log.scrollTop = log.scrollHeight;
+  }
+  function enhanceAsk(panel) {
+    var card = panel.querySelector(".fc-live-screen:not(.fc-live-pending)");
     if (!card) return;
-    var rerun = document.createElement('div');
-    rerun.className = 'v-live-rerun';
-    rerun.innerHTML = '<button type="button" class="btn ai-live-btn">Re-run AI</button><span class="ai-live-status" role="status"></span>';
-    card.appendChild(rerun);
-    var subjectKey = App.state.subject;
-    rerun.querySelector('button').addEventListener('click', function(e){liveRun(subjectKey,e.currentTarget,rerun,host);});
     var box = document.createElement("section");
-    box.className = "ask-ai";
-    box.innerHTML =
-      '<div class="ask-head">ASK THE AI · grounded Q&amp;A</div>' +
-      '<div class="ask-chips">' +
-      '<button type="button" class="ask-chip" data-q="Why is this merchant on watch rather than rejected?">Why watch, not reject?</button>' +
-      '<button type="button" class="ask-chip" data-q="What is the single most decisive evidence for the verdict?">Decisive evidence?</button>' +
-      '<button type="button" class="ask-chip" data-q="Why does the AI verdict differ from the rule-engine baseline?">AI vs rules gap?</button>' +
-      "</div>" +
-      '<div class="ask-row">' +
-      '<input type="text" id="ask-ai-input" aria-label="Question about this AI assessment" name="question" autocomplete="off" maxlength="500" placeholder="Ask about this verdict (facts F1–F12)…">' +
-      '<button type="button" class="btn btn-sm" id="ask-ai-send">Ask</button>' +
-      "</div>" +
+    box.className = "ask-ai fc-review-ask";
+    box.innerHTML = '<div class="ask-head">ASK THE AI · GROUNDED REVIEW</div><div class="ask-chips">' +
+      '<button type="button" class="ask-chip" data-q="How was TAI derived from the Token evidence?">How was TAI derived?</button>' +
+      '<button type="button" class="ask-chip" data-q="What evidence supports the commercial linkage score?">Commercial linkage?</button>' +
+      '<button type="button" class="ask-chip" data-q="Is the evidence sufficient for a real credit decision?">Evidence sufficient?</button>' +
+      '<button type="button" class="ask-chip" data-q="Is there a confirmed integrity Veto, and why?">Confirmed Veto?</button></div>' +
+      '<div class="ask-row"><input type="text" id="ask-ai-input" aria-label="Question about this Token-adjusted risk screen" name="question" autocomplete="off" maxlength="500" placeholder="Ask about this result (facts F1–F12)…"><button type="button" class="btn btn-sm" id="ask-ai-send">Ask</button></div>' +
       '<div class="ask-log" id="ask-ai-log" role="log" aria-live="polite"></div>';
-    panel.appendChild(box);
-
-    var input = box.querySelector("#ask-ai-input");
-    var send = box.querySelector("#ask-ai-send");
-    var log = box.querySelector("#ask-ai-log");
-    function ask(q) {
-      if (!q) return;
-      appendQ(q);
+    card.querySelector(".fc-ai-review").appendChild(box);
+    var input = box.querySelector("#ask-ai-input"), send = box.querySelector("#ask-ai-send"), log = box.querySelector("#ask-ai-log");
+    function ask(question) {
+      if (!question || send.disabled) return;
+      var q = document.createElement("div"), progress = document.createElement("div"), subject = App.state.subject;
+      q.className = "ask-q"; q.textContent = question; log.appendChild(q);
+      progress.className = "ask-status"; progress.textContent = "asking " + MODEL_LABEL + "…"; log.appendChild(progress);
       send.disabled = true; input.disabled = true;
-      var status = document.createElement("div");
-      status.className = "ask-status";
-      status.textContent = "asking " + MODEL_LABEL + "…";
-      log.appendChild(status);
-      log.scrollTop = log.scrollHeight;
-      var subject = (window.App.state && App.state.subject) || keysOrder()[0] || "healthy";
-      fetchTimeout(BASE + "/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: subject, question: q })
-      }, 36000).then(function (r) {
-        return r.json().then(function (j) { return { ok: r.ok, data: j }; });
-      }).then(function (p) {
-        status.remove();
-        if (!p.ok || !p.data || !p.data.answer) throw new Error(p.data && p.data.error || "bad response");
-        appendA(p.data.answer, p.data.citations || []);
+      askRequest(subject, question).then(function (packet) {
+        progress.remove();
+        if (!packet.ok || !packet.data || !packet.data.answer) throw new Error("Invalid answer");
+        appendAnswer(log, packet.data.answer, packet.data.citations);
         send.disabled = false; input.disabled = false; input.value = ""; input.focus();
-      }).catch(function (e) {
-        status.textContent = "ask failed — try again";
+      }).catch(function () {
+        progress.textContent = "Review unavailable — try again";
         send.disabled = false; input.disabled = false;
       });
     }
-    function appendQ(q) {
-      var d = document.createElement("div");
-      d.className = "ask-q";
-      d.textContent = q;
-      log.appendChild(d);
-      trimLog();
-    }
-    function appendA(answer, cites) {
-      var d = document.createElement("div");
-      d.className = "ask-a";
-      d.textContent = answer;
-      var c = document.createElement("div");
-      c.className = "ask-cites";
-      var html = [];
-      for (var i = 0; i < cites.length; i++) {
-        html.push('<span class="ask-cite">' + esc(cites[i]) + "</span>");
-      }
-      c.innerHTML = html.join(" ");
-      d.appendChild(c);
-      log.appendChild(d);
-      log.scrollTop = log.scrollHeight;
-      trimLog();
-    }
-    function trimLog() {
-      while (log.children.length > 10) log.removeChild(log.firstChild);
-    }
-    var chips = box.querySelectorAll(".ask-chip");
-    for (var i = 0; i < chips.length; i++) {
-      chips[i].addEventListener("click", function () { ask(this.getAttribute("data-q")); });
-    }
+    Array.prototype.forEach.call(box.querySelectorAll(".ask-chip"), function (chip) { chip.addEventListener("click", function () { ask(chip.getAttribute("data-q")); }); });
     send.addEventListener("click", function () { ask(input.value.trim()); });
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") ask(input.value.trim());
-    });
+    input.addEventListener("keydown", function (event) { if (event.key === "Enter") ask(input.value.trim()); });
   }
-
-  function cleanup(host) {
-    var olds = host.querySelectorAll(".ai-panel");
-    for (var i = 0; i < olds.length; i++) olds[i].remove();
+  function enhance(host, ctx) {
+    if (!window.FC_LIVE || !host) return;
+    var panel = host.querySelector(".ai-panel:last-of-type") || host.querySelector(".ai-panel");
+    if (!panel) return;
+    var subject = App.state.subject, state = status(subject), controls = document.createElement("div");
+    controls.className = "v-live-rerun";
+    controls.innerHTML = '<button type="button" class="btn ai-live-btn"' + (state.state === "running" ? " disabled" : "") + '>' +
+      (state.state === "error" ? "Retry v0.2.1" : state.state === "running" ? "Running v0.2.1…" : "Re-run v0.2.1") + '</button><span class="ai-live-status" role="status">' +
+      (state.state === "error" ? "Previous live call failed; the saved baseline is unchanged." : "") + '</span>';
+    panel.appendChild(controls);
+    controls.querySelector("button").addEventListener("click", function () { run(subject).catch(function () { /* status is rendered above */ }); });
+    enhanceAsk(panel);
   }
-  function refreshPanel() {
-    if (!lastHost || !lastCtx) return;
-    var orig = window.__FC_ORIG_PANEL;
-    if (!orig) return;
-    cleanup(lastHost);
-    orig(lastHost, lastCtx);
-    enhance(lastHost, lastCtx, true);
-  }
-  function enhance(host, ctx, isRefresh) {
-    if (!window.FC_LIVE) return;
-    try {
-      var panel = host.querySelector(".ai-panel:last-of-type") || host.querySelector(".ai-panel");
-      if (!panel) return;
-      if (ctx === "report") { enhanceReport(host, panel); } else { enhanceWorkspace(host, panel); }
-    } catch (e) { /* never break the page */ }
-  }
-
-  /* ---------- boot ---------- */
   function boot() {
-    if (!window.App || !App.aiPanel) { setTimeout(boot, 80); return; }
-    if (READY) return;
-    if (window.location.protocol === "file:") return;
-    READY = true;
+    if (!window.App || !App.aiPanel || !App.fn || !App.fn.timeout) { later(boot, 80); return; }
+    if (window.location.protocol === "file:") { window.FC_LIVE = false; return; }
     window.__FC_ORIG_PANEL = App.aiPanel;
     App.aiPanel = function (host, ctx) {
       if (!host) return;
-      window.__FC_ORIG_PANEL(host, ctx);
-      if (ctx === "report") { lastHost = host; lastCtx = ctx; }
-      else if (typeof ctx === "string") { lastHost = host; lastCtx = "workspace"; }
-      enhance(host, ctx === "report" ? "report" : "workspace", false);
+      lastHost = host; lastCtx = ctx || "assessment";
+      window.__FC_ORIG_PANEL(host, lastCtx);
+      enhance(host, lastCtx);
     };
-    fetchTimeout(BASE + "/config", { method: "GET" }, 1500).then(function (r) {
-      return r.json().then(function (j) { return { response: r, data: j }; });
-    }).then(function (p) {
-      if (p && p.response && p.response.ok) {
-        if (p.data && p.data.model) MODEL_LABEL = String(p.data.model);
-        window.FC_LIVE = true;
-        window.FC_AI = {
-          ask: function (subject, question) {
-            return fetchTimeout(BASE + "/ask", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ subject: subject, question: question })
-            }, 36000).then(function (res) {
-              return res.json().then(function (j) { return { ok: res.ok, data: j }; });
-            });
-          }
-        };
-        try { window.dispatchEvent(new Event("fc:live")); } catch (e) { /* consumer polls FC_AI */ }
-        if (lastHost && lastCtx) refreshPanel();
-      }
-    }, function () {
+    fetchTimeout(BASE + "/config", { method: "GET" }, 1500).then(function (response) {
+      return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+    }).then(function (packet) {
+      if (!packet.ok) throw new Error("Live configuration unavailable");
+      MODEL_LABEL = String(packet.data.model || "AI");
+      window.FC_LIVE = true;
+      window.FC_AI = {
+        model: MODEL_LABEL, ruleVersion: packet.data.ruleVersion || "flowcredit.risk_result/v0.2.1",
+        run: run, status: status,
+        ask: askRequest
+      };
+      var pending = window.FC_PENDING_RUN;
+      window.FC_PENDING_RUN = null;
+      emit("fc:live", { model: MODEL_LABEL, ruleVersion: packet.data.ruleVersion });
+      App.setState({});
+      if (pending) run(pending).catch(function () { /* live status exposes retry */ });
+    }).catch(function () {
       window.FC_LIVE = false;
-      try { window.dispatchEvent(new Event("fc:live-off")); } catch (e) { /* consumer reads FC_AI absence */ }
+      emit("fc:live-off", {});
+      App.setState({});
     });
   }
-  boot();
+  if (window.App && App.fn && App.fn.addClearHook) {
+    App.fn.addClearHook(function () {
+      controllers.slice().forEach(function (ctrl) { try { ctrl.abort(); } catch (e) { /* ignore */ } });
+      controllers = [];
+    });
+  }
+  if (document.readyState === "complete") later(boot, 0);
+  else window.addEventListener("load", boot, { once: true });
 })();

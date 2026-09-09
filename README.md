@@ -72,15 +72,15 @@ assets/js/view-workspace.js Workspace 工作台（#/workspace）
 assets/js/view-account.js  Account 账户页（#/account）
 agent/                     本机 AI 侧车源码、v0.1/v0.2 规则、测试和 Docker 配置
 docs/flowcredit-rules-v0.2.md v0.2 保守型初筛规则表
+docs/flowcredit-rules-v0.2.1.md AI Token 计量增强型规则表
 CHANGELOG.md              版本更新记录
 ```
 
 ## 6. 自检（可选，需 Node 18+）
 
 ```bash
-# 语法检查（10 个 JS 全部通过）
-node --check assets/js/data.js
-# …对 assets/js/ 下每个 js 执行
+# 语法检查（对 assets/js/ 下全部前端 JS 执行）
+for file in assets/js/*.js; do node --check "$file" || exit 1; done
 
 # 数值回归基线（断言脚本位于 agent/regress.js，不进本仓库）：
 # CCI 795/320 · PD 2.3/85.0 · ValidNT 90.2/36.7 · Efficiency 22857/514286
@@ -99,8 +99,9 @@ node --check assets/js/data.js
 ## 8. 实时 Agent
 
 - `agent/` 保存可审查的侧车源码；凭据和运行日志保存在仓库外 `/Users/yimingyang/fc-agent/runtime/`。
-- `/fc/ai/*` 保留 v0.1 兼容接口；页面实时 Re-run 使用 `/fc/ai/v0.2/*` 保守型初筛接口。
-- v0.2 不产生自动批准、校准 PD、预期损失或数值额度，详情见 `docs/flowcredit-rules-v0.2.md`。
+- `/fc/ai/*` 与 `/fc/ai/v0.2/*` 保留兼容；页面实时 Re-run 使用 `/fc/ai/v0.2.1/*`。
+- v0.2.1 先计算 AI Token Activity Index，再以 40% 权重纳入 CCI；详情见 `docs/flowcredit-rules-v0.2.1.md`。
+- v0.2.1 不产生自动批准、校准 PD、预期损失或数值额度。
 
 ```bash
 cd /Users/yimingyang/fc.v1/agent
@@ -118,4 +119,4 @@ docker compose up --build -d
 curl http://127.0.0.1:8787/health
 ```
 
-浏览器打开 http://127.0.0.1:8787/。侧车在线时 Workspace Re-run 和 Report Ask the AI 使用 v0.2；侧车或网络不可用时保留离线 v0.1 结果。双击 index.html 仍可运行纯离线演示。
+浏览器打开 http://127.0.0.1:8787/。侧车在线时，一次 Assessment 同时启动原演示流水线与 v0.2.1 Token 风险筛查；页面以 TAI、CCI、证据质量和完整性结论为主，PD、额度与压力场景收纳在 Legacy v0.1 appendix。侧车或网络不可用时保留离线 v0.1 结果；双击 index.html 仍可运行纯离线演示。

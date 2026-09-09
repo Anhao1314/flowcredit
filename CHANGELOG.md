@@ -2,6 +2,25 @@
 
 本文件记录 FlowCredit 的主要功能、规则与工程变更。
 
+## 2026-09-09 — v0.2.1 AI Token 计量增强型风险评估
+
+### 新增
+
+- 新增 AI Token Activity Index（TAI），将 Token 对账、有效率、物理合理性、商业关联和月度连续性汇总为 0–100 指数。
+- 新增服务端 Token 标准化注册表；申请人提交的系数与标准化结果不再影响权威计算。
+- 新增互斥 Token 分类桶、月度 Token—收入相关性及单位 Valid NT 收入/成本指标。
+- 新增 `/fc/ai/v0.2.1/*` API、CLI `--rule v0.2.1` 和三个受限 Harness 工具。
+
+### 规则与页面
+
+- TAI 以 40% 权重纳入 CCI；回款、客户、经济性和连续性合计占 60%。
+- HTTP 在线页面以 v0.2.1 为主结果；一次 Assessment 同时运行原有演示流水线和实时 Token 风险筛查。
+- 新增 Raw → Metered → Normalized → Valid NT → Business linkage → TAI 计量链，以及 TAI/CCI 权重、证据质量和完整性分区。
+- DeepSeek 页面区域调整为非评分的解释与复核层；普通风险信号与确认型 Veto 分开显示。
+- 在线完整报告采用六节 v0.2.1 结构；原 PD、额度、Expected Loss 和压力场景收敛至 Legacy v0.1 demo appendix。
+- Workspace 显示在线规则、模型、模拟模式及最近 TAI/CCI/Grade；`file://` 继续完整使用 v0.1。
+- v0.1 与 v0.2 接口和离线账本保持不变；v0.2.1 仍不产生自动批准、PD、EL 或数值额度。
+
 ## 2026-09-09 — v0.2.0 保守型风险初筛 Agent
 
 ### 新增

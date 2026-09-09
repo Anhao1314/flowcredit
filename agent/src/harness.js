@@ -32,7 +32,7 @@ export class HarnessBrain {
 
   async status() {
     const configured = await this.configured();
-    return { configured, ready: configured && !this.startError, model: MODEL, profile: "sdk", restrictedTools: ["normalize_evidence", "compute_risk", "validate_assessment", "normalize_evidence_v02", "compute_risk_v02", "validate_assessment_v02"], error: this.startError?.name || null };
+    return { configured, ready: configured && !this.startError, model: MODEL, profile: "sdk", restrictedTools: ["normalize_evidence", "compute_risk", "validate_assessment", "normalize_evidence_v02", "compute_risk_v02", "validate_assessment_v02", "normalize_evidence_v021", "compute_risk_v021", "validate_assessment_v021"], error: this.startError?.name || null };
   }
 
   async #get() {
@@ -59,7 +59,7 @@ export class HarnessBrain {
         cwd: this.workspace,
         provider: "deepseek-official",
         model: MODEL,
-        maxTokens: 1600,
+        maxTokens: 2400,
         env,
         initializeTimeoutMs: 15000,
         requestTimeoutMs: this.timeoutMs
@@ -148,6 +148,45 @@ export class HarnessBrain {
     catch (first) {
       if (first.code === "HARNESS_UNCONFIGURED" || first.code === "HARNESS_BUSY") throw first;
       review = await this.#run(`${reviewPrompt}\nReturn JSON only.`, `${requestId}-v02-review-retry`);
+    }
+    return { analysis, review };
+  }
+
+  async assessV021(normalizedInput, deterministic, requestId) {
+    const toolInput = structuredClone(normalizedInput);
+    delete toolInput.anchorScores;
+    delete toolInput.efficiencyPeerUpper;
+    delete toolInput.efficiencyPeerMultiple;
+    delete toolInput.efficiencyExcessPct;
+    delete toolInput.modelWeight;
+    delete toolInput.taskWeight;
+    delete toolInput.w_model;
+    delete toolInput.w_task;
+    const payload = JSON.stringify(toolInput);
+    const analysisPrompt = `Return strict JSON only after calling compute_risk_v021 exactly once: {"evidenceNotes":[up to 3 strings, each <=80 chars],"tokenOpinions":{"reconciliation":"<=80 chars","validity":"<=80 chars","physical":"<=80 chars","commercial":"<=80 chars","continuity":"<=80 chars"},"creditOpinions":{"repayment":"<=80 chars","customer":"<=80 chars","economics":"<=80 chars","continuity":"<=80 chars"},"limitations":[up to 2 strings],"explanation":"<=250 chars"}. Explain the authoritative FlowCredit v0.2.1 result. TAI is activity coherence, not revenue or creditworthiness. Never change deterministic fields or invent verification, PD, expected loss, a numeric limit, or approval. INPUT=${payload}`;
+    let analysis;
+    try { analysis = await this.#run(analysisPrompt, `${requestId}-v021-analysis`); }
+    catch (first) {
+      if (first.code === "HARNESS_UNCONFIGURED" || first.code === "HARNESS_BUSY") throw first;
+      analysis = await this.#run(`${analysisPrompt}\nYour prior response was invalid or empty. Return JSON only.`, `${requestId}-v021-analysis-retry`);
+    }
+    const reviewInput = {
+      analysis,
+      deterministic: {
+        decisionStatus: deterministic.decisionStatus, simulatedDecisionStatus: deterministic.simulatedDecisionStatus,
+        verdict: deterministic.verdict, TAI: deterministic.TAI, tokenActivityBand: deterministic.tokenActivityBand,
+        tokenMeteringStatus: deterministic.tokenMeteringStatus, tokenMetrics: deterministic.tokenMetrics,
+        tokenComponentScores: deterministic.tokenComponentScores, CCI: deterministic.CCI, riskGrade: deterministic.riskGrade,
+        PD_pct: null, expectedLoss: null, recommendedLimit: null, dimensionScores: deterministic.dimensionScores,
+        evidenceQuality: deterministic.evidenceQuality, vetoApplied: deterministic.vetoApplied
+      }
+    };
+    const reviewPrompt = `Return strict JSON only: {"conflicts":[field names],"approved":true|false,"correctedExplanation":"<=200 chars"}. Check the v0.2.1 analysis against deterministic fields. Deterministic values always win. TAI must remain distinct from CCI. PD, expected loss, numeric limit, and automatic approval must remain absent. Do not call a tool. DATA=${JSON.stringify(reviewInput)}`;
+    let review;
+    try { review = await this.#run(reviewPrompt, `${requestId}-v021-review`); }
+    catch (first) {
+      if (first.code === "HARNESS_UNCONFIGURED" || first.code === "HARNESS_BUSY") throw first;
+      review = await this.#run(`${reviewPrompt}\nReturn JSON only.`, `${requestId}-v021-review-retry`);
     }
     return { analysis, review };
   }

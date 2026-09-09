@@ -41,6 +41,22 @@ test("HTTP contracts work without a configured model", async () => {
     const askV02 = await fetch(`${base}/fc/ai/v0.2/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy", question: "Is the PD calibrated?" }) });
     assert.equal(askV02.status, 200);
     assert.match((await askV02.json()).answer, /not calibrated/i);
+
+    const v021Config = await fetch(`${base}/fc/ai/v0.2.1/config`).then(response => response.json());
+    assert.equal(v021Config.ruleVersion, "flowcredit.risk_result/v0.2.1");
+    assert.equal(v021Config.tokenMetering, true);
+    const v021Response = await fetch(`${base}/fc/ai/v0.2.1/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy" }) });
+    const v021 = await v021Response.json();
+    assert.equal(v021Response.status, 200);
+    assert.deepEqual({ tai: v021.tai, band: v021.tokenActivityBand, cci: v021.cci, grade: v021.grade, status: v021.decisionStatus }, { tai: 93.8, band: "coherent", cci: 929, grade: "A", status: "simulation-only" });
+    assert.equal(v021.tokenMetrics.reportedRawTokensM, 80);
+    assert.equal(v021.vetoApplied, false);
+    assert.deepEqual(v021.confirmedIntegrityEvents, []);
+    assert.ok(Array.isArray(v021.integritySignals));
+    assert.ok(Array.isArray(v021.limitations));
+    const askV021 = await fetch(`${base}/fc/ai/v0.2.1/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy", question: "What does TAI mean?" }) });
+    assert.equal(askV021.status, 200);
+    assert.match((await askV021.json()).answer, /activity/i);
   });
 });
 

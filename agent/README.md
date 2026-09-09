@@ -6,8 +6,9 @@ The configured default model is `deepseek-v4-flash`.
 
 ## Safety boundary
 
-- The v0.1 engine remains available for compatibility. The v0.2 `flowcredit.risk_result/v0.2` engine is the live-page default.
-- v0.2 never emits an automatic approval, calibrated PD, expected loss, or numeric limit.
+- The v0.1 and v0.2 engines remain available for compatibility. The v0.2.1 `flowcredit.risk_result/v0.2.1` engine is the live-page default.
+- v0.2.1 calculates AI Token Activity Index before applying a 40% Token contribution to CCI.
+- v0.2 and v0.2.1 never emit an automatic approval, calibrated PD, expected loss, or numeric limit.
 - DeepSeek Harness is pinned to `0.1.2-rc.1`; its profile advertises only versioned FlowCredit normalization, computation, and validation tools.
 - No shell, file, web, transaction, subagent, or editor tool is exposed to the model.
 - The site mount is read-only. Live results stay in memory and never update `assets/js/ai-ledger.js`.
@@ -42,6 +43,8 @@ curl -X POST http://127.0.0.1:8787/fc/ai/assess \
   -H 'Content-Type: application/json' -d '{"input":{"address":"0x0000000000000000000000000000000000000000"}}'
 curl -X POST http://127.0.0.1:8787/fc/ai/v0.2/run \
   -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
+curl -X POST http://127.0.0.1:8787/fc/ai/v0.2.1/run \
+  -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
 ```
 
 Set `"requireModel": true` on POST requests when a missing or failed model must return an HTTP error instead of a deterministic degraded result.
@@ -57,6 +60,8 @@ node src/cli.js health
 node src/cli.js ask healthy 'What evidence is decisive?'
 node src/cli.js run-preset --rule v0.2 healthy
 node src/cli.js assess --rule v0.2 --file case.json
+node src/cli.js run-preset --rule v0.2.1 healthy
+node src/cli.js assess --rule v0.2.1 --file case.json
 ```
 
 ## Operations

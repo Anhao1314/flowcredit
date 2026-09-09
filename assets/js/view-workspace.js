@@ -5,7 +5,9 @@
     var u = App.ui,
       s = App.state,
       d = SUBJECTS[s.subject],
-      done = s.auditStage === 4 && !s.running;
+      done = s.auditStage === 4 && !s.running,
+      liveRun = App.liveResults && App.liveResults[s.subject] && window.AI_LEDGER && AI_LEDGER.runs[s.subject] && AI_LEDGER.runs[s.subject].ruleVersion === "flowcredit.risk_result/v0.2.1" ? AI_LEDGER.runs[s.subject] : null,
+      liveReady = window.FC_LIVE === true;
     var next = !s.anchored
       ? ["#/ingest", "Review evidence", "Start with the four source records."]
       : !done
@@ -19,12 +21,14 @@
       '<div class="v-page">' +
       u.pageHead(
         "DEMO WORKSPACE",
-        "Follow the evidence.",
-        "Choose a case and explore how operating activity becomes a credit decision."
+        "Follow Token activity into risk.",
+        "Evidence → Token metering → Risk screen → Report."
       ) +
       '<section class="v-panel v-current"><div><p class="v-eyebrow">YOUR CURRENT CASE</p><h2>' +
       u.esc(d.label) +
-      "</h2><p>" +
+      '</h2><div class="fc-runtime-line">' +
+      (liveReady ? u.tag("LIVE v0.2.1", "green") + '<span>' + u.esc(window.FC_AI && FC_AI.model || "Configured model") + '</span>' + u.tag("SIMULATION", "neutral") : u.tag("OFFLINE v0.1 BASELINE", "neutral")) +
+      '</div><p>' +
       next[2] +
       '</p></div><a class="btn btn-primary" href="' +
       next[0] +
@@ -68,8 +72,8 @@
       '</div><ol class="v-session-steps">' +
       [
         ["Evidence", s.anchored ? "Local proof created" : "Ready to review", s.anchored],
-        ["Assessment", done ? "Rule assessment complete" : s.running ? "Running…" : "Not started", done],
-        ["Report & Monitor", done ? "Ready to explore" : "Available after assessment", s.stress === "recover"]
+        ["Token metering", done ? "Metering pipeline complete" : s.running ? "Running…" : "Not started", done],
+        ["Risk screen & report", done ? "Ready to explore" : "Available after assessment", s.stress === "recover"]
       ]
         .map(function (x, i) {
           return (
@@ -92,10 +96,9 @@
           (done
             ? "<li>" +
               u.icon("check", 17) +
-              "<div><b>Assessment complete</b><small>" +
+              "<div><b>" + (liveRun ? "Live Token screen complete" : "Assessment complete") + "</b><small>" +
               u.esc(d.label) +
-              " · CCI " +
-              App.fn.cci(d) +
+              (liveRun ? " · TAI " + u.esc(liveRun.tai) + " · CCI " + u.esc(liveRun.cci) + " · Grade " + u.esc(liveRun.grade) : " · CCI " + App.fn.cci(d)) +
               "</small></div></li>"
             : "") +
           s.chainLogs
