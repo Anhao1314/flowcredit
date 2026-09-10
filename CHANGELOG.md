@@ -2,6 +2,13 @@
 
 本文件记录 FlowCredit 的主要功能、规则与工程变更。
 
+## 2026-09-10 — GitHub Public-Facing Cleanup v0.1
+
+- 将 README 重构为英文优先的 External Alpha 产品入口，以 `Evidence → Risk → Action` 解释价值、用户场景、确定性权威、Public API、Finch 定位和产品边界。
+- 将公开克隆地址更新为 `Anhao1314/flowcredit`，移除 README 和 Agent 入门文档中的个人绝对路径与过时 autosync 独占措辞。
+- 更新 Public Deployment 与 Finch Submission 清单，确认冻结提交和 annotated tag 已完成；公网 HTTPS 与 Finch 提交状态继续明确标为 Pending。
+- 本次仅修改文档与仓库展示；`external-alpha-v0.1` 继续冻结在 `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`，没有修改运行时代码、契约、Schema 或风险规则。
+
 ## 2026-09-10 — Git Freeze and Public Deployment Handoff v0.1
 
 - 审计确认当前仓库没有 autosync script、daemon、LaunchAgent、task runner 或有效 Git hook；因 `AGENTS.md` 仍规定 autosync 管理提交，本轮没有手动 commit、push 或在旧 HEAD 上打 tag。

@@ -2,7 +2,7 @@
 
 Release identifier: `external-alpha-v0.1`
 
-Status: Release Candidate for controlled external-alpha deployment. This is not Production Ready, Finch Approved, a production lending system or a service-level commitment.
+Status: Frozen Git release for controlled external-alpha deployment. Public HTTPS deployment remains pending. This is not Production Ready, Finch Approved, a production lending system, or a service-level commitment.
 
 ## What is included
 

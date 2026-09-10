@@ -85,8 +85,8 @@ See [CONTRACT.md](CONTRACT.md), [TESTING.md](TESTING.md), the [Public API docume
 
 ## Submission Checklist
 
-- [ ] Release baseline frozen — pending autosync release commit.
-- [ ] `external-alpha-v0.1` tag exists — do not tag the previous commit.
+- [x] Release baseline frozen at `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`.
+- [x] Annotated tag `external-alpha-v0.1` exists and points to the frozen release commit.
 - [ ] Public deployment exists.
 - [ ] HTTPS enabled.
 - [ ] Managed secret configured.

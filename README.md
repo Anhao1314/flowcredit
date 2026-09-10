@@ -1,247 +1,250 @@
 # FlowCredit
 
-## AI-Native Risk Intelligence Infrastructure
+**Risk Intelligence Infrastructure for the AI-Native Economy**
 
-> Evidence-aware risk intelligence infrastructure for AI-native businesses and compute-intensive operators.
+FlowCredit is an evidence-aware counterparty risk intelligence system designed for AI-native businesses, agents, API providers, and compute-intensive operators.
 
-Current status: **External Alpha Release Candidate**. External Alpha is not Production Ready. See [Public API](docs/public-api-v1.md), [Deployment Guide](docs/external-alpha-deployment.md), [Public Deployment Checklist](docs/public-deployment-checklist.md), [Release Notes](docs/releases/external-alpha-v0.1.md), and [Finch Submission](docs/finch-agent-submission-v0.3.1.md).
+It transforms operational, compute, commercial, and verifiable evidence into deterministic, machine-readable risk intelligence.
 
-The Finch Submission Package is prepared under [`docs/finch/`](docs/finch/). Its status is **Submission Candidate — pending public deployment**.
+> **Evidence → Risk → Action**
 
-FlowCredit 将 Web Interface、Evidence Intake、确定性 Risk Engine 和稳定 Agent API 组合为一条可复核的风险评估流程。它首先把 Token、GPU、收入、回款和证据元数据转成可信经营活动，再输出 TAI、CCI、完整性信号、证据覆盖和人工复核建议。
+**External Alpha v0.1** · Public API v1 · Docker · MIT License
 
-```text
-Natural Language / JSON / Guided Form
-                  ↓
-          Intake v0.3.1
-                  ↓
-       Evidence Validation
-                  ↓
-         Readiness Check
-                  ↓
- AI Token Activity / Risk Signals
-                  ↓
- Deterministic Risk Engine v0.2.1
-                  ↓
-   Structured Risk Intelligence
-```
+FlowCredit is External Alpha software. Current outputs are experimental and must not be interpreted as calibrated production credit decisions, statutory audit opinions, or financial advice. Public HTTPS deployment is pending.
 
-| Layer | Version | Responsibility |
+## Why FlowCredit
+
+AI-native counterparties can generate substantial activity before conventional financial records tell the full story. Token usage alone is not proof of healthy operations, and an opaque AI-generated score is not enough for accountable review.
+
+FlowCredit helps answer three practical questions:
+
+| Stage | Question | Output |
 | --- | --- | --- |
-| Public API | `flowcredit.api/v1` | Stable external assessment transport |
-| Finch distribution | FlowCredit Finch Pilot v0.1 | External Agent delivery profile |
-| Intake | `flowcredit.intake/v0.3.1` | Extraction, validation, readiness and evidence coverage |
-| Risk engine | `flowcredit.risk_result/v0.2.1` | Authoritative TAI, CCI, signals and review status |
+| Evidence | What do we reliably know? | Readiness, coverage, provenance, and missing items |
+| Risk | What risks are present, and why? | Deterministic activity and counterparty-risk signals |
+| Action | What should happen next? | Review status and prioritized evidence requests |
 
-The LLM can extract and explain supplied facts. It never owns TAI, CCI, PD, Expected Loss, limits, approval or rejection. The v0.2.1 deterministic engine remains authoritative.
+## What FlowCredit Provides
 
-The Public API assessment contract is locally machine-verifiable. See [Public API v1](docs/public-api-v1.md) and [`agent/contracts/`](agent/contracts/) for the endpoint, Draft 2020-12 schemas, representative fixtures, idempotency rules and validators. Finch is the first documented distribution profile, not the only supported consumer.
+- Evidence readiness and field-level coverage.
+- AI Token and compute-activity analysis.
+- Deterministic Token Activity Index (TAI) and Compute Credibility Index (CCI).
+- Risk grade and review status without automatic lending approval.
+- Risk signals, confirmed integrity findings, and Veto handling.
+- Missing evidence and prioritized required actions.
+- Reproducible request and assessment fingerprints.
+- A versioned, machine-readable JSON API.
+- Optional LLM-assisted evidence extraction and explanation.
 
-> Early Pilot · testnet/demo calibration · not a statutory audit · not a lending decision · not financial or investment advice
+## Designed Use Cases
 
-### Static Demo Mode
+### Agent Marketplace
 
-- Zero build and zero backend dependency.
-- Open `index.html` directly through `file://`.
-- Uses simulated demo cases and keeps the original hackathon demonstration path.
+Assess counterparty risk before allowing higher-value transactions.
 
-### Live Agent Mode
+### Compute or GPU Provider
 
-- Versioned Agent API, Intake v0.3.1 and deterministic v0.2.1 risk engine.
-- Optional DeepSeek extraction and explanation with deterministic degradation.
-- Docker runtime, Bearer authentication, fixed-window rate limiting and structured errors.
-- Finch-ready API and submission documentation; this does not claim official Finch integration or approval.
+Evaluate operational and commercial evidence before extending exposure or payment terms.
 
-See [Finch Agent submission](docs/finch-agent-submission-v0.3.1.md) and [Intake contract](docs/flowcredit-intake-v0.3.md).
+### API or AI Service Provider
+
+Review usage, commercial, and evidence signals before increasing limits.
+
+### Risk or Fintech System
+
+Consume machine-readable risk signals as one input to a broader decision process.
+
+These are intended use cases, not claims of current customers or production deployments.
+
+## Example Assessment Journey
+
+An AI service operator submits recent Token activity, GPU usage, revenue, compute spend, repayment behavior, customer concentration, operating history, and evidence metadata.
+
+FlowCredit may identify that customer concentration is elevated, compute costs are growing faster than activity, and recent supporting evidence is incomplete. Instead of inventing missing facts or issuing an automatic lending decision, it returns prioritized actions such as:
+
+- Provide recent GPU invoices or telemetry.
+- Update customer-concentration evidence.
+- Resolve inconsistent Token classification.
+- Review exposure before increasing limits.
+
+The exact result is determined from the submitted structured evidence. See the [representative input and output](agent/contracts/README.md) for a reproducible contract example.
 
 ## Public API
 
-FlowCredit can run as a machine-consumable risk intelligence API. `POST /api/v1/assess` is the recommended stable endpoint; see [Public API v1](docs/public-api-v1.md). Finch is currently the first target distribution channel for the Direct API contract, not the only use case.
+The stable external assessment endpoint is:
 
-### External Agent Quick Start
+```http
+POST /api/v1/assess
+Authorization: Bearer <API_KEY>
+Content-Type: application/json
+```
+
+```text
+Public API:  flowcredit.api/v1
+Intake:      flowcredit.intake/v0.3.1
+Risk Engine: flowcredit.risk_result/v0.2.1
+```
+
+Public HTTPS deployment is pending. The API can currently be run locally at `http://127.0.0.1:8787`.
+
+From the `agent/` directory:
 
 ```bash
-git clone https://github.com/Anhao1314/FC.demo2.git
-cd FC.demo2/agent
+curl http://127.0.0.1:8787/health
+
+curl --fail-with-body \
+  -X POST http://127.0.0.1:8787/api/v1/assess \
+  -H 'Authorization: Bearer <YOUR_LOCAL_API_KEY>' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: example-assessment-001' \
+  --data-binary @contracts/finch-test-input.json
+```
+
+Canonical business results are returned under `data.*`. Contract details, limits, error semantics, and schemas are documented in [Public API v1](docs/public-api-v1.md).
+
+## Architecture
+
+```text
+Structured Evidence or Consent-Gated Text
+                   ↓
+        Normalization and Validation
+                   ↓
+        Evidence Readiness and Coverage
+                   ↓
+         Deterministic Risk Engine
+                   ↓
+             Risk Intelligence
+                   ↓
+         Versioned Machine-Readable API
+```
+
+### Deterministic Risk Authority
+
+LLMs may assist with evidence interpretation and explanation, but they do not own the authoritative risk calculation. TAI, CCI, evidence quality, risk grade, integrity handling, and review status are calculated and validated by versioned deterministic rules.
+
+The optional LLM provider can be unavailable or unconfigured while deterministic assessment remains available. FlowCredit is not an LLM wrapper and does not allow model output to overwrite authoritative scores.
+
+## Finch Agent
+
+```text
+Agent: FlowCredit Risk Intelligence Agent
+Type:  Direct API Agent
+```
+
+FlowCredit is being prepared for delivery through Finch as a Direct API Agent. Finch is the first target distribution channel, not a separate FlowCredit product fork.
+
+```text
+Finch
+  ↓
+FlowCredit Public API v1
+  ↓
+POST /api/v1/assess
+  ↓
+Deterministic Risk Engine
+```
+
+The submission package is ready, but the Agent has not been submitted, approved, certified, or published by Finch. See the [Finch submission package](docs/finch/SUBMISSION.md).
+
+## Quick Start
+
+### Docker API and web interface
+
+```bash
+git clone https://github.com/Anhao1314/flowcredit.git
+cd flowcredit/agent
 cp .env.example .env
 ```
 
-For local API testing, keep `PUBLISH_HOST=127.0.0.1`. For an authenticated pilot:
+Set a unique local `FLOWCREDIT_API_KEY` of at least 16 characters in `.env`, then start the service:
+
+```bash
+docker compose up --build -d
+curl http://127.0.0.1:8787/ready
+```
+
+Open `http://127.0.0.1:8787/` for the browser experience. DeepSeek configuration is optional; without it, structured deterministic assessments still work.
+
+### Static example mode
+
+The repository also retains the original zero-build browser experience. Open `index.html` directly to explore simulated cases without a backend. This is a compatibility and demonstration mode, not the primary product architecture.
+
+Never commit `.env` or API keys. Public deployment must use managed secrets, Bearer authentication, and an HTTPS gateway.
+
+## Repository Structure
 
 ```text
-AUTH_ENABLED=true
-FLOWCREDIT_API_KEY=replace_with_a_long_random_secret
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=30
+agent/                 API service, deterministic engines, tests, and Docker
+agent/contracts/       Draft 2020-12 schemas and representative fixtures
+assets/                Static web interface
+deploy/                Reverse-proxy deployment example
+docs/                  API, methodology, deployment, Finch, and release docs
+index.html             Zero-build local example entry point
 ```
 
-Start the service:
+## Current Status
 
-```bash
-docker compose up --build -d
-```
+| Capability | Status |
+| --- | --- |
+| External Alpha v0.1 Git release | Ready — tag `external-alpha-v0.1` |
+| Public API contract | Ready |
+| Finch Direct API contract | Ready |
+| Docker deployment artifact | Ready |
+| Release verification | Passing |
+| Finch submission package | Ready |
+| Public HTTPS deployment | Pending |
+| Finch Marketplace submission | Pending |
+| Production calibration | Not available |
 
-Public metadata is available without a token:
+The frozen release tag points to commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`. Later documentation commits on `main` do not move or redefine that release.
 
-```bash
-curl http://127.0.0.1:8787/health
-curl http://127.0.0.1:8787/api/v1
-curl http://127.0.0.1:8787/fc/ai/v0.3/schema
-```
+## Security and Data Principles
 
-The recommended external assessment endpoint uses the configured Bearer token and always returns canonical business results under `data.*`:
+- Bearer-protected assessment endpoint.
+- Bounded request and response sizes.
+- Fixed-window rate limiting and invocation timeout.
+- Idempotency support for single-instance External Alpha operation.
+- No API secrets committed to the repository.
+- Raw sensitive payloads are not intended for application logs.
+- Deterministic assessment remains independent of optional LLM availability.
 
-```bash
-curl -X POST http://127.0.0.1:8787/api/v1/assess \
-  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: partner-assessment-001' \
-  --data-binary @contracts/finch-test-input.json
-```
+> Raw data stays private. Evidence becomes machine-readable. Decisions stay accountable.
 
-Browser intake and consent-gated extraction continue to use the compatibility endpoints:
+VPC deployment, private evidence connectors, distributed persistence, formal data-residency controls, and compliance certification are not current capabilities.
 
-```bash
-curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/extract \
-  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
-  -H 'Content-Type: application/json' \
-  -d '{"draftId":"pilot-1","text":"Acme operates an AI inference API using H100 GPUs.","modelConsent":true}'
+## What FlowCredit Does Not Do
 
-curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
-  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
-  -H 'Content-Type: application/json' \
-  -d '{"draftId":"pilot-1","draft":{"label":"Acme AI API","periodStart":"2026-08-01","periodEnd":"2026-08-31","modelTier":"flagship","inputTokensM":64,"outputTokensM":16,"validRatePct":94,"gpuModel":"h100-equivalent","gpuHours":4200,"revenueUsd":100000,"computeSpendUsd":58000}}'
-```
+FlowCredit does not:
 
-For the legacy Finch-specific adapter, send the checked-in representative request with the contract version header:
+- Automatically approve or reject loans.
+- Issue calibrated production lending decisions.
+- Guarantee repayment or counterparty performance.
+- Generate production PD, Expected Loss, or lending limits.
+- Execute lending or payment transactions.
+- Provide investment, legal, or financial advice.
+- Replace regulated financial review or statutory audit.
 
-```bash
-curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
-  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
-  -H 'Content-Type: application/json' \
-  -H 'X-FlowCredit-Contract-Version: flowcredit.finch-assess/v0.1' \
-  -H 'Idempotency-Key: finch-test-001' \
-  --data-binary @contracts/finch-test-input.json
+FlowCredit provides risk intelligence. Final decisions remain with the user, marketplace, provider, or policy system.
 
-npm run test:finch-contract
-npm run validate:finch-contract
-npm run test:public-api
-npm run validate:public-api
-```
+## Documentation
 
-In canonical responses, `data.*` is the only business payload. The recommended Public API needs no product-specific header; the versioned compatibility adapter still avoids duplicated legacy top-level fields without changing the browser response used when the header is absent.
+- [Public API v1](docs/public-api-v1.md)
+- [Contract schemas and fixtures](agent/contracts/README.md)
+- [External Alpha deployment guide](docs/external-alpha-deployment.md)
+- [Public deployment checklist](docs/public-deployment-checklist.md)
+- [External Alpha v0.1 release notes](docs/releases/external-alpha-v0.1.md)
+- [Finch submission profile](docs/finch/SUBMISSION.md)
+- [Finch listing copy](docs/finch/LISTING.md)
+- [Finch contract summary](docs/finch/CONTRACT.md)
+- [Finch testing guide](docs/finch/TESTING.md)
+- [Intake contract](docs/flowcredit-intake-v0.3.md)
+- [Risk methodology v0.2.1](docs/flowcredit-rules-v0.2.1.md)
 
-For the browser UI on a trusted local machine, set `AUTH_ENABLED=false`; do not use that setting for a public endpoint. Public binding requires `PUBLISH_HOST=0.0.0.0`, authentication, and preferably an HTTPS reverse proxy or managed gateway. TLS intentionally remains outside the Node service.
+## Roadmap and Project History
 
-## 1. Static demo quick start
+FlowCredit originated as a hackathon prototype and has evolved into an External Alpha risk-intelligence API and Finch-ready Direct API Agent. The static simulated experience remains available for transparent demonstrations and regression compatibility.
 
-```bash
-git clone https://github.com/Anhao1314/FC.demo2.git
-cd FC.demo2
-```
+Future work is documented in the [roadmap](docs/roadmap.md). It is not part of the current release. The repository has adopted the concise name `Anhao1314/flowcredit` for broader external distribution.
 
-- Double-click `index.html` in Chrome or Edge; Node and a backend are not required.
-- Install Node only when running the checks in §6.
+## License
 
-## 2. 页面与演示动线
-
-| Hash | 页面 | 顶栏 Tab | 作用 |
-| --- | --- | --- | --- |
-| #/landing | Landing 门面 | （无，默认落地） | 对外介绍；入口：Go to Workspace / My Account |
-| #/workspace | Workspace 工作台 | （无） | 当前任务 + 双主体 Ledgers + 活动流（Landing 入口进入） |
-| #/ingest | New Assessment | New Assessment | 描述、JSON 或引导表单 → 确认草稿 → 可选本地证明 |
-| #/audit | P2 · AI Risk Assessment | Risk P2 | L0→L5 流水线：归一化 / 过滤 / 锚点核验 / veto / CCI 评分 |
-| #/report | P3 · Risk Monitoring & Response | Monitor P3 | 链上凭证验证 + 压力测试（shock → de-risk → recover） |
-| #/account | Account 账户页 | （无） | 机构档案 + 钱包（mock）+ 授信 + 活动流（Landing 入口进入） |
-
-- 顶栏三 Tab（New Assessment / Assessment / Report）是产品页切换入口；Workspace 以 Start a new assessment 为主任务。
-- 两条演示线：Healthy Merchant（approved 全流程）与 Sybil Address（veto 终局、额度 0）。
-- 默认落地页 #/landing；无 hash / 非法 hash 自动回到对应路由；刷新保页、前进后退正常。
-
-## 3. 技术说明
-
-- 原生 HTML + CSS + JS（ES5 风格，普通 script 按序加载，无 module/defer）。
-- 脚本顺序：data → state → ui → intake-v03 → views → ai-ledger → view-ai → view-ai-live → app。
-- 全局契约：window.App（state / fn / act / ui / views / nav / navTo）。
-- 派生数值全部纯函数现算：cci / pd / validNT_M / efficiency / scuOf / creditLine / vetoed / deviation / ntM / stressMeta。
-- L1 口径锁定：Raw Token 取自 l0.compute.Raw（80.0M / 108.0M）；rawNT_M 是「已乘 w_model/w_task 后的 NT」（96.0M / 108.0M），不得顶替 Raw Token；L2 毛 NT 才用 rawNT_M。
-- Merkle：哈希输入 = 叶数据摘要 + 时间戳 + 递增 nonce；anchor 保存最新 root；chainLogs 累积历史。
-- 深色设计令牌集中在 styles.css :root（--teal/--blue/--amber/--red/--green/--text*、--line/--card*、--mono）。
-
-## 4. GitHub Pages 部署
-
-1. 仓库需为 public（免费账号下 Pages 不支持 private 仓库）。
-2. 仓库 Settings → Pages → Source：Deploy from a branch。
-3. 分支 main，目录 / (root)，Save。
-4. 上线地址：https://Anhao1314.github.io/FC.demo2/
-5. 站点使用 hash 路由 + 相对路径，子路径部署无需改任何代码。
-
-其它静态托管同样适用（Netlify Drop / Vercel / Cloudflare Pages / OSS+CDN / nginx）：发布整个仓库目录即可。
-
-## 5. 仓库结构
-
-```
-index.html                 入口（无 module/CDN，file:// 直开）
-assets/styles.css          全部样式（含 P0 enterprise components 追加区）
-assets/js/data.js          SUBJECTS 双案例 mock 数据 + ANCHOR_W（冻结）
-assets/js/state.js         state / App.fn 纯函数 / STRESS_FRAMES（冻结）
-assets/js/ui.js            icon/toast/ring/bar/lineChart/logTimeline（冻结）
-assets/js/view-landing.js  Landing 门面（冻结）
-assets/js/intake-v03.js    标签页草稿、校验、LRU 与自定义结果状态
-assets/js/view-ingest.js   v0.3 描述、JSON、引导表单与本地证明
-assets/js/view-audit.js    P2 AI 风险评估流水线
-assets/js/view-report.js   P3 验证报告与压力响应
-assets/js/view-workspace.js Workspace 工作台（#/workspace）
-assets/js/view-account.js  Account 账户页（#/account）
-agent/                     本机 AI 侧车源码、v0.1/v0.2 规则、测试和 Docker 配置
-docs/flowcredit-rules-v0.2.md v0.2 保守型初筛规则表
-docs/flowcredit-rules-v0.2.1.md AI Token 计量增强型规则表
-docs/flowcredit-intake-v0.3.md v0.3 产品、输入契约与隐私边界
-CHANGELOG.md              版本更新记录
-```
-
-## 6. 自检（可选，需 Node 18+）
-
-```bash
-# 语法检查（对 assets/js/ 下全部前端 JS 执行）
-for file in assets/js/*.js; do node --check "$file" || exit 1; done
-
-# 数值回归基线（断言脚本位于 agent/regress.js，不进本仓库）：
-# CCI 795/320 · PD 2.3/85.0 · ValidNT 90.2/36.7 · Efficiency 22857/514286
-# SCU 3570/86.1 · Credit 20000/0 · Deviation +3%/+186% · stress 1.85/1.05/1.35 · 20000/12000/18000
-```
-
-## 7. 协作约定（重要）
-
-- 详细编辑规范见根目录 AGENTS.md（协助者先读它）。
-- 核心冻结区默认不动：data.js / ui.js / app.js / state.js / view-landing.js 及全部公式、数值、id、路由 hash；任务书明确点名才可改。
-- UI 文案全英文、无 emoji；图标一律 App.ui.icon(...) 内联 SVG。
-- 改样式：在 styles.css 末尾追加新区块，复用既有 token，不删仍被 JS 使用的类。
-- 本仓库由本机 autosync 守护自动 commit/push（提交信息以 [autosync] 开头）；改完文件等待同步，最终工作区应为 clean。
-
-
-## 8. 实时 Agent
-
-- `agent/` 保存可审查的侧车源码；凭据和运行日志保存在仓库外 `/Users/yimingyang/fc-agent/runtime/`。
-- `/fc/ai/*` 与 `/fc/ai/v0.2/*` 保留兼容；页面实时 Re-run 使用 `/fc/ai/v0.2.1/*`。
-- `/fc/ai/v0.3/*` 提供 v0.3.1 Intake schema、自然语言提取、自定义评估和会话隔离问答；浏览器与服务端共享校验语义，DeepSeek 不可用时确定性风险评估仍可运行，风险规则版本仍为 v0.2.1。
-- v0.2.1 先计算 AI Token Activity Index，再以 40% 权重纳入 CCI；详情见 `docs/flowcredit-rules-v0.2.1.md`。
-- v0.2.1 不产生自动批准、校准 PD、预期损失或数值额度。
-
-```bash
-cd /Users/yimingyang/fc.v1/agent
-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node scripts/set-key.js
-docker compose up --build -d
-open http://127.0.0.1:8787/
-```
-
-## 9. 现场演示检查
-
-```bash
-cd /Users/yimingyang/fc.v1/agent
-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node --test test/*.test.js
-docker compose up --build -d
-curl http://127.0.0.1:8787/health
-```
-
-浏览器打开 http://127.0.0.1:8787/。Workspace 可创建真实自定义草稿，表单与 JSON 默认只执行确定性 v0.2.1；自然语言提取和 AI 解释必须单独授权。GitHub Pages 和 file:// 可准备草稿及运行预置模拟案例，但不会发送自定义评估请求。
+FlowCredit is available under the [MIT License](LICENSE).

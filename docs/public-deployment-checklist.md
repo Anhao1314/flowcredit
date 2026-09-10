@@ -2,14 +2,14 @@
 
 Target release: `external-alpha-v0.1`
 
-Status: deployment handoff prepared; no public cloud service or HTTPS endpoint has been created.
+Status: Git release frozen and published; no public cloud service or HTTPS endpoint has been created.
 
 ## Git Baseline
 
-- [ ] Release commit exists — blocked until the repository autosync workflow creates it.
-- [ ] Annotated tag `external-alpha-v0.1` exists and points to the verified release commit.
+- [x] Release commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9` exists on `main`.
+- [x] Annotated tag `external-alpha-v0.1` exists and points to the verified release commit.
 
-Do not deploy or tag the current dirty working tree, and do not attach the tag to the previous `cd3968c` commit.
+Deploy the frozen tag, not a later documentation-only `main` commit. Do not move, delete, or recreate the release tag.
 
 ## Cloud and Runtime
 

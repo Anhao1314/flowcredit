@@ -1,6 +1,6 @@
 # FlowCredit Agent Sidecar
 
-FlowCredit risk-assessment sidecar for trusted local use or deployment behind an HTTPS reverse proxy/gateway. Its reviewable source lives in `fc.v1/agent/`; local credentials, sessions, dependencies and logs remain outside the repository under `/Users/yimingyang/fc-agent/`.
+FlowCredit risk-assessment service for trusted local use or deployment behind an HTTPS reverse proxy or managed gateway. Reviewable source lives in `agent/`; local credentials, sessions, dependencies, and logs remain in the repository-external runtime directory configured by `FC_RUNTIME_ROOT`.
 
 The configured default model is `deepseek-v4-flash`.
 
@@ -22,17 +22,14 @@ Release baseline: `external-alpha-v0.1`. See the [External Alpha deployment guid
 System Node is not required for Docker operation.
 
 ```sh
-cd /Users/yimingyang/fc.v1/agent
+git clone https://github.com/Anhao1314/flowcredit.git
+cd flowcredit/agent
+cp .env.example .env
 node scripts/set-key.js
 docker compose up --build -d
-open http://127.0.0.1:8787/
 ```
 
-If `node` is not on PATH, use the bundled runtime:
-
-```sh
-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node scripts/set-key.js
-```
+Open `http://127.0.0.1:8787/` after the health check passes. If Node is not installed locally, set `FLOWCREDIT_API_KEY` directly in the untracked `.env` file instead of using `scripts/set-key.js`.
 
 Without a configured key, deterministic assessment, presets, page serving, and grounded fallback answers still work. `/health` reports Harness as unconfigured.
 
@@ -97,7 +94,7 @@ docker compose restart
 docker compose down
 ```
 
-Logs are under `/Users/yimingyang/fc-agent/runtime/logs/`, rotate at 10 MB or daily, and expire after 30 days. They contain hashes and runtime metadata, not raw cases, questions, addresses, or credentials.
+Logs are written under the repository-external `FC_RUNTIME_ROOT` path, rotate at 10 MB or daily, and expire after 30 days. They contain hashes and runtime metadata, not raw cases, questions, addresses, or credentials.
 
 After a Harness upgrade, update all pinned `0.1.2-rc.1` values together, rebuild, and run `npm test` plus the browser smoke test before deployment.
 
