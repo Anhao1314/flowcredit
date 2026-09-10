@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1}
+        FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1.1}
     container_name: flowcredit-agent
     init: true
     restart: unless-stopped
@@ -17,7 +17,7 @@ services:
     environment:
       HOST: ${CONTAINER_HOST:-0.0.0.0}
       PORT: ${PORT:-8787}
-      FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1}
+      FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1.1}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       FLOWCREDIT_API_KEY: ${FLOWCREDIT_API_KEY:-}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}

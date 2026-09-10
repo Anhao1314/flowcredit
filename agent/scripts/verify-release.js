@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const AGENT_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const REPOSITORY_ROOT = resolve(process.env.FLOWCREDIT_REPOSITORY_ROOT || AGENT_ROOT, process.env.FLOWCREDIT_REPOSITORY_ROOT ? "." : "..");
-const EXPECTED_RELEASE = "external-alpha-v0.1";
+const EXPECTED_RELEASE = "external-alpha-v0.1.1";
 
 function run(label, args) {
   const result = spawnSync(process.execPath, args, { cwd: AGENT_ROOT, stdio: "inherit", env: { ...process.env, NODE_ENV: "test" } });
@@ -34,9 +34,9 @@ async function sourceFiles(root) {
 
 async function verifyMetadataAndDocs() {
   const constants = await readFile(resolve(AGENT_ROOT, "src/constants.js"), "utf8");
-  assert.match(constants, /RELEASE_VERSION[\s\S]*external-alpha-v0\.1/);
+  assert.match(constants, /RELEASE_VERSION[\s\S]*external-alpha-v0\.1\.1/);
   const envExample = await readFile(resolve(REPOSITORY_ROOT, "agent/.env.example"), "utf8");
-  for (const marker of ["Local Development", "External Alpha / Public Deployment", "Optional LLM", "FLOWCREDIT_RELEASE_VERSION=external-alpha-v0.1", "AUTH_ENABLED=true", "FLOWCREDIT_API_KEY=", "TRUST_PROXY=false"]) {
+  for (const marker of ["Local Development", "External Alpha / Public Deployment", "Optional LLM", "FLOWCREDIT_RELEASE_VERSION=external-alpha-v0.1.1", "AUTH_ENABLED=true", "FLOWCREDIT_API_KEY=", "TRUST_PROXY=false"]) {
     assert.ok(envExample.includes(marker), `.env.example is missing ${marker}`);
   }
   for (const path of ["docs/public-api-v1.md", "docs/external-alpha-deployment.md", "docs/public-deployment-checklist.md", "docs/releases/external-alpha-v0.1.md", "deploy/Caddyfile.example"]) {

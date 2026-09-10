@@ -4,7 +4,7 @@ FlowCredit risk-assessment service for trusted local use or deployment behind an
 
 The configured default model is `deepseek-v4-flash`.
 
-Release baseline: `external-alpha-v0.1`. See the [External Alpha deployment guide](../docs/external-alpha-deployment.md) and [release notes](../docs/releases/external-alpha-v0.1.md).
+Current release baseline: `external-alpha-v0.1.1` (Finch Direct API compatibility patch; historical frozen baseline remains `external-alpha-v0.1`). See the [External Alpha deployment guide](../docs/external-alpha-deployment.md), the [v0.1.1 patch notes](../docs/releases/external-alpha-v0.1.1.md) and the [v0.1 release notes](../docs/releases/external-alpha-v0.1.md).
 
 ## Safety boundary
 

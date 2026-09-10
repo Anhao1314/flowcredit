@@ -65,3 +65,19 @@ test("evidence fields arrays expand once and coverage uses 24 decision fields", 
   assert.equal(coverage.covered, 2);
   assert.equal(coverage.serverDerived, 5);
 });
+
+test("monthlySeries periods enforce strict YYYY-MM in the application validation layer", () => {
+  const seriesWith = period => [{ period, rawTokensM: 80, validRatePct: 90, revenueUsd: 1000, computeSpendUsd: 500 }];
+  // Valid periods produce no monthlySeries error and stay valid.
+  for (const period of ["2026-01", "2026-12", "1999-12"]) {
+    const result = validateDraftV03({ monthlySeries: seriesWith(period) });
+    assert.equal(result.errors.some(item => item.field === "monthlySeries"), false, `${period} should be accepted`);
+    assert.equal(result.valid, true, `${period} should not raise a validation error`);
+  }
+  // Invalid periods are rejected before the risk engine.
+  for (const period of ["2026-00", "2026-13", "2026-99", "abcdefg", "202X-01", "2026-1", "26-09", "2026/09", null, ""]) {
+    const result = validateDraftV03({ monthlySeries: seriesWith(period) });
+    assert.equal(result.valid, false, `${String(period)} should be rejected`);
+    assert.ok(result.errors.some(item => item.field === "monthlySeries"), `${String(period)} should raise a monthlySeries field error`);
+  }
+});

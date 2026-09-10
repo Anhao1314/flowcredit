@@ -15,7 +15,7 @@
     "apiVersion": { "const": "flowcredit.api/v1" },
     "contractVersion": { "const": "flowcredit.finch-assess/v0.1" },
     "schemaVersion": { "const": "flowcredit.risk_result/v0.2.1" },
-    "requestId": { "type": "string", "pattern": "^fc-[a-f0-9]{16}$" },
+    "requestId": { "type": "string", "minLength": 19, "maxLength": 19, "description": "FlowCredit request id: an fc- prefix followed by 16 lowercase hexadecimal characters (19 characters total). Finch Direct API rejects regex pattern keywords, so length is constrained here." },
     "timestamp": { "type": "string", "format": "date-time" },
     "data": { "$ref": "#/$defs/assessment" }
   },
@@ -45,9 +45,9 @@
         "integritySignals", "confirmedIntegrityEvents", "vetoApplied", "requiredActions", "limitations"
       ],
       "properties": {
-        "assessmentId": { "type": "string", "pattern": "^fca-[a-f0-9]{24}$" },
-        "inputFingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "assessmentFingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "assessmentId": { "type": "string", "minLength": 28, "maxLength": 28, "description": "Assessment id: an fca- prefix followed by 24 lowercase hexadecimal characters (28 characters total)." },
+        "inputFingerprint": { "type": "string", "minLength": 71, "maxLength": 71, "description": "SHA-256 input fingerprint prefixed sha256: (71 characters total)." },
+        "assessmentFingerprint": { "type": "string", "minLength": 71, "maxLength": 71, "description": "SHA-256 assessment fingerprint prefixed sha256: (71 characters total)." },
         "productVersion": { "const": "flowcredit.intake/v0.3.1" },
         "ruleVersion": { "const": "flowcredit.risk_result/v0.2.1" },
         "assessmentMode": { "enum": ["real", "simulation"] },

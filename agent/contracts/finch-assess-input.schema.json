@@ -49,7 +49,7 @@
       "additionalProperties": false,
       "required": ["period", "rawTokensM", "validRatePct", "revenueUsd", "computeSpendUsd"],
       "properties": {
-        "period": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+        "period": { "type": "string", "minLength": 7, "maxLength": 7, "description": "Calendar month in YYYY-MM form (7 characters). Finch Direct API rejects regex pattern keywords, so the format is described here; the FlowCredit runtime keeps strict calendar validation independently." },
         "rawTokensM": { "$ref": "#/$defs/nonNegativeNumber" },
         "validRatePct": { "$ref": "#/$defs/percentage" },
         "revenueUsd": { "$ref": "#/$defs/nonNegativeNumber" },

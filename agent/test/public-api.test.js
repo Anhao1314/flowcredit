@@ -146,3 +146,20 @@ test("Public response size guard returns canonical structured error", async () =
     assert.equal(Object.hasOwn(body, "data"), false);
   });
 });
+
+test("Public assessment rejects malformed monthlySeries YYYY-MM periods before the risk engine", async () => {
+  const env = { ...process.env, AUTH_ENABLED: "false", RATE_LIMIT_MAX_REQUESTS: "20" };
+  await withServer({ env }, async base => {
+    for (const badPeriod of ["2026-99", "abcdefg"]) {
+      const input = structuredClone(await fixture());
+      assert.ok(Array.isArray(input.draft.monthlySeries) && input.draft.monthlySeries.length > 0);
+      input.draft.monthlySeries[0].period = badPeriod;
+      const response = await fetch(`${base}/api/v1/assess`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(input) });
+      const body = await response.json();
+      assert.equal(response.status, 400, `${badPeriod} must be rejected`);
+      assert.equal(body.error.code, "INVALID_INPUT");
+      assert.ok(Array.isArray(body.error.details) && body.error.details.some(item => item.field === "monthlySeries"), "monthlySeries field error required");
+      assert.equal(Object.hasOwn(body, "data"), false, "risk engine must not produce a result for an invalid period");
+    }
+  });
+});

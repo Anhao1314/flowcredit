@@ -19,6 +19,10 @@ const FLAT_ALLOWED = new Set([
 ]);
 
 const GROUPS = new Set(["scope", "tokenActivity", "computeBusiness", "creditProfile", "historyCrossCheck"]);
+// Strict YYYY-MM (month 01-12) contract for monthlySeries rows. The Finch Direct API JSON
+// Schema cannot express regex (pattern keywords fail closed there), so this application-layer
+// validator retains the strict format check that the contract schema deliberately cannot.
+const MONTHLY_PERIOD_PATTERN = /^[0-9]{4}-(0[1-9]|1[0-2])$/;
 
 export const INTAKE_SCHEMA_V03 = Object.freeze({
   productVersion: PRODUCT_VERSION_V03,
@@ -191,6 +195,12 @@ export function validateDraftV03(source) {
   for (const key of ["R", "C"]) if (draft[key] && (!Array.isArray(draft[key]) || draft[key].some(value => !finite(value)))) errors.push({ field: key, message: "Enter a comma-separated numeric series." });
   if (Array.isArray(draft.R) && Array.isArray(draft.C) && draft.R.length !== draft.C.length) errors.push({ field: "C", message: "Declared and credible activity series must have the same length." });
   if (draft.monthlySeries && (!Array.isArray(draft.monthlySeries) || draft.monthlySeries.length < 6)) warnings.push("At least six monthly periods are needed for Token continuity.");
+  if (Array.isArray(draft.monthlySeries)) {
+    for (const row of draft.monthlySeries) {
+      const period = String(row?.period ?? "");
+      if (!MONTHLY_PERIOD_PATTERN.test(period)) errors.push({ field: "monthlySeries", message: `Monthly period "${period}" must use YYYY-MM (for example 2026-01), with a month from 01 through 12.` });
+    }
+  }
   const requiredGroups = {
     "Scope": ["label", "periodStart", "periodEnd", "modelTier"],
     "Token activity": ["inputTokensM", "outputTokensM", "validRatePct"],

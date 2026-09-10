@@ -187,7 +187,8 @@ index.html             Zero-build local example entry point
 
 | Capability | Status |
 | --- | --- |
-| External Alpha v0.1 Git release | Ready — tag `external-alpha-v0.1` |
+| External Alpha v0.1.1 patch release | Current — tag `external-alpha-v0.1.1` (Finch Direct API compatibility + YYYY-MM validation hardening) |
+| External Alpha v0.1 Git release | Frozen baseline — tag `external-alpha-v0.1` |
 | Public API contract | Ready |
 | Finch Direct API contract | Ready |
 | Docker deployment artifact | Ready |
@@ -197,7 +198,7 @@ index.html             Zero-build local example entry point
 | Finch Marketplace submission | Pending |
 | Production calibration | Not available |
 
-The frozen release tag points to commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`. Later documentation commits on `main` do not move or redefine that release.
+The historical `external-alpha-v0.1` frozen tag points to commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9` and is never moved. The current active patch release is `external-alpha-v0.1.1`; later documentation commits on `main` do not move or redefine either release.
 
 ## Security and Data Principles
 
@@ -234,6 +235,7 @@ FlowCredit provides risk intelligence. Final decisions remain with the user, mar
 - [External Alpha deployment guide](docs/external-alpha-deployment.md)
 - [Public deployment checklist](docs/public-deployment-checklist.md)
 - [External Alpha v0.1 release notes](docs/releases/external-alpha-v0.1.md)
+- [External Alpha v0.1.1 patch release notes](docs/releases/external-alpha-v0.1.1.md)
 - [Finch submission profile](docs/finch/SUBMISSION.md)
 - [Finch listing copy](docs/finch/LISTING.md)
 - [Finch contract summary](docs/finch/CONTRACT.md)

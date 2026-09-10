@@ -2,6 +2,13 @@
 
 本文件记录 FlowCredit 的主要功能、规则与工程变更。
 
+## 2026-09-10 — External Alpha v0.1.1 (Finch Direct API compatibility patch)
+
+- 将 Finch Direct API 契约 Schema 中官方不接受的 5 处 `pattern` 关键字替换为固定长度约束与说明：Input Schema 的 `monthlySeries[].period`，Output Schema 的 `requestId`、`assessmentId`、`inputFingerprint`、`assessmentFingerprint`；Schema 仍为 JSON Schema Draft 2020-12，结构约束（required/type/properties/additionalProperties/enum/const/本地 `$ref`）全部保留。
+- 将原本由 Schema pattern 承担的 `monthlySeries[].period` 严格 YYYY-MM（月份 01–12）校验下沉到应用校验层 `validateDraftV03()`，非法 period 在进入 normalization 与 Risk Engine 前以既有标准 400 结构拒绝。
+- 当前 active release 标识升级为 `external-alpha-v0.1.1`（源码回退值、Dockerfile 构建参数、环境模板与 compose 默认值、release 校验脚本同步）；`external-alpha-v0.1` 作为历史冻结 Release 保留并继续指向 `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`。
+- 未改动 TAI/CCI/EQS/Veto/Risk Grade/Risk Engine 规则、normalization 公式、fingerprint 算法、鉴权、限流、幂等与 Docker 运行时；协议版本 `flowcredit.api/v1`、`flowcredit.intake/v0.3.1`、`flowcredit.risk_result/v0.2.1` 保持不变；代表性案例结果仍为 TAI 93.8 / CCI 929 / Risk Grade A。
+
 ## 2026-09-10 — GitHub Public-Facing Cleanup v0.1
 
 - 将 README 重构为英文优先的 External Alpha 产品入口，以 `Evidence → Risk → Action` 解释价值、用户场景、确定性权威、Public API、Finch 定位和产品边界。
