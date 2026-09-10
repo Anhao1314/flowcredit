@@ -8,7 +8,9 @@ It transforms operational, compute, commercial, and verifiable evidence into det
 
 > **Evidence → Risk → Action**
 
-**External Alpha v0.1** · Public API v1 · Docker · MIT License
+**External Alpha v0.1** · Git release published · Public HTTPS deployment pending
+
+Public API v1 · Docker · MIT License
 
 FlowCredit is External Alpha software. Current outputs are experimental and must not be interpreted as calibrated production credit decisions, statutory audit opinions, or financial advice. Public HTTPS deployment is pending.
 
