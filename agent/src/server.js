@@ -4,7 +4,7 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DSH_VERSION, MODEL, RULE_VERSION } from "./constants.js";
+import { DSH_VERSION, MODEL, RELEASE_VERSION, RULE_VERSION } from "./constants.js";
 import { RULE_VERSION_V02 } from "./rules-v02.js";
 import { RULE_VERSION_V021 } from "./rules-v021.js";
 import { HarnessBrain } from "./harness.js";
@@ -18,12 +18,17 @@ import { computeRiskV02 } from "./risk-core-v02.js";
 import { computeRiskV021 } from "./risk-core-v021.js";
 import { SessionStore } from "./session-store.js";
 import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, buildEvidenceCoverageV03, buildRequiredActionsV03, sanitizeExtractedDraftV03, validateDraftV03 } from "./intake-v03.js";
+import { FixedWindowRateLimiter, bearerAuthorized, clientKey, isProtectedApi, networkConfig, securityConfig } from "./security.js";
+import { IdempotencyStore } from "./idempotency-store.js";
+import {
+  FINCH_CONTRACT_HEADER, FINCH_CONTRACT_VERSION, FINCH_RESPONSE_MAX_BYTES, addFinchIdentity, deterministicFingerprintPayload,
+  finchAssessmentFingerprint, finchInputFingerprint, finchRequestFingerprint, isFinchContractRequest,
+  isPublicAssessRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, validateFinchAssessInput
+} from "./finch-contract.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
 const RUNTIME_ROOT = resolve(process.env.FC_RUNTIME_ROOT || join(ROOT, "..", "..", "fc-agent", "runtime"));
-const PORT = Number(process.env.FC_PORT || 8787);
-const HOST = process.env.FC_HOST || "127.0.0.1";
 const BODY_LIMIT = 64 * 1024;
 const sessions = new SessionStore();
 const logger = new SafeLogger(join(RUNTIME_ROOT, "logs"));
@@ -37,15 +42,59 @@ const MIME = {
 
 function hash(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16); }
 function stamp() { return new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC"; }
-function sendJson(res, status, body, requestId) {
-  const output = { ...body, requestId: body.requestId || requestId };
-  const text = JSON.stringify(output);
+function sendJson(res, status, body, requestId, options = {}) {
+  const timestamp = options.timestamp || new Date().toISOString();
+  const schemaVersion = options.schemaVersion || body.schemaVersion || body.productVersion || body.ruleVersion || PRODUCT_VERSION_V03;
+  const canonicalVersion = options.apiVersion ? { apiVersion: options.apiVersion } : { contractVersion: FINCH_CONTRACT_VERSION };
+  let output;
+  if (status >= 400) {
+    const supplied = body.error;
+    const message = typeof supplied === "string" ? supplied : supplied?.message || "Request failed.";
+    const code = body.errorCode || supplied?.code || (status === 401 ? "UNAUTHORIZED" : status === 413 ? "PAYLOAD_TOO_LARGE" : status === 429 ? "RATE_LIMIT_EXCEEDED" : status === 404 ? "NOT_FOUND" : status === 504 ? "UPSTREAM_TIMEOUT" : status === 502 ? "UPSTREAM_UNAVAILABLE" : "INVALID_INPUT");
+    const details = body.errorDetails || supplied?.details || body.fieldErrors || [];
+    output = options.canonical
+      ? { ok: false, ...canonicalVersion, schemaVersion, requestId: body.requestId || requestId, timestamp, error: { code, message, details } }
+      : { ...body, ok: false, schemaVersion, requestId: body.requestId || requestId, timestamp, error: { code, message, details } };
+    delete output.errorCode;
+    delete output.errorDetails;
+  } else {
+    const data = { ...(options.canonicalData || body) };
+    delete data.requestId;
+    output = options.canonical
+      ? { ok: true, ...canonicalVersion, schemaVersion, requestId: body.requestId || requestId, timestamp, data }
+      : { ...body, ok: true, schemaVersion, requestId: body.requestId || requestId, timestamp, data };
+  }
+  let text = JSON.stringify(output);
+  if (options.maxBytes && Buffer.byteLength(text) > options.maxBytes) {
+    status = 502;
+    output = {
+      ok: false, ...(options.canonical ? canonicalVersion : {}), schemaVersion,
+      requestId: body.requestId || requestId, timestamp,
+      error: { code: "RESPONSE_TOO_LARGE", message: "Assessment response exceeds the contract size limit.", details: [] }
+    };
+    text = JSON.stringify(output);
+  }
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(text),
     "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"
   });
   res.end(text);
   return output;
+}
+
+function idempotencyKey(req) {
+  const value = req.headers["idempotency-key"];
+  if (value == null || value === "") return null;
+  if (typeof value !== "string" || value.length > 128 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+    const error = new Error("Idempotency-Key must contain 1 to 128 URL-safe characters.");
+    error.code = "INVALID_IDEMPOTENCY_KEY";
+    throw error;
+  }
+  return value;
+}
+
+function acceptsJson(req) {
+  return /^application\/json(?:\s*;|$)/i.test(String(req.headers["content-type"] || ""));
 }
 
 async function readJson(req) {
@@ -67,6 +116,19 @@ async function readJson(req) {
     error.code = "INVALID_JSON";
     throw error;
   }
+}
+
+function withTimeout(promise, timeoutMs, code = "INVOCATION_TIMEOUT") {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(code === "MODEL_TIMEOUT" ? "Model review timed out." : "Assessment invocation timed out.");
+      error.code = code;
+      reject(error);
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 function factsFor(data, result) {
@@ -259,20 +321,94 @@ async function assessV02WithOptionalBrain(input, requestId, requireModel = false
   return { normalized, result, modelLayer, harnessStatus };
 }
 
-async function assessV021WithOptionalBrain(input, requestId, requireModel = false, useModel = true) {
+async function assessV021WithOptionalBrain(input, requestId, requireModel = false, useModel = true, modelTimeoutMs = null) {
   const normalized = normalizeEvidenceV021(input);
   const result = computeRiskV021(normalized);
   let modelLayer = null;
   let harnessStatus = useModel ? "unconfigured" : "not-requested";
   if (!useModel) return { normalized, result, modelLayer, harnessStatus };
   try {
-    modelLayer = await brain.assessV021(normalized, result, requestId);
+    modelLayer = modelTimeoutMs
+      ? await withTimeout(brain.assessV021(normalized, result, requestId), modelTimeoutMs, "MODEL_TIMEOUT")
+      : await brain.assessV021(normalized, result, requestId);
     harnessStatus = "ok";
   } catch (error) {
     if (requireModel) throw error;
     harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
   }
   return { normalized, result, modelLayer, harnessStatus };
+}
+
+async function buildV03Assessment(body, requestId, context) {
+  if (!body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) return { status: 400, body: { error: "draft must be an object" } };
+  const validation = validateDraftV03(body.draft);
+  if (validation.errors.length) return {
+    status: 400,
+    body: {
+      error: "Review the highlighted assessment fields", fieldErrors: validation.errors,
+      missingByGroup: validation.missingByGroup, warnings: validation.warnings, ignoredInputs: validation.ignoredInputs
+    }
+  };
+
+  const useModel = body.modelConsent === true;
+  const modelBudgetMs = Math.max(1, context.security.invocationTimeoutMs - 250);
+  const runner = context.assessmentRunner || assessV021WithOptionalBrain;
+  const { normalized, result, modelLayer, harnessStatus } = await runner(validation.draft, requestId, false, useModel, modelBudgetMs);
+  const evidenceCoverage = buildEvidenceCoverageV03(validation.draft);
+  const requiredActions = buildRequiredActionsV03(validation, result, evidenceCoverage);
+  const sessionId = typeof body.sessionId === "string" && body.sessionId.length <= 80 ? body.sessionId : requestId;
+  sessions.set(`v03:${sessionId}`, { version: "v0.3.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
+
+  const inputFingerprint = finchInputFingerprint(validation.draft);
+  const assessmentFingerprint = finchAssessmentFingerprint(deterministicFingerprintPayload({ result, validation, evidenceCoverage, requiredActions }));
+  const payload = addFinchIdentity({
+    ...result, productVersion: PRODUCT_VERSION_V03, draftId: body.draftId || sessionId, model: MODEL,
+    modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null,
+    validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [], ignoredInputs: validation.ignoredInputs },
+    readinessStatus: validation.readinessStatus, missingByGroup: validation.missingByGroup,
+    evidenceCoverage, requiredActions, harnessStatus, sessionId
+  }, inputFingerprint, assessmentFingerprint);
+  return { status: 200, body: payload };
+}
+
+async function handleV03Assessment(req, requestId, context) {
+  const body = await readJson(req);
+  const contractMode = isFinchContractRequest(req);
+  const publicMode = isPublicAssessRequest(req);
+  const key = idempotencyKey(req);
+  const operation = async () => {
+    if (contractMode || publicMode) {
+      const contractValidation = validateFinchAssessInput(body);
+      if (!contractValidation.valid) return {
+        status: 400,
+        body: {
+          errorCode: publicMode ? "INVALID_INPUT" : "CONTRACT_SCHEMA_INVALID",
+          error: publicMode ? "Request does not match the FlowCredit assessment input schema." : "Request does not match the Finch assessment input schema.",
+          errorDetails: contractValidation.errors
+        }
+      };
+    }
+    const response = await buildV03Assessment(body, requestId, context);
+    return { ...response, requestId, timestamp: new Date().toISOString() };
+  };
+  if (!key) return operation();
+  const scope = publicMode ? "public-v1" : contractMode ? "finch-v01" : "internal-v03";
+  const stored = await context.idempotency.execute(`${scope}:${key}`, finchRequestFingerprint(body), operation);
+  return { ...stored.value, replayed: stored.replayed };
+}
+
+async function serveAssessment(req, res, requestId, context, { publicApi = false } = {}) {
+  const canonical = publicApi || isFinchContractRequest(req);
+  const response = await withTimeout(handleV03Assessment(req, requestId, context), context.security.invocationTimeoutMs);
+  if (response.replayed != null) res.setHeader("Idempotency-Replayed", String(response.replayed));
+  return sendJson(res, response.status, response.body, response.requestId || requestId, {
+    canonical,
+    apiVersion: publicApi ? PUBLIC_API_VERSION : undefined,
+    canonicalData: response.body,
+    timestamp: response.timestamp,
+    schemaVersion: canonical ? RULE_VERSION_V021 : undefined,
+    maxBytes: FINCH_RESPONSE_MAX_BYTES
+  });
 }
 
 async function serveStatic(req, res) {
@@ -295,11 +431,27 @@ async function serveStatic(req, res) {
   } catch { return false; }
 }
 
-async function route(req, res, requestId) {
+async function route(req, res, requestId, context = {}) {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
-    return sendJson(res, 200, { ok: true, service: "flowcredit-agent", model: MODEL, productVersions: { v03: PRODUCT_VERSION_V03 }, ruleVersion: RULE_VERSION, ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02, v021: RULE_VERSION_V021 }, dshVersion: DSH_VERSION, harness }, requestId);
+    return sendJson(res, 200, {
+      status: "ok", service: "flowcredit-agent", version: "0.3.1", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
+      model: MODEL, productVersions: { v03: PRODUCT_VERSION_V03 }, ruleVersion: RULE_VERSION,
+      ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02, v021: RULE_VERSION_V021 }, dshVersion: DSH_VERSION,
+      llm: { enabled: harness.configured, available: harness.ready }, harness
+    }, requestId);
+  }
+  if (req.method === "GET" && url.pathname === "/ready") {
+    const harness = await brain.status();
+    return sendJson(res, 200, { status: "ready", service: "flowcredit-agent", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03, llm: { enabled: harness.configured, available: harness.ready }, deterministicAssessmentAvailable: true }, requestId);
+  }
+  if (req.method === "GET" && url.pathname === "/api/v1") {
+    return sendJson(res, 200, {
+      service: "FlowCredit Risk Intelligence API", release: RELEASE_VERSION, apiVersion: PUBLIC_API_VERSION,
+      intakeVersion: PRODUCT_VERSION_V03, riskEngineVersion: RULE_VERSION_V021,
+      endpoints: { assess: PUBLIC_ASSESS_PATH, health: "/health", ready: "/ready" }
+    }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: RULE_VERSION_V021 });
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/config") {
     const harness = await brain.status();
@@ -319,11 +471,17 @@ async function route(req, res, requestId) {
       ok: true, enabled: true, productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021,
       model: MODEL, harnessReady: harness.ready, deterministicByDefault: true,
       deterministicStatus: "ready", extractionStatus: harness.ready ? "available" : harness.configured ? "unavailable" : "unconfigured",
+      authenticationRequired: context.security?.authEnabled === true,
+      publicApi: { version: PUBLIC_API_VERSION, invocationPath: PUBLIC_ASSESS_PATH, canonicalPayload: "data" },
+      finchContract: { version: FINCH_CONTRACT_VERSION, invocationPath: PUBLIC_ASSESS_PATH, compatibilityPath: "/fc/ai/v0.3/assess", canonicalPayload: "data", responseMaxBytes: FINCH_RESPONSE_MAX_BYTES, invocationTimeoutMs: context.security?.invocationTimeoutMs },
       privacy: { browserDrafts: true, rawFilesUploaded: false, modelConsentRequired: true }
     }, requestId);
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/v0.3/schema") {
     return sendJson(res, 200, INTAKE_SCHEMA_V03, requestId);
+  }
+  if (req.method === "POST" && url.pathname === PUBLIC_ASSESS_PATH) {
+    return serveAssessment(req, res, requestId, context, { publicApi: true });
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/extract") {
     const body = await readJson(req);
@@ -358,26 +516,7 @@ async function route(req, res, requestId) {
     }, requestId);
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/assess") {
-    const body = await readJson(req);
-    if (!body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) return sendJson(res, 400, { error: "draft must be an object" }, requestId);
-    const validation = validateDraftV03(body.draft);
-    if (validation.errors.length) return sendJson(res, 400, {
-      error: "Review the highlighted assessment fields", fieldErrors: validation.errors,
-      missingByGroup: validation.missingByGroup, warnings: validation.warnings, ignoredInputs: validation.ignoredInputs
-    }, requestId);
-    const useModel = body.modelConsent === true;
-    const { normalized, result, modelLayer, harnessStatus } = await assessV021WithOptionalBrain(validation.draft, requestId, false, useModel);
-    const evidenceCoverage = buildEvidenceCoverageV03(validation.draft);
-    const requiredActions = buildRequiredActionsV03(validation, result, evidenceCoverage);
-    const sessionId = typeof body.sessionId === "string" && body.sessionId.length <= 80 ? body.sessionId : requestId;
-    sessions.set(`v03:${sessionId}`, { version: "v0.3.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
-    return sendJson(res, 200, {
-      ...result, productVersion: PRODUCT_VERSION_V03, draftId: body.draftId || sessionId, model: MODEL,
-      modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null,
-      validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [], ignoredInputs: validation.ignoredInputs },
-      readinessStatus: validation.readinessStatus, missingByGroup: validation.missingByGroup,
-      evidenceCoverage, requiredActions, harnessStatus, sessionId
-    }, requestId);
+    return serveAssessment(req, res, requestId, context);
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/ask") {
     const body = await readJson(req);
@@ -525,31 +664,83 @@ async function route(req, res, requestId) {
   return sendJson(res, 404, { error: "not found" }, requestId);
 }
 
-export function createFlowCreditServer() {
+export function createFlowCreditServer(options = {}) {
+  const security = securityConfig(options.env || process.env);
+  const limiter = new FixedWindowRateLimiter({ windowMs: security.rateLimitWindowMs, maxRequests: security.rateLimitMaxRequests, now: options.now || Date.now });
+  const idempotency = options.idempotencyStore || new IdempotencyStore({ ttlMs: security.idempotencyTtlMs, maxEntries: security.idempotencyMaxEntries, now: options.now || Date.now });
+  const context = { security, idempotency, assessmentRunner: options.assessmentRunner };
   return createServer(async (req, res) => {
     const requestId = `fc-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const started = Date.now();
     let output;
     let status = 200;
     let errorClass;
-    try { output = await route(req, res, requestId); }
+    try {
+      const url = new URL(req.url, "http://localhost");
+      const contractHeader = String(req.headers[FINCH_CONTRACT_HEADER] || "");
+      const contractMode = isFinchContractRequest(req);
+      const publicMode = isPublicAssessRequest(req);
+      const canonicalOptions = { canonical: contractMode || publicMode, apiVersion: publicMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : undefined };
+      if (isProtectedApi(req.method, url.pathname)) {
+        const rate = limiter.consume(clientKey(req, security));
+        res.setHeader("RateLimit-Limit", String(rate.limit));
+        res.setHeader("RateLimit-Remaining", String(rate.remaining));
+        res.setHeader("RateLimit-Reset", new Date(rate.resetAt).toISOString());
+        if (!rate.allowed) {
+          res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+          output = sendJson(res, 429, { errorCode: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, requestId, canonicalOptions);
+        } else if (!bearerAuthorized(req.headers.authorization, security)) {
+          res.setHeader("WWW-Authenticate", 'Bearer realm="flowcredit-agent"');
+          output = sendJson(res, 401, { errorCode: "UNAUTHORIZED", error: "A valid Bearer token is required." }, requestId, canonicalOptions);
+        } else if (!acceptsJson(req)) {
+          output = sendJson(res, 415, { errorCode: "UNSUPPORTED_MEDIA_TYPE", error: "Content-Type must be application/json." }, requestId, canonicalOptions);
+        } else if (url.pathname === "/fc/ai/v0.3/assess" && contractHeader && contractHeader !== FINCH_CONTRACT_VERSION) {
+          output = sendJson(res, 400, { errorCode: "UNSUPPORTED_CONTRACT_VERSION", error: "Unsupported FlowCredit Finch contract version." }, requestId);
+        } else output = await route(req, res, requestId, context);
+      } else output = await route(req, res, requestId, context);
+    }
     catch (error) {
       errorClass = error.code || error.name;
-      status = error.code === "BODY_TOO_LARGE" ? 413 : error.code === "HARNESS_BUSY" ? 429 : /timeout/i.test(error.message) ? 504 : error.code === "INVALID_JSON" ? 400 : 502;
-      output = sendJson(res, status, { error: status === 502 ? "model service unavailable" : error.message }, requestId);
+      const contractMode = isFinchContractRequest(req);
+      const publicMode = isPublicAssessRequest(req);
+      status = error.code === "BODY_TOO_LARGE" ? 413
+        : error.code === "IDEMPOTENCY_CONFLICT" ? 409
+          : error.code === "HARNESS_BUSY" ? 429
+            : error.code === "INVOCATION_TIMEOUT" || /timeout/i.test(error.message) ? 504
+              : ["INVALID_JSON", "INVALID_IDEMPOTENCY_KEY"].includes(error.code) ? 400 : publicMode ? 500 : 502;
+      const code = error.code === "BODY_TOO_LARGE" ? "PAYLOAD_TOO_LARGE"
+        : error.code === "INVALID_JSON" ? "INVALID_JSON"
+          : error.code === "IDEMPOTENCY_CONFLICT" ? "IDEMPOTENCY_CONFLICT"
+            : error.code === "INVALID_IDEMPOTENCY_KEY" ? "INVALID_IDEMPOTENCY_KEY"
+              : error.code === "INVOCATION_TIMEOUT" ? "INVOCATION_TIMEOUT"
+                : status === 504 ? "UPSTREAM_TIMEOUT" : status === 429 ? "SERVICE_BUSY" : status === 500 ? "INTERNAL_ERROR" : "UPSTREAM_UNAVAILABLE";
+      const message = status === 500 ? "Internal server error."
+        : status === 502 ? "Model service unavailable."
+        : error.code === "INVOCATION_TIMEOUT" ? "Assessment invocation timed out."
+          : status === 504 ? "Model service timed out." : error.message;
+      output = sendJson(res, status, { errorCode: code, error: message }, requestId, { canonical: contractMode || publicMode, apiVersion: publicMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : undefined });
     } finally {
       const url = new URL(req.url, "http://localhost");
-      logger.write({ requestId, route: url.pathname, model: MODEL, durationMs: Date.now() - started, status, outputHash: output ? hash(output) : undefined, inputHash: output?.inputHash, harnessStatus: output?.harnessStatus, errorClass });
+      status = res.statusCode || status;
+      logger.write({ requestId, route: url.pathname, model: MODEL, durationMs: Date.now() - started, status, outputHash: output ? hash(output) : undefined, inputHash: output?.inputFingerprint || output?.data?.inputFingerprint, harnessStatus: output?.harnessStatus || output?.data?.harnessStatus, errorClass });
     }
   });
 }
 
 const server = createFlowCreditServer();
 if (process.env.NODE_ENV !== "test") {
-  server.listen(PORT, HOST, () => process.stdout.write(`FlowCredit Agent listening at http://${HOST}:${PORT}\n`));
+  const { host, port } = networkConfig();
+  server.listen(port, host, () => process.stdout.write(`FlowCredit Agent listening at http://${host}:${port}\n`));
+  let shuttingDown = false;
   const shutdown = async () => {
-    server.close();
-    await brain.close().catch(() => {});
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.closeIdleConnections?.();
+    await Promise.all([
+      new Promise(resolveClose => server.close(resolveClose)),
+      brain.close().catch(() => {})
+    ]);
+    process.exitCode = 0;
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

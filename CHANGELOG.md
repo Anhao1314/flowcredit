@@ -2,6 +2,54 @@
 
 本文件记录 FlowCredit 的主要功能、规则与工程变更。
 
+## 2026-09-10 — Git Freeze and Public Deployment Handoff v0.1
+
+- 审计确认当前仓库没有 autosync script、daemon、LaunchAgent、task runner 或有效 Git hook；因 `AGENTS.md` 仍规定 autosync 管理提交，本轮没有手动 commit、push 或在旧 HEAD 上打 tag。
+- 新增 Public Deployment Checklist，并补充平台动态 `PORT`、显式 `HOST=0.0.0.0`、平台 HTTPS 域名优先、External Assessment #1、幂等冲突和部署后日志审计步骤。
+- 新增只记录未来方向的 Roadmap，包括 External Alpha 学习指标与 Private Evidence Connector/VPC 隐私架构边界；没有实现数据存储或连接器。
+- Release Gate 现在要求部署 Checklist 存在；风险引擎、评分公式、冻结案例和 Finch/Public Contract 语义保持不变。
+
+## 2026-09-10 — FlowCredit Finch Agent Submission Prep v0.1
+
+- 将首版 Finch 产品固定为 `FlowCredit Risk Intelligence Agent`，以 Public API `/api/v1/assess` 作为唯一推荐 Invocation，并保留内部兼容接口。
+- 新增 `docs/finch/` 提交清单、Listing 文案、Contract 摘要和公共部署测试流程；所有未部署、未定价和未提交状态均显式保留。
+- 新增 `verify:finch-submission`，检查提交材料、Schema、代表性案例、Release Metadata、允许的 URL/定价待定项，并复用 Finch validator 与完整 Release Gate。
+- 未创建虚假公网地址、价格、Finch 提交或批准状态；没有修改风险规则、冻结案例或产品功能。
+
+## 2026-09-10 — FlowCredit External Alpha Release Prep v0.1
+
+- 新增独立 Release 标识 `external-alpha-v0.1`，并由 `/health`、`/ready` 和 `/api/v1` 安全返回；API、Intake 与 Risk Engine 版本保持解耦。
+- 整理 Local Development、External Alpha 和 Optional LLM 环境模板，补充供应商中立部署、安全边界、Caddy 反代、回滚和 Release Notes。
+- 新增生产式 External Alpha smoke，验证健康接口、Bearer 鉴权、canonical Schema、响应大小、指纹及 SIGTERM 优雅退出。
+- 新增一键 Release Verification，覆盖全量回归、Public/Finch 合约、验证器、发布元数据、环境文档与敏感文件检查。
+- Docker 镜像增加 OCI Release 标签并继续使用锁文件安装；没有修改风险公式、冻结案例或前端产品能力。
+
+## 2026-09-10 — FlowCredit Public API v1
+
+- 新增推荐外部入口 `POST /api/v1/assess` 与匿名发现入口 `GET /api/v1`，公共 API 标识为 `flowcredit.api/v1`。
+- Public API 始终返回单一 canonical envelope，业务结果只存在于 `data.*`，无需 Finch 或其他产品专用请求头。
+- Public 与 Finch 兼容入口复用同一验证、幂等、超时、指纹、确定性评估和响应大小保护链路，不复制风险计算。
+- 保留 `/fc/ai/v0.3/assess` 浏览器响应和 `flowcredit.finch-assess/v0.1` 兼容模式。
+- 新增 Public API 自动化测试、真实 HTTP 验证器和外部接入文档；风险公式、预置案例和前端均未改变。
+
+## 2026-09-10 — FlowCredit Finch Contract Compliance v0.1
+
+- 为 `POST /fc/ai/v0.3/assess` 新增 Draft 2020-12 输入/输出 Schema、代表性请求与真实 API 输出样例。
+- 新增 `flowcredit.finch-assess/v0.1` canonical response mode；Finch 只消费 `data.*`，旧页面响应保持兼容。
+- 新增稳定输入与评估 SHA-256 指纹，以及单实例内存 Idempotency-Key TTL 存储；重复请求可重放，冲突返回 409。
+- 增加 65,536-byte response guard、1–120 秒 invocation timeout、JSON Content-Type 校验和可控 Reverse Proxy 信任。
+- 新增 Contract 验证脚本与独立测试命令，自动检查 Schema、真实 Invocation、大小、重定向、鉴权、幂等、超时和有意义结果。
+
+## 2026-09-10 — FlowCredit Finch Pilot v0.1
+
+- 将 Agent 的 `HOST` / `PORT` 配置化，直接运行默认绑定 `127.0.0.1:8787`；Docker 默认只发布至宿主机 loopback，公网发布需显式配置。
+- 为所有计算与会话类 POST API 增加可配置 Bearer Authentication，并以恒定时间摘要比较验证 Token。
+- 增加集中式、内存固定窗口 Rate Limit，支持窗口与请求上限环境变量，并返回标准 429 envelope 和 `Retry-After`。
+- API 成功与失败响应增加 `ok`、`schemaVersion`、`requestId`、ISO 时间戳以及 `data`/结构化 `error`；旧顶层业务字段继续保留。
+- `/health` 增加确定性风险引擎、Intake 和 LLM 分层状态；新增公开 `/ready`，LLM 降级不影响确定性服务就绪状态。
+- 新增公开部署 `.env.example`、安全 Docker 参数、Finch Agent 提交文档，并将 Finch Skill 标记为 Secondary / Experimental。
+- README 第一屏调整为 AI-Native Risk Intelligence Infrastructure，区分 Static Demo 与 Live Agent，并增加 Finch / External Agent Quick Start。
+
 ## 2026-09-10 — v0.3.1 客户可完成性修复
 
 - 产品标识升级为 `flowcredit.intake/v0.3.1`，继续复用未改动的 `flowcredit.risk_result/v0.2.1` 风险规则。

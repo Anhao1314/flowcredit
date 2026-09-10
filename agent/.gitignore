@@ -3,3 +3,12 @@ runtime/
 coverage/
 .DS_Store
 *.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*

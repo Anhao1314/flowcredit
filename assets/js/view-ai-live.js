@@ -40,7 +40,7 @@
     return fetchTimeout(url, options, ms).then(function (response) {
       return response.json().then(function (data) {
         if (!response.ok) {
-          var error = new Error(data && data.error || "Request failed");
+          var error = new Error(data && (typeof data.error === "string" ? data.error : data.error && data.error.message) || "Request failed");
           error.status = response.status; error.data = data; throw error;
         }
         return data;

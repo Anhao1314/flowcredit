@@ -24,6 +24,7 @@ export class HarnessBrain {
   }
 
   async configured() {
+    if (process.env.DEEPSEEK_API_KEY) return true;
     try {
       await access(join(this.dshHome, ".credentials.yaml"));
       return true;

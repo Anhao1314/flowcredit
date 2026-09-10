@@ -1,25 +1,147 @@
-# FlowCredit · On-chain AI Credit Risk Intelligence
+# FlowCredit
 
-FlowCredit 是一个面向 AI 原生企业（GPU / API / 链上地址）的「链上可验证 AI 信用风控智能（风险评估 + 动态授信）」概念演示站。
+## AI-Native Risk Intelligence Infrastructure
 
-> Testnet demo · simulated data · not financial advice · demo calibration
+> Evidence-aware risk intelligence infrastructure for AI-native businesses and compute-intensive operators.
 
-前端保持零构建、零依赖；双击 index.html 可查看静态体验。本机 Agent 模式提供自定义输入、确定性评估和经授权的 DeepSeek 解释。
+Current status: **External Alpha Release Candidate**. External Alpha is not Production Ready. See [Public API](docs/public-api-v1.md), [Deployment Guide](docs/external-alpha-deployment.md), [Public Deployment Checklist](docs/public-deployment-checklist.md), [Release Notes](docs/releases/external-alpha-v0.1.md), and [Finch Submission](docs/finch-agent-submission-v0.3.1.md).
 
----
+The Finch Submission Package is prepared under [`docs/finch/`](docs/finch/). Its status is **Submission Candidate — pending public deployment**.
 
-## 1. 快速开始（本机 / 另一台设备）
+FlowCredit 将 Web Interface、Evidence Intake、确定性 Risk Engine 和稳定 Agent API 组合为一条可复核的风险评估流程。它首先把 Token、GPU、收入、回款和证据元数据转成可信经营活动，再输出 TAI、CCI、完整性信号、证据覆盖和人工复核建议。
 
-```bash
-# 方式 A：git clone
-git clone https://github.com/Anhao1314/FC.demo2.git
-cd FC.demo2
-
-# 方式 B：GitHub 网页 Download ZIP 后解压
+```text
+Natural Language / JSON / Guided Form
+                  ↓
+          Intake v0.3.1
+                  ↓
+       Evidence Validation
+                  ↓
+         Readiness Check
+                  ↓
+ AI Token Activity / Risk Signals
+                  ↓
+ Deterministic Risk Engine v0.2.1
+                  ↓
+   Structured Risk Intelligence
 ```
 
-- 直接双击 index.html（推荐 Chrome / Edge），无需 Node、无需安装依赖、无需后端。
-- 如需跑语法/回归自检，另装 Node 18+ 后见 §6。
+| Layer | Version | Responsibility |
+| --- | --- | --- |
+| Public API | `flowcredit.api/v1` | Stable external assessment transport |
+| Finch distribution | FlowCredit Finch Pilot v0.1 | External Agent delivery profile |
+| Intake | `flowcredit.intake/v0.3.1` | Extraction, validation, readiness and evidence coverage |
+| Risk engine | `flowcredit.risk_result/v0.2.1` | Authoritative TAI, CCI, signals and review status |
+
+The LLM can extract and explain supplied facts. It never owns TAI, CCI, PD, Expected Loss, limits, approval or rejection. The v0.2.1 deterministic engine remains authoritative.
+
+The Public API assessment contract is locally machine-verifiable. See [Public API v1](docs/public-api-v1.md) and [`agent/contracts/`](agent/contracts/) for the endpoint, Draft 2020-12 schemas, representative fixtures, idempotency rules and validators. Finch is the first documented distribution profile, not the only supported consumer.
+
+> Early Pilot · testnet/demo calibration · not a statutory audit · not a lending decision · not financial or investment advice
+
+### Static Demo Mode
+
+- Zero build and zero backend dependency.
+- Open `index.html` directly through `file://`.
+- Uses simulated demo cases and keeps the original hackathon demonstration path.
+
+### Live Agent Mode
+
+- Versioned Agent API, Intake v0.3.1 and deterministic v0.2.1 risk engine.
+- Optional DeepSeek extraction and explanation with deterministic degradation.
+- Docker runtime, Bearer authentication, fixed-window rate limiting and structured errors.
+- Finch-ready API and submission documentation; this does not claim official Finch integration or approval.
+
+See [Finch Agent submission](docs/finch-agent-submission-v0.3.1.md) and [Intake contract](docs/flowcredit-intake-v0.3.md).
+
+## Public API
+
+FlowCredit can run as a machine-consumable risk intelligence API. `POST /api/v1/assess` is the recommended stable endpoint; see [Public API v1](docs/public-api-v1.md). Finch is currently the first target distribution channel for the Direct API contract, not the only use case.
+
+### External Agent Quick Start
+
+```bash
+git clone https://github.com/Anhao1314/FC.demo2.git
+cd FC.demo2/agent
+cp .env.example .env
+```
+
+For local API testing, keep `PUBLISH_HOST=127.0.0.1`. For an authenticated pilot:
+
+```text
+AUTH_ENABLED=true
+FLOWCREDIT_API_KEY=replace_with_a_long_random_secret
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_REQUESTS=30
+```
+
+Start the service:
+
+```bash
+docker compose up --build -d
+```
+
+Public metadata is available without a token:
+
+```bash
+curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8787/api/v1
+curl http://127.0.0.1:8787/fc/ai/v0.3/schema
+```
+
+The recommended external assessment endpoint uses the configured Bearer token and always returns canonical business results under `data.*`:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/assess \
+  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: partner-assessment-001' \
+  --data-binary @contracts/finch-test-input.json
+```
+
+Browser intake and consent-gated extraction continue to use the compatibility endpoints:
+
+```bash
+curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/extract \
+  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
+  -H 'Content-Type: application/json' \
+  -d '{"draftId":"pilot-1","text":"Acme operates an AI inference API using H100 GPUs.","modelConsent":true}'
+
+curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
+  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
+  -H 'Content-Type: application/json' \
+  -d '{"draftId":"pilot-1","draft":{"label":"Acme AI API","periodStart":"2026-08-01","periodEnd":"2026-08-31","modelTier":"flagship","inputTokensM":64,"outputTokensM":16,"validRatePct":94,"gpuModel":"h100-equivalent","gpuHours":4200,"revenueUsd":100000,"computeSpendUsd":58000}}'
+```
+
+For the legacy Finch-specific adapter, send the checked-in representative request with the contract version header:
+
+```bash
+curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
+  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
+  -H 'Content-Type: application/json' \
+  -H 'X-FlowCredit-Contract-Version: flowcredit.finch-assess/v0.1' \
+  -H 'Idempotency-Key: finch-test-001' \
+  --data-binary @contracts/finch-test-input.json
+
+npm run test:finch-contract
+npm run validate:finch-contract
+npm run test:public-api
+npm run validate:public-api
+```
+
+In canonical responses, `data.*` is the only business payload. The recommended Public API needs no product-specific header; the versioned compatibility adapter still avoids duplicated legacy top-level fields without changing the browser response used when the header is absent.
+
+For the browser UI on a trusted local machine, set `AUTH_ENABLED=false`; do not use that setting for a public endpoint. Public binding requires `PUBLISH_HOST=0.0.0.0`, authentication, and preferably an HTTPS reverse proxy or managed gateway. TLS intentionally remains outside the Node service.
+
+## 1. Static demo quick start
+
+```bash
+git clone https://github.com/Anhao1314/FC.demo2.git
+cd FC.demo2
+```
+
+- Double-click `index.html` in Chrome or Edge; Node and a backend are not required.
+- Install Node only when running the checks in §6.
 
 ## 2. 页面与演示动线
 

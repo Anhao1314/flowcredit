@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { RELEASE_VERSION } from "../src/constants.js";
 
 process.env.NODE_ENV = "test";
 process.env.FC_SITE_ROOT = "/Users/yimingyang/fc.v1";
@@ -7,8 +8,8 @@ process.env.FC_RUNTIME_ROOT = "/Users/yimingyang/fc-agent/runtime-test";
 const { createFlowCreditServer } = await import("../src/server.js");
 const { getPresetV021 } = await import("../src/presets.js");
 
-async function withServer(run) {
-  const server = createFlowCreditServer();
+async function withServer(run, options) {
+  const server = createFlowCreditServer(options);
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   try { await run(`http://127.0.0.1:${address.port}`); }
@@ -18,7 +19,14 @@ async function withServer(run) {
 test("HTTP contracts work without a configured model", async () => {
   await withServer(async base => {
     const health = await fetch(`${base}/health`).then(response => response.json());
+    assert.equal(health.release, RELEASE_VERSION);
     assert.equal(health.ok, true);
+    assert.equal(health.status, "ok");
+    assert.equal(health.schemaVersion, "flowcredit.intake/v0.3.1");
+    assert.equal(typeof health.requestId, "string");
+    assert.match(health.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(health.riskEngine, "flowcredit.risk_result/v0.2.1");
+    assert.equal(health.intakeSchema, "flowcredit.intake/v0.3.1");
     assert.equal(health.harness.configured, false);
 
     const runResponse = await fetch(`${base}/fc/ai/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy" }) });
@@ -94,6 +102,10 @@ test("HTTP validation uses documented status codes", async () => {
   await withServer(async base => {
     const badJson = await fetch(`${base}/fc/ai/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" });
     assert.equal(badJson.status, 400);
+    const badJsonBody = await badJson.json();
+    assert.equal(badJsonBody.ok, false);
+    assert.equal(badJsonBody.error.code, "INVALID_JSON");
+    assert.equal(typeof badJsonBody.requestId, "string");
     const unknown = await fetch(`${base}/fc/ai/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "unknown" }) });
     assert.equal(unknown.status, 400);
     const tooLarge = await fetch(`${base}/fc/ai/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: "x".repeat(70 * 1024) }) });
@@ -108,6 +120,54 @@ test("HTTP validation uses documented status codes", async () => {
     const askWithoutConsent = await fetch(`${base}/fc/ai/v0.3/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "missing", question: "Explain" }) });
     assert.equal(askWithoutConsent.status, 400);
   });
+});
+
+test("Bearer authentication protects mutating Agent APIs while health and schema stay public", async () => {
+  const env = { ...process.env, AUTH_ENABLED: "true", FLOWCREDIT_API_KEY: "test-secret-key-12345", RATE_LIMIT_MAX_REQUESTS: "20" };
+  await withServer(async base => {
+    const health = await fetch(`${base}/health`);
+    const ready = await fetch(`${base}/ready`).then(response => response.json());
+    const schema = await fetch(`${base}/fc/ai/v0.3/schema`);
+    const config = await fetch(`${base}/fc/ai/v0.3/config`).then(response => response.json());
+    assert.equal(health.status, 200);
+    assert.equal(ready.status, "ready");
+    assert.equal(ready.deterministicAssessmentAvailable, true);
+    assert.equal(schema.status, 200);
+    assert.equal(config.authenticationRequired, true);
+
+    for (const authorization of [undefined, "Bearer wrong-secret-value"]) {
+      const headers = { "Content-Type": "application/json" };
+      if (authorization) headers.Authorization = authorization;
+      const denied = await fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers, body: JSON.stringify({ draft: {} }) });
+      const body = await denied.json();
+      assert.equal(denied.status, 401);
+      assert.equal(body.ok, false);
+      assert.equal(body.error.code, "UNAUTHORIZED");
+      assert.equal(body.error.message, "A valid Bearer token is required.");
+      assert.equal(typeof body.requestId, "string");
+      assert.equal(JSON.stringify(body).includes("test-secret-key-12345"), false);
+      assert.equal(JSON.stringify(body).includes("stack"), false);
+    }
+
+    const allowed = await fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer test-secret-key-12345" }, body: JSON.stringify({ draft: { label: "Authenticated case" } }) });
+    assert.equal(allowed.status, 200);
+  }, { env });
+});
+
+test("rate limit middleware returns a stable 429 envelope", async () => {
+  const env = { ...process.env, AUTH_ENABLED: "false", RATE_LIMIT_WINDOW_MS: "60000", RATE_LIMIT_MAX_REQUESTS: "2" };
+  await withServer(async base => {
+    const request = () => fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: { label: "Rate case" } }) });
+    assert.equal((await request()).status, 200);
+    assert.equal((await request()).status, 200);
+    const limited = await request();
+    const body = await limited.json();
+    assert.equal(limited.status, 429);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, "RATE_LIMIT_EXCEEDED");
+    assert.equal(body.error.message, "Too many requests.");
+    assert.equal(limited.headers.get("Retry-After"), "60");
+  }, { env, now: () => 1000 });
 });
 
 test("v0.3.1 deterministic assessment survives unavailable DeepSeek", async () => {

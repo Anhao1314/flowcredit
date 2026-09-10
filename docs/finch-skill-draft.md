@@ -1,5 +1,10 @@
 # Finch Skill 上架草稿 — FlowCredit v0.2.1
 
+> **Status: Secondary / Experimental**
+>
+> **Primary Finch delivery target: FlowCredit Risk Intelligence Agent**
+> See: [finch-agent-submission-v0.3.1.md](finch-agent-submission-v0.3.1.md)
+
 本文档将 FlowCredit 的 AI Token 计量增强型风险评估整理为可上架 Skill。目标是先把 Token 消耗转换为可复算的经营活动，再将其纳入信用风险初筛。
 
 ## 一、产品定位

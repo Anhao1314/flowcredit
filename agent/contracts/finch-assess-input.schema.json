@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:flowcredit:assess:input:v1",
+  "title": "FlowCredit Assess API Input v1",
+  "description": "Shared canonical invocation body for POST /api/v1/assess and the Finch compatibility endpoint.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["draft"],
+  "properties": {
+    "apiVersion": { "const": "flowcredit.api/v1" },
+    "contractVersion": { "const": "flowcredit.finch-assess/v0.1" },
+    "draftId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "sessionId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "modelConsent": { "type": "boolean" },
+    "draft": { "$ref": "#/$defs/draft" }
+  },
+  "$defs": {
+    "nonNegativeNumber": { "type": "number", "minimum": 0 },
+    "percentage": { "type": "number", "minimum": 0, "maximum": 100 },
+    "decisionField": {
+      "enum": [
+        "periodStart", "periodEnd", "inputTokensM", "outputTokensM", "modelTier", "taskType",
+        "normalizationProfileId", "validRatePct", "gpuHours", "gpuModel", "peerProfileId",
+        "revenueUsd", "computeSpendUsd", "monthlySeries", "repaymentRatePct", "overdue30Pct",
+        "payingCustomers", "top5ConcentrationPct", "monthlyRevenueUsd", "monthlyComputeSpendUsd",
+        "operatingHistoryDays", "dataCoveragePct", "R", "C"
+      ]
+    },
+    "numberSeries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 120,
+      "items": { "type": "number" }
+    },
+    "tokenBuckets": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "valid": { "$ref": "#/$defs/nonNegativeNumber" },
+        "idle": { "$ref": "#/$defs/nonNegativeNumber" },
+        "duplicate": { "$ref": "#/$defs/nonNegativeNumber" },
+        "pulse": { "$ref": "#/$defs/nonNegativeNumber" },
+        "unclassified": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    },
+    "monthlyRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["period", "rawTokensM", "validRatePct", "revenueUsd", "computeSpendUsd"],
+      "properties": {
+        "period": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+        "rawTokensM": { "$ref": "#/$defs/nonNegativeNumber" },
+        "validRatePct": { "$ref": "#/$defs/percentage" },
+        "revenueUsd": { "$ref": "#/$defs/nonNegativeNumber" },
+        "computeSpendUsd": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    },
+    "evidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceDomain", "verification"],
+      "properties": {
+        "field": { "$ref": "#/$defs/decisionField" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/decisionField" }
+        },
+        "sourceDomain": {
+          "enum": ["billing", "gpu_telemetry", "bank_treasury", "customer_contract", "identity_graph", "self_report"]
+        },
+        "verification": {
+          "enum": ["self_reported", "uploaded_document", "counterparty_confirmed", "system_api", "cryptographic", "cross_verified"]
+        },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "periodStart": { "type": "string", "format": "date" },
+        "periodEnd": { "type": "string", "format": "date" },
+        "coveragePct": { "$ref": "#/$defs/percentage" },
+        "referenceHash": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "anyOf": [
+        { "required": ["field"] },
+        { "required": ["fields"] }
+      ]
+    },
+    "integrityEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "status", "sourceDomain"],
+      "properties": {
+        "code": {
+          "enum": ["CONFIRMED_SYBIL", "CONFIRMED_EVIDENCE_TAMPERING", "CONFIRMED_RELATED_PARTY_MANIPULATION"]
+        },
+        "status": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "verification": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "sourceDomain": {
+          "enum": ["billing", "gpu_telemetry", "bank_treasury", "customer_contract", "identity_graph", "self_report"]
+        },
+        "evidenceRef": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "verifiedBy": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    },
+    "draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subjectId": { "type": "string", "maxLength": 120 },
+        "label": { "type": "string", "maxLength": 200 },
+        "address": { "type": "string", "maxLength": 160 },
+        "periodStart": { "type": "string", "format": "date" },
+        "periodEnd": { "type": "string", "format": "date" },
+        "assessmentAsOf": { "type": "string", "format": "date-time" },
+        "modelTier": { "enum": ["flagship", "general"] },
+        "taskType": { "const": "inference" },
+        "rawTokensM": { "$ref": "#/$defs/nonNegativeNumber" },
+        "inputTokensM": { "$ref": "#/$defs/nonNegativeNumber" },
+        "outputTokensM": { "$ref": "#/$defs/nonNegativeNumber" },
+        "validRatePct": { "$ref": "#/$defs/percentage" },
+        "tokenBucketsM": { "$ref": "#/$defs/tokenBuckets" },
+        "gpuHours": { "$ref": "#/$defs/nonNegativeNumber" },
+        "gpuModel": { "enum": ["h100-equivalent", "mixed"] },
+        "revenueUsd": { "$ref": "#/$defs/nonNegativeNumber" },
+        "computeSpendUsd": { "$ref": "#/$defs/nonNegativeNumber" },
+        "repaymentRatePct": { "$ref": "#/$defs/percentage" },
+        "overdue30Pct": { "$ref": "#/$defs/percentage" },
+        "payingCustomers": { "type": "integer", "minimum": 0 },
+        "top5ConcentrationPct": { "$ref": "#/$defs/percentage" },
+        "customerHHI": { "type": "number", "minimum": 0, "maximum": 10000 },
+        "relatedPartyRevenuePct": { "$ref": "#/$defs/percentage" },
+        "monthlySeries": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 120,
+          "items": { "$ref": "#/$defs/monthlyRow" }
+        },
+        "monthlyRevenueUsd": { "$ref": "#/$defs/numberSeries" },
+        "monthlyComputeSpendUsd": { "$ref": "#/$defs/numberSeries" },
+        "operatingHistoryDays": { "type": "integer", "minimum": 0 },
+        "dataCoveragePct": { "$ref": "#/$defs/percentage" },
+        "R": { "$ref": "#/$defs/numberSeries" },
+        "C": { "$ref": "#/$defs/numberSeries" },
+        "loopWashRatePct": { "$ref": "#/$defs/percentage" },
+        "evidence": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/evidenceRecord" }
+        },
+        "integrityEvents": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/integrityEvent" }
+        },
+        "currentExposure": { "$ref": "#/$defs/nonNegativeNumber" }
+      }
+    }
+  }
+}

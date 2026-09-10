@@ -1,0 +1,257 @@
+{
+  "ok": true,
+  "contractVersion": "flowcredit.finch-assess/v0.1",
+  "schemaVersion": "flowcredit.risk_result/v0.2.1",
+  "requestId": "fc-9c2df3270dd84576",
+  "timestamp": "2026-09-09T19:24:05.411Z",
+  "data": {
+    "ruleVersion": "flowcredit.risk_result/v0.2.1",
+    "assessmentMode": "real",
+    "decisionStatus": "enhanced-review",
+    "simulatedDecisionStatus": null,
+    "verdict": "watch",
+    "TAI": 93.8,
+    "tokenActivityBand": "coherent",
+    "tokenMeteringStatus": "provisional",
+    "tokenMetrics": {
+      "reportedRawTokensM": 80,
+      "meteredRawTokensM": 80,
+      "normalizedTokensM": 96,
+      "validRatePct": 94,
+      "validNT_M": 90.2,
+      "validEfficiency_NT_per_GPUh": 21486,
+      "revenuePerValidNTM": 1108.2,
+      "computeSpendPerValidNTM": 642.7,
+      "tokenVolatilityPct": 2.4,
+      "tokenRevenueCorrelation": 0.992
+    },
+    "tokenComponentScores": {
+      "reconciliation": 100,
+      "validity": 90.3,
+      "physical": 94.1,
+      "commercial": 94.1,
+      "continuity": 98.6
+    },
+    "CCI": 929,
+    "riskGrade": "A",
+    "grade": "A",
+    "PD_pct": null,
+    "pdStatus": "not-calibrated",
+    "dimensionScores": {
+      "tokenActivity": 93.8,
+      "repayment": 94.3,
+      "customer": 89.9,
+      "economics": 90.1,
+      "continuity": 93.5
+    },
+    "dimensionDetails": {
+      "tokenActivity": {
+        "reconciliation": 100,
+        "validity": 90.3,
+        "physical": 94.1,
+        "commercial": 94.1,
+        "continuity": 98.6
+      },
+      "repayment": {
+        "collectionScore": 93.6,
+        "overdueScore": 96
+      },
+      "customer": {
+        "top5Score": 87,
+        "hhiScore": null,
+        "customerCountScore": 96.8,
+        "relatedPartyPenalty": 0
+      },
+      "economics": {
+        "computeContributionMarginPct": 42,
+        "costCvPct": 2.5,
+        "marginScore": 87,
+        "stabilityScore": 97.5
+      },
+      "continuity": {
+        "historyScore": 84.6,
+        "coverageScore": 100,
+        "deviationScore": 94,
+        "volatilityScore": 97.4
+      }
+    },
+    "evidenceQuality": {
+      "score": 77.8,
+      "strength": "medium",
+      "components": {
+        "completeness": 100,
+        "provenance": 60,
+        "recency": 75,
+        "coverage": 75,
+        "consistency": 80
+      },
+      "caps": [],
+      "independentDomains": 3
+    },
+    "evidenceStrength": "medium",
+    "integritySignals": [],
+    "confirmedIntegrityEvents": [],
+    "vetoApplied": false,
+    "validNT_M": 90.2,
+    "validEfficiency_NT_per_GPUh": 21486,
+    "deviationPct": 3,
+    "volatilityPct": 2.6,
+    "currentExposure": 20000,
+    "recommendedLimit": null,
+    "suggestedCreditBand": "manual-only",
+    "expectedLoss": null,
+    "missingInputs": [],
+    "integrityFindings": [
+      {
+        "code": "SIMULATION_REFERENCE_PROVISIONAL_ONLY",
+        "severity": "material",
+        "message": "Simulation normalization or peer data can support only a provisional real-input result",
+        "fields": [
+          "normalizationProfileId",
+          "peerProfileId"
+        ]
+      }
+    ],
+    "limitations": [
+      "Token metering is provisional and cannot support standard or eligible review",
+      "v0.2.1 is an expert-rule Token metering and risk screen, not an automated credit decision",
+      "TAI measures activity coherence and is not revenue, a credit limit or a probability of default",
+      "PD, LGD, expected loss and numeric credit limits are not calibrated and are intentionally not produced"
+    ],
+    "disclaimer": "Conservative demonstration risk screening only; not a credit approval, financial recommendation, statutory audit or assurance opinion.",
+    "summary": "ENHANCED-REVIEW. AI Token Activity Index 93.8 (coherent); Compute Credibility Index 929, risk grade A; Token metering provisional; no confirmed integrity Veto.",
+    "inputHash": "67232f6ac870d2f1",
+    "productVersion": "flowcredit.intake/v0.3.1",
+    "draftId": "finch-contract-healthy-v01",
+    "model": "deepseek-v4-flash",
+    "modelAnalysis": null,
+    "modelReview": null,
+    "validation": {
+      "authoritative": "deterministic-v0.2.1",
+      "modelConflicts": [],
+      "ignoredInputs": []
+    },
+    "readinessStatus": "ready",
+    "missingByGroup": {},
+    "evidenceCoverage": {
+      "total": 24,
+      "covered": 18,
+      "missingEvidence": 1,
+      "missingData": 0,
+      "serverDerived": 5,
+      "fields": [
+        {
+          "field": "periodStart",
+          "status": "covered"
+        },
+        {
+          "field": "periodEnd",
+          "status": "covered"
+        },
+        {
+          "field": "inputTokensM",
+          "status": "covered"
+        },
+        {
+          "field": "outputTokensM",
+          "status": "covered"
+        },
+        {
+          "field": "modelTier",
+          "status": "missing-evidence"
+        },
+        {
+          "field": "taskType",
+          "status": "server-derived"
+        },
+        {
+          "field": "normalizationProfileId",
+          "status": "server-derived"
+        },
+        {
+          "field": "validRatePct",
+          "status": "covered"
+        },
+        {
+          "field": "gpuHours",
+          "status": "covered"
+        },
+        {
+          "field": "gpuModel",
+          "status": "covered"
+        },
+        {
+          "field": "peerProfileId",
+          "status": "server-derived"
+        },
+        {
+          "field": "revenueUsd",
+          "status": "covered"
+        },
+        {
+          "field": "computeSpendUsd",
+          "status": "covered"
+        },
+        {
+          "field": "monthlySeries",
+          "status": "covered"
+        },
+        {
+          "field": "repaymentRatePct",
+          "status": "covered"
+        },
+        {
+          "field": "overdue30Pct",
+          "status": "covered"
+        },
+        {
+          "field": "payingCustomers",
+          "status": "covered"
+        },
+        {
+          "field": "top5ConcentrationPct",
+          "status": "covered"
+        },
+        {
+          "field": "monthlyRevenueUsd",
+          "status": "server-derived"
+        },
+        {
+          "field": "monthlyComputeSpendUsd",
+          "status": "server-derived"
+        },
+        {
+          "field": "operatingHistoryDays",
+          "status": "covered"
+        },
+        {
+          "field": "dataCoveragePct",
+          "status": "covered"
+        },
+        {
+          "field": "R",
+          "status": "covered"
+        },
+        {
+          "field": "C",
+          "status": "covered"
+        }
+      ]
+    },
+    "requiredActions": [
+      {
+        "priority": 3,
+        "category": "evidence",
+        "fields": [
+          "modelTier"
+        ],
+        "message": "Add field-level evidence for 1 supplied decision fields."
+      }
+    ],
+    "harnessStatus": "not-requested",
+    "sessionId": "fc-9c2df3270dd84576",
+    "assessmentId": "fca-d0ffb2fd6eb748add62b07ca",
+    "inputFingerprint": "sha256:eb1d2909df50a36605408a276e26989faea49f8645c3aa51fbcf868e9325a1bd",
+    "assessmentFingerprint": "sha256:d0ffb2fd6eb748add62b07cac4a57caa0c816b9b0417e3e0b556be827c04b1d6"
+  }
+}

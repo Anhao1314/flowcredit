@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:flowcredit:assess:output:v1",
+  "title": "FlowCredit Assess API Output v1",
+  "description": "Shared canonical successful response for the Public API and Finch compatibility invocation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "schemaVersion", "requestId", "timestamp", "data"],
+  "oneOf": [
+    { "required": ["apiVersion"], "not": { "required": ["contractVersion"] } },
+    { "required": ["contractVersion"], "not": { "required": ["apiVersion"] } }
+  ],
+  "properties": {
+    "ok": { "const": true },
+    "apiVersion": { "const": "flowcredit.api/v1" },
+    "contractVersion": { "const": "flowcredit.finch-assess/v0.1" },
+    "schemaVersion": { "const": "flowcredit.risk_result/v0.2.1" },
+    "requestId": { "type": "string", "pattern": "^fc-[a-f0-9]{16}$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "data": { "$ref": "#/$defs/assessment" }
+  },
+  "$defs": {
+    "nullableNumber": { "type": ["number", "null"] },
+    "nullableString": { "type": ["string", "null"] },
+    "stringArray": { "type": "array", "items": { "type": "string" } },
+    "signal": {
+      "type": "object",
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "type": "string" },
+        "message": { "type": "string" },
+        "evidenceRefs": { "$ref": "#/$defs/stringArray" },
+        "fields": { "$ref": "#/$defs/stringArray" }
+      },
+      "additionalProperties": true
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "assessmentId", "inputFingerprint", "assessmentFingerprint", "productVersion", "ruleVersion",
+        "assessmentMode", "readinessStatus", "decisionStatus", "TAI", "CCI", "riskGrade",
+        "tokenMetrics", "tokenComponentScores", "dimensionScores", "evidenceCoverage",
+        "integritySignals", "confirmedIntegrityEvents", "vetoApplied", "requiredActions", "limitations"
+      ],
+      "properties": {
+        "assessmentId": { "type": "string", "pattern": "^fca-[a-f0-9]{24}$" },
+        "inputFingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "assessmentFingerprint": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "productVersion": { "const": "flowcredit.intake/v0.3.1" },
+        "ruleVersion": { "const": "flowcredit.risk_result/v0.2.1" },
+        "assessmentMode": { "enum": ["real", "simulation"] },
+        "readinessStatus": { "enum": ["not-ready", "limited", "ready"] },
+        "decisionStatus": {
+          "enum": ["simulation-only", "reject-confirmed-integrity", "insufficient-evidence", "enhanced-review", "standard-review", "eligible-for-review"]
+        },
+        "simulatedDecisionStatus": { "$ref": "#/$defs/nullableString" },
+        "verdict": { "type": "string" },
+        "TAI": { "$ref": "#/$defs/nullableNumber" },
+        "tokenActivityBand": { "$ref": "#/$defs/nullableString" },
+        "tokenMeteringStatus": { "enum": ["simulated", "provisional", "verified", "not-computable"] },
+        "tokenMetrics": { "type": "object", "additionalProperties": { "$ref": "#/$defs/nullableNumber" } },
+        "tokenComponentScores": { "type": "object", "additionalProperties": { "$ref": "#/$defs/nullableNumber" } },
+        "CCI": { "$ref": "#/$defs/nullableNumber" },
+        "riskGrade": { "$ref": "#/$defs/nullableString" },
+        "dimensionScores": { "type": "object", "additionalProperties": { "$ref": "#/$defs/nullableNumber" } },
+        "dimensionDetails": { "type": "object" },
+        "evidenceQuality": { "type": "object" },
+        "evidenceStrength": { "type": "string" },
+        "evidenceCoverage": {
+          "type": "object",
+          "required": ["total", "covered", "missingEvidence", "missingData", "serverDerived", "fields"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0 },
+            "covered": { "type": "integer", "minimum": 0 },
+            "missingEvidence": { "type": "integer", "minimum": 0 },
+            "missingData": { "type": "integer", "minimum": 0 },
+            "serverDerived": { "type": "integer", "minimum": 0 },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["field", "status"],
+                "properties": {
+                  "field": { "type": "string" },
+                  "status": { "enum": ["covered", "missing-evidence", "missing-data", "server-derived"] }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "integritySignals": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
+        "confirmedIntegrityEvents": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
+        "integrityFindings": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
+        "vetoApplied": { "type": "boolean" },
+        "missingInputs": { "$ref": "#/$defs/stringArray" },
+        "missingByGroup": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/stringArray" }
+        },
+        "requiredActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["priority", "category", "fields", "message"],
+            "properties": {
+              "priority": { "type": "integer", "minimum": 1 },
+              "category": { "type": "string" },
+              "fields": { "$ref": "#/$defs/stringArray" },
+              "message": { "type": "string" }
+            }
+          }
+        },
+        "limitations": { "$ref": "#/$defs/stringArray" },
+        "summary": { "type": "string" },
+        "disclaimer": { "type": "string" },
+        "PD_pct": { "type": "null" },
+        "expectedLoss": { "type": "null" },
+        "recommendedLimit": { "type": "null" },
+        "sessionId": { "type": "string" },
+        "draftId": { "type": "string" },
+        "harnessStatus": { "type": "string" }
+      }
+    }
+  }
+}

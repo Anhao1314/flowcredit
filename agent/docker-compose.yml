@@ -2,21 +2,36 @@ services:
   flowcredit-agent:
     build:
       context: .
+      args:
+        FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1}
     container_name: flowcredit-agent
     init: true
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8787:8787"
+      - "${PUBLISH_HOST:-127.0.0.1}:${PORT:-8787}:${PORT:-8787}"
     volumes:
-      - /Users/yimingyang/fc.v1:/site:ro
-      - ../../fc-agent/runtime/dsh-home:/runtime/dsh-home
-      - ../../fc-agent/runtime/logs:/runtime/logs
-      - ../../fc-agent/runtime/workspace:/runtime/workspace
+      - ${FC_SITE_ROOT:-..}:/site:ro
+      - ${FC_RUNTIME_ROOT:-../../fc-agent/runtime}/dsh-home:/runtime/dsh-home
+      - ${FC_RUNTIME_ROOT:-../../fc-agent/runtime}/logs:/runtime/logs
+      - ${FC_RUNTIME_ROOT:-../../fc-agent/runtime}/workspace:/runtime/workspace
     environment:
-      FC_MODEL: deepseek-v4-flash
+      HOST: ${CONTAINER_HOST:-0.0.0.0}
+      PORT: ${PORT:-8787}
+      FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      FLOWCREDIT_API_KEY: ${FLOWCREDIT_API_KEY:-}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-30}
+      INVOCATION_TIMEOUT_MS: ${INVOCATION_TIMEOUT_MS:-30000}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      IDEMPOTENCY_TTL_MS: ${IDEMPOTENCY_TTL_MS:-1800000}
+      IDEMPOTENCY_MAX_ENTRIES: ${IDEMPOTENCY_MAX_ENTRIES:-1000}
+      FC_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       DSH_TELEMETRY_MODE: DISABLED
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 3s
       retries: 3

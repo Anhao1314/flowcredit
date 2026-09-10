@@ -1,5 +1,6 @@
 export const RULE_VERSION = "flowcredit.audit_result/v0.1";
-export const MODEL = process.env.FC_MODEL || "deepseek-v4-flash";
+export const RELEASE_VERSION = process.env.FLOWCREDIT_RELEASE_VERSION || "external-alpha-v0.1";
+export const MODEL = process.env.DEEPSEEK_MODEL || process.env.FC_MODEL || "deepseek-v4-flash";
 export const DSH_VERSION = "0.1.2-rc.1";
 export const ANCHOR_KEYS = ["efficiency", "repayment", "customer", "cost", "timeSybil"];
 export const ANCHOR_WEIGHTS = [0.25, 0.25, 0.20, 0.15, 0.15];

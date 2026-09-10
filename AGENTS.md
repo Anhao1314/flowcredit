@@ -44,5 +44,8 @@
 ## 6. 修改流程与提交
 - 完成后自检：node --check 全部前端 JS；CSS 花括号配平；静态扫描仅 view-ai-live.js 可含 fetch 与 /fc/ai/（且必须有门控判定），其余文件无 fetch/外链/module/emoji。
 - 回归断言脚本放系统临时目录（不入库）；涉及渲染需 stub window/document 后按序加载 JS。
-- 本机 autosync 守护会自动 commit + push（提交信息以 [autosync] 开头）；不要手动 commit；交付前确认 git status clean；GitHub 网络中断时守护会自动等恢复后补推。
+- Autosync 可作为日常开发阶段的可选 commit / push 辅助工具，但不独占 commit / push 权限；autosync 缺失或未运行不得阻塞已经完整验证的正式发布。
+- 全部必要 Release Gate 通过后，维护者或获得明确授权的 coding agent 可以创建正式 release commit；该提交必须代表已经复核和验证的工作区。
+- Release tag 只能创建在已经验证且工作区 clean 的 release commit 上，不得因当前修改尚未提交而将 tag 指向旧提交；创建 tag 需要人工确认或任务明确授权。
+- 明确授权的普通 release commit / tag 可以 push；禁止 force push、force-with-lease 和任何远端历史改写。普通 push 被拒绝时停止并报告远端差异，不自动 rebase 或 merge。
 - 交付说明列出：改动文件清单、每文件改动点、冻结区零改动核对、验收结果。

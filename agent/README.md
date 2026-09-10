@@ -1,8 +1,10 @@
 # FlowCredit Agent Sidecar
 
-Local-only FlowCredit risk-assessment sidecar. Its reviewable source lives in `fc.v1/agent/`; credentials, sessions, dependencies and logs remain outside the repository under `/Users/yimingyang/fc-agent/`.
+FlowCredit risk-assessment sidecar for trusted local use or deployment behind an HTTPS reverse proxy/gateway. Its reviewable source lives in `fc.v1/agent/`; local credentials, sessions, dependencies and logs remain outside the repository under `/Users/yimingyang/fc-agent/`.
 
 The configured default model is `deepseek-v4-flash`.
+
+Release baseline: `external-alpha-v0.1`. See the [External Alpha deployment guide](../docs/external-alpha-deployment.md) and [release notes](../docs/releases/external-alpha-v0.1.md).
 
 ## Safety boundary
 
@@ -34,10 +36,20 @@ If `node` is not on PATH, use the bundled runtime:
 
 Without a configured key, deterministic assessment, presets, page serving, and grounded fallback answers still work. `/health` reports Harness as unconfigured.
 
+For Docker configuration, copy `.env.example` to `.env`. The default Compose host publication is `127.0.0.1`; `PUBLISH_HOST=0.0.0.0` must only be used with `AUTH_ENABLED=true` and an HTTPS reverse proxy or managed gateway.
+
+`HOST` and `PORT` configure a direct Node process. Docker uses `CONTAINER_HOST` for the container interface and `PUBLISH_HOST` for host exposure because a container must listen on its internal interface to receive a published port.
+
 ## API
 
 ```sh
 curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8787/api/v1
+curl -X POST http://127.0.0.1:8787/api/v1/assess \
+  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: partner-assessment-001' \
+  --data-binary @contracts/finch-test-input.json
 curl -X POST http://127.0.0.1:8787/fc/ai/run \
   -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
 curl -X POST http://127.0.0.1:8787/fc/ai/assess \
@@ -48,8 +60,15 @@ curl -X POST http://127.0.0.1:8787/fc/ai/v0.2.1/run \
   -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
 curl http://127.0.0.1:8787/fc/ai/v0.3/schema
 curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
+  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
   -H 'Content-Type: application/json' -d '{"draft":{"label":"Example","inputTokensM":10,"outputTokensM":8,"validRatePct":90}}'
 ```
+
+When `AUTH_ENABLED=true`, every mutating `/fc/ai/*` POST and `POST /api/v1/assess` requires `Authorization: Bearer <FLOWCREDIT_API_KEY>`. `GET /api/v1`, `GET /health`, `GET /ready`, and versioned config/schema routes remain public. Rate limiting applies to mutating Agent APIs and returns HTTP 429 with a structured error. Local browser development normally uses `AUTH_ENABLED=false` because a static page must not contain the API secret.
+
+The recommended external invocation is `POST /api/v1/assess`. It always returns the canonical `flowcredit.api/v1` envelope without a custom header; consumers should read only `data.*`. The Finch-specific `POST /fc/ai/v0.3/assess` plus `X-FlowCredit-Contract-Version: flowcredit.finch-assess/v0.1` remains a compatibility adapter. Send `Idempotency-Key` to replay a prior identical single-instance invocation or receive HTTP 409 when the key is reused with a different payload. Full schemas and fixtures are in [`contracts/`](contracts/); see [`docs/public-api-v1.md`](../docs/public-api-v1.md).
+
+`INVOCATION_TIMEOUT_MS` defaults to 30 seconds and must remain between 1 and 120 seconds. `TRUST_PROXY` defaults to false; never trust arbitrary `X-Forwarded-For` headers. The Pilot idempotency store is memory-only, bounded by `IDEMPOTENCY_TTL_MS` and `IDEMPOTENCY_MAX_ENTRIES`.
 
 Set `"requireModel": true` on POST requests when a missing or failed model must return an HTTP error instead of a deterministic degraded result.
 
@@ -81,3 +100,15 @@ docker compose down
 Logs are under `/Users/yimingyang/fc-agent/runtime/logs/`, rotate at 10 MB or daily, and expire after 30 days. They contain hashes and runtime metadata, not raw cases, questions, addresses, or credentials.
 
 After a Harness upgrade, update all pinned `0.1.2-rc.1` values together, rebuild, and run `npm test` plus the browser smoke test before deployment.
+
+Contract verification:
+
+```sh
+npm run test:public-api
+npm run validate:public-api
+npm run test:finch-contract
+npm run validate:finch-contract
+npm run smoke:external-alpha
+npm run verify:release
+npm run verify:finch-submission
+```
