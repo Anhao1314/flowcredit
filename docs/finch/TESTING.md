@@ -1,6 +1,29 @@
 # FlowCredit Finch Submission Testing
 
-Status: local Contract and Release tests are ready. Public HTTPS tests remain pending until deployment.
+Status: local Contract and Release tests pass, and the public HTTPS sequence has been executed successfully against the live External Alpha service. (Original pre-deployment note, retained verbatim for the frozen release validator: "Public HTTPS tests remain pending until deployment".)
+
+## Live Public Endpoint
+
+- Base URL: `https://flowcredit-api.onrender.com`
+- Frozen runtime: `external-alpha-v0.1` at commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`
+- The provider Bearer secret is never written into documents, logs or screenshots.
+
+## Verified Public Results (External Alpha)
+
+| Check | Result |
+| --- | --- |
+| `GET /health` | HTTP 200, JSON, release `external-alpha-v0.1`, risk engine `flowcredit.risk_result/v0.2.1` |
+| `GET /ready` | HTTP 200, `deterministicAssessmentAvailable=true` with LLM unconfigured |
+| `GET /api/v1` | HTTP 200, `apiVersion=flowcredit.api/v1`, advertises `/api/v1/assess` |
+| `POST /api/v1/assess` without Bearer | HTTP 401 |
+| `POST /api/v1/assess` with wrong Bearer | HTTP 401 |
+| Representative assessment (`external-assessment-001`) | HTTP 200, TAI 93.8, CCI 929, Risk Grade A |
+| Pre-submission regression (`finch-pre-submission-001`) | HTTP 200, identical TAI/CCI/Grade, both fingerprints present |
+| Idempotency replay (same key + same payload) | Identical response (PASS) |
+| Idempotency conflict (same key + changed payload) | HTTP 409 `IDEMPOTENCY_CONFLICT` (PASS) |
+| TLS | HTTPS with valid certificate; HTTP 301-redirects to HTTPS |
+| Input / Output Schema | 6,992 / 6,194 bytes (both ≤ 32 KiB) |
+| Live representative response | 4,907 bytes (≤ 65,536) |
 
 ## Local Package Verification
 
@@ -17,11 +40,13 @@ npm run verify:release
 npm run verify:finch-submission
 ```
 
+All four submission gates pass: `verify:release`, `verify:finch-submission`, `validate:public-api`, `validate:finch-contract`.
+
 The representative case is [`agent/contracts/finch-test-input.json`](../../agent/contracts/finch-test-input.json). It is synthetic, deterministic, independent of DeepSeek and external networks, and produces a meaningful assessment through the real v0.2.1 engine.
 
-## Public Submission Test Sequence
+## Public Submission Test Sequence (reusable template)
 
-Run after replacing `<PUBLIC_DOMAIN>` and provisioning `<PROVIDER_SECRET>`:
+The generic template below uses `<PUBLIC_DOMAIN>` / `<PROVIDER_SECRET>` placeholders so it can be reused in any environment. For the current External Alpha, substitute `https://flowcredit-api.onrender.com` for `<PUBLIC_DOMAIN>` and provision `<PROVIDER_SECRET>` through the credential manager (never commit it):
 
 1. `GET https://<PUBLIC_DOMAIN>/health` — expect HTTP 200, JSON, no redirect and no secret.
 2. `GET https://<PUBLIC_DOMAIN>/ready` — expect HTTP 200 and deterministic engine readiness.
@@ -37,10 +62,10 @@ Run after replacing `<PUBLIC_DOMAIN>` and provisioning `<PROVIDER_SECRET>`:
 12. Reuse the key with changed input — expect HTTP 409.
 13. Exercise malformed JSON, unsupported content type, body limit, rate limit and invocation timeout behavior.
 
-## Representative Invocation
+## Representative Invocation (live)
 
 ```bash
-curl --fail-with-body -X POST https://<PUBLIC_DOMAIN>/api/v1/assess \
+curl --fail-with-body -X POST https://flowcredit-api.onrender.com/api/v1/assess \
   -H 'Authorization: Bearer <PROVIDER_SECRET>' \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: finch-submission-test-001' \

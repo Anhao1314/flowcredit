@@ -57,7 +57,7 @@ The Agent form preserves draft/session context, separates optional language-mode
 
 ## 4. API Endpoints
 
-Base URL is deployment-specific. Examples use `https://flowcredit.example`; replace it with the actual HTTPS gateway URL. Public endpoints do not return secrets, filesystem paths or environment variables.
+The live External Alpha Base URL is `https://flowcredit-api.onrender.com` (frozen release `external-alpha-v0.1`); the examples below use it directly. For any other deployment, substitute that environment's HTTPS gateway URL. Public endpoints do not return secrets, filesystem paths or environment variables.
 
 For external deterministic assessment, the recommended stable endpoint is `POST /api/v1/assess`. It always returns `flowcredit.api/v1` canonical output and requires no Finch-specific header. The `/fc/ai/v0.3/*` routes remain browser/intake compatibility interfaces.
 
@@ -66,7 +66,7 @@ For external deterministic assessment, the recommended stable endpoint is `POST 
 Purpose: liveness and component status. Authentication: public.
 
 ```bash
-curl https://flowcredit.example/health
+curl https://flowcredit-api.onrender.com/health
 ```
 
 Response includes `status`, `service`, package `version`, `riskEngine`, `intakeSchema`, `llm.enabled`, `llm.available`, `requestId` and `timestamp`. An unavailable LLM does not make the deterministic service unhealthy.
@@ -80,7 +80,7 @@ Purpose: deterministic readiness for a gateway/orchestrator. Authentication: pub
 Purpose: public capabilities and safe runtime status. Authentication: public.
 
 ```bash
-curl https://flowcredit.example/fc/ai/v0.3/config
+curl https://flowcredit-api.onrender.com/fc/ai/v0.3/config
 ```
 
 The response includes `productVersion`, `ruleVersion`, `deterministicStatus`, `extractionStatus`, `authenticationRequired` and privacy capabilities. It never contains a credential.
@@ -90,7 +90,7 @@ The response includes `productVersion`, `ruleVersion`, `deterministicStatus`, `e
 Purpose: authoritative field types, units, enums, requirements and help. Authentication: public.
 
 ```bash
-curl https://flowcredit.example/fc/ai/v0.3/schema
+curl https://flowcredit-api.onrender.com/fc/ai/v0.3/schema
 ```
 
 ### `POST /fc/ai/v0.3/extract`
@@ -98,7 +98,7 @@ curl https://flowcredit.example/fc/ai/v0.3/schema
 Purpose: consent-gated natural-language extraction. Authentication: Bearer token when `AUTH_ENABLED=true`.
 
 ```bash
-curl -X POST https://flowcredit.example/fc/ai/v0.3/extract \
+curl -X POST https://flowcredit-api.onrender.com/fc/ai/v0.3/extract \
   -H 'Authorization: Bearer YOUR_FLOWCREDIT_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"draftId":"pilot-1","text":"Acme operates an AI inference API using H100 GPUs.","modelConsent":true}'
@@ -111,7 +111,7 @@ The response `data` contains `draft`, `fieldConfidence`, `missingInputs`, `missi
 Purpose: validate a draft and run the deterministic v0.2.1 engine. Authentication: Bearer token when enabled.
 
 ```bash
-curl -X POST https://flowcredit.example/fc/ai/v0.3/assess \
+curl -X POST https://flowcredit-api.onrender.com/fc/ai/v0.3/assess \
   -H 'Authorization: Bearer YOUR_FLOWCREDIT_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"draftId":"pilot-1","draft":{"label":"Acme AI API","periodStart":"2026-08-01","periodEnd":"2026-08-31","modelTier":"flagship","inputTokensM":64,"outputTokensM":16,"validRatePct":94,"gpuModel":"h100-equivalent","gpuHours":4200,"revenueUsd":100000,"computeSpendUsd":58000}}'

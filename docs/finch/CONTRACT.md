@@ -2,16 +2,16 @@
 
 This is the concise Finch consumer contract for FlowCredit Public API v1. The authoritative machine-readable schemas remain in [`agent/contracts/`](../../agent/contracts/).
 
-## Invocation
+## Invocation (live External Alpha endpoint)
 
 ```http
-POST https://api.example.com/api/v1/assess
+POST https://flowcredit-api.onrender.com/api/v1/assess
 Authorization: Bearer <FLOWCREDIT_API_KEY>
 Content-Type: application/json
 Idempotency-Key: <optional-client-key>
 ```
 
-`api.example.com` is a PLACEHOLDER — replace after public deployment. The invocation URL is currently PENDING PUBLIC DEPLOYMENT.
+The live External Alpha service runs the frozen release `external-alpha-v0.1` (commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`). The provider secret is supplied through Finch's Bearer credential configuration and never appears in this package. A generic, pre-deployment URL template (`api.example.com`) is retained only in [SUBMISSION.md](SUBMISSION.md) to satisfy the immutable release validator; it is not a callable endpoint.
 
 Finch uses the public endpoint, not a Finch-specific risk engine. `/fc/ai/v0.3/assess` remains a legacy/internal compatibility route and is not the recommended submission endpoint.
 
@@ -59,4 +59,4 @@ Successful public invocation returns exactly one canonical envelope:
 
 ## Health
 
-Primary Finch health endpoint: `GET /health`. It is anonymous, JSON, redirect-free and returns HTTP 200 while the service is alive. Deployment readiness uses `GET /ready`.
+Primary Finch health endpoint: `GET /health` (live: `https://flowcredit-api.onrender.com/health`). It is anonymous, JSON, redirect-free and returns HTTP 200 while the service is alive. Deployment readiness uses `GET /ready` (`https://flowcredit-api.onrender.com/ready`), which reports HTTP 200 and deterministic readiness even when the optional language model is not configured.

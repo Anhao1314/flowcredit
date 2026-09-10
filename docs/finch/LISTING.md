@@ -1,6 +1,6 @@
 # FlowCredit Finch Listing Copy
 
-Status: copy-ready draft for a Submission Candidate pending public deployment. This is not a published Marketplace listing.
+Status: copy-ready for Finch Publisher entry. The live External Alpha service is deployed and publicly verified (HTTPS); this is still not a published Marketplace listing, and no claim of being published, approved or certified by Finch is made here.
 
 ## Agent Name
 
@@ -28,16 +28,33 @@ All risk calculations are owned by the deterministic `flowcredit.risk_result/v0.
 
 FlowCredit is an External Alpha risk-intelligence screen. It does not approve or reject loans, provide a production probability of default, calculate Expected Loss, recommend real lending limits, execute transactions, guarantee counterparty performance, replace regulated financial review or provide investment advice.
 
-## Buyer-facing Outcome
+## Product Boundary
+
+FlowCredit does **not**:
+
+- automatically approve loans;
+- automatically reject loans;
+- guarantee repayment;
+- guarantee counterparty performance;
+- provide investment advice;
+- replace regulated financial review.
+
+**FlowCredit provides risk intelligence. Final decisions remain with the user or the integrating policy system.**
+
+## What it returns (buyer-facing outcome)
+
+All business fields are returned as canonical machine-readable JSON under `data.*`:
 
 - Evidence readiness and 24-field evidence coverage.
-- TAI and Token activity band.
-- CCI and risk grade.
-- Manual review or decision status.
-- Risk and integrity flags.
+- TAI (AI Token Activity Index) and Token activity band.
+- CCI (Compute Credibility Index).
+- Risk Grade.
+- Review Status / decision status (manual review state).
+- Risk flags / signals and separately confirmed integrity findings.
 - Prioritized required actions.
 - Stable input and assessment fingerprints.
-- Canonical machine-readable JSON under `data.*`.
+
+Incomplete but valid evidence is returned as a legitimate result (readiness, coverage and required actions, with non-computable scores kept null) rather than an invented score.
 
 ## First-use Experience
 
@@ -78,3 +95,10 @@ Options for later product decision:
 - Option A: Free External Alpha.
 - Option B: Low-cost per assessment.
 - Option C: Limited free calls plus paid assessments.
+
+## Internal Hosting Note — not Marketplace copy
+
+- Current hosting: Render Free Web Service (`https://flowcredit-api.onrender.com`), Singapore region.
+- Do not present free hosting as a Marketplace product benefit.
+- Review cold-start behavior (Free instances spin down after inactivity; the first request can take longer) before the Finch official contract test.
+- Do not purchase a paid instance as part of External Alpha submission; any plan change is a separate maintainer decision.
