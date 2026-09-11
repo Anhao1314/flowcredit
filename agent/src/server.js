@@ -42,6 +42,33 @@ const MIME = {
 
 function hash(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16); }
 function stamp() { return new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC"; }
+
+// Finch Direct API rejects null, empty strings, empty arrays and empty objects even when a schema
+// permits them. Contract responses are therefore compacted recursively at the single assembly exit;
+// legitimate business values such as 0 and false are preserved.
+function isEmptyContractValue(value) {
+  return value === null || value === "" || (Array.isArray(value) && value.length === 0) ||
+    (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
+}
+function compactContractValue(value) {
+  if (Array.isArray(value)) {
+    const items = [];
+    for (const item of value) {
+      const compacted = compactContractValue(item);
+      if (!isEmptyContractValue(compacted)) items.push(compacted);
+    }
+    return items;
+  }
+  if (value && typeof value === "object") {
+    const compacted = {};
+    for (const [key, child] of Object.entries(value)) {
+      const next = compactContractValue(child);
+      if (!isEmptyContractValue(next)) compacted[key] = next;
+    }
+    return compacted;
+  }
+  return value;
+}
 function sendJson(res, status, body, requestId, options = {}) {
   const timestamp = options.timestamp || new Date().toISOString();
   const schemaVersion = options.schemaVersion || body.schemaVersion || body.productVersion || body.ruleVersion || PRODUCT_VERSION_V03;
@@ -64,6 +91,7 @@ function sendJson(res, status, body, requestId, options = {}) {
       ? { ok: true, ...canonicalVersion, schemaVersion, requestId: body.requestId || requestId, timestamp, data }
       : { ...body, ok: true, schemaVersion, requestId: body.requestId || requestId, timestamp, data };
   }
+  if (options.canonical) output = compactContractValue(output);
   let text = JSON.stringify(output);
   if (options.maxBytes && Buffer.byteLength(text) > options.maxBytes) {
     status = 502;
@@ -72,6 +100,7 @@ function sendJson(res, status, body, requestId, options = {}) {
       requestId: body.requestId || requestId, timestamp,
       error: { code: "RESPONSE_TOO_LARGE", message: "Assessment response exceeds the contract size limit.", details: [] }
     };
+    if (options.canonical) output = compactContractValue(output);
     text = JSON.stringify(output);
   }
   res.writeHead(status, {

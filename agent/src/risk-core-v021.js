@@ -15,6 +15,21 @@ const usableArray = (value, min = 1) => Array.isArray(value) && value.length >= 
 const finding = (code, severity, message, fields = []) => ({ code, severity, message, fields });
 const signal = (code, severity, message, evidenceRefs = []) => ({ code, severity, message, evidenceRefs });
 
+// Finch Direct API rejects empty values and requires every confirmed event to satisfy $defs/signal, so a
+// confirmed hard event is described deterministically (no LLM text, no randomness) and never emitted bare.
+const CONFIRMED_EVENT_SEVERITY_V021 = "critical";
+const CONFIRMED_EVENT_MESSAGES_V021 = Object.freeze({
+  CONFIRMED_SYBIL: "Confirmed Sybil cluster event was independently verified for this subject",
+  CONFIRMED_EVIDENCE_TAMPERING: "Confirmed evidence tampering was independently verified for this subject",
+  CONFIRMED_RELATED_PARTY_MANIPULATION: "Confirmed related-party manipulation was independently verified for this subject"
+});
+function confirmedEventSignal(event) {
+  const base = CONFIRMED_EVENT_MESSAGES_V021[event.code] || `Confirmed hard integrity event ${event.code}`;
+  const attestation = [typeof event.verifiedBy === "string" ? event.verifiedBy.trim() : "", typeof event.verifiedAt === "string" ? event.verifiedAt.trim() : ""].filter(Boolean).join(" at ");
+  const evidenceRefs = typeof event.evidenceRef === "string" && event.evidenceRef.trim() ? [event.evidenceRef] : [];
+  return { code: event.code, severity: CONFIRMED_EVENT_SEVERITY_V021, message: attestation ? `${base} (attested by ${attestation})` : base, evidenceRefs };
+}
+
 function sampleStd(values) {
   if (!usableArray(values, 2)) return null;
   const avg = mean(values);
@@ -203,7 +218,7 @@ function businessDimensions(data, metrics, findings) {
     const customers = interpolateV021(data.payingCustomers, KNOTS_V021.customers);
     const penalty = finite(data.relatedPartyRevenuePct) ? interpolateV021(data.relatedPartyRevenuePct, KNOTS_V021.relatedParty) : 0;
     scores.customer = round1(clamp(concentration * 0.7 + customers * 0.3 - penalty));
-    details.customer = { top5Score: round1(top5), hhiScore: round1(hhi), customerCountScore: round1(customers), relatedPartyPenalty: round1(penalty) };
+    details.customer = { top5Score: round1(top5), ...(finite(hhi) ? { hhiScore: round1(hhi) } : {}), customerCountScore: round1(customers), relatedPartyPenalty: round1(penalty) };
   }
   if (finite(data.revenueUsd) && data.revenueUsd > 0 && finite(data.computeSpendUsd) && usableArray(data.monthlyRevenueUsd, 6) && usableArray(data.monthlyComputeSpendUsd, 6) && data.monthlyRevenueUsd.length === data.monthlyComputeSpendUsd.length) {
     const margin = (data.revenueUsd - data.computeSpendUsd) / data.revenueUsd * 100, avgCost = mean(data.monthlyComputeSpendUsd);
@@ -261,7 +276,7 @@ function evidenceQuality(data, findings) {
   score = round1(score);
   let strength = score < 50 ? "low" : score < 80 ? "medium" : "high";
   if (strength === "high" && (domains.size < 2 || critical > 0)) strength = "medium";
-  return { score, strength, components, caps, independentDomains: domains.size };
+  return { score, strength, components, ...(caps.length ? { caps } : {}), independentDomains: domains.size };
 }
 
 function integrity(data, tokenMetrics) {
@@ -276,7 +291,7 @@ function integrity(data, tokenMetrics) {
     if (!event || !HARD_EVENT_CODES_V021.has(event.code) || event.status !== "confirmed") continue;
     const simulated = data.assessmentMode === "simulation" && event.verification === "simulation" && event.evidenceRef;
     const real = data.assessmentMode !== "simulation" && SOURCE_DOMAINS_V021.has(event.sourceDomain) && event.sourceDomain !== "self_report" && event.evidenceRef && event.verifiedAt && event.verifiedBy;
-    if (simulated || real) confirmed.push({ ...event, simulation: Boolean(simulated) });
+    if (simulated || real) confirmed.push({ ...event, ...confirmedEventSignal(event), simulation: Boolean(simulated) });
     else signals.push(signal("UNVERIFIED_HARD_EVENT", "critical", `${event.code} lacks independent confirmation`, event.evidenceRef ? [event.evidenceRef] : []));
   }
   return { signals, confirmed, vetoApplied: confirmed.length > 0 };
@@ -379,7 +394,7 @@ export function computeRiskV021(input) {
     volatilityPct: businessMetrics.volatilityPct,
     currentExposure: finite(data.currentExposure) ? data.currentExposure : null,
     recommendedLimit: null,
-    suggestedCreditBand: integrityResult.vetoApplied ? "none" : "manual-only",
+    suggestedCreditBand: integrityResult.vetoApplied ? "withheld-due-to-veto" : "manual-only",
     expectedLoss: null,
     missingInputs: [...new Set(missingInputs)],
     integrityFindings: findings,

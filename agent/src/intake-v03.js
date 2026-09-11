@@ -241,5 +241,7 @@ export function buildRequiredActionsV03(validation, result, coverage) {
   if (validation.valid && result?.CCI == null && !Object.keys(validation.missingByGroup || {}).length) actions.push({ priority: 2, category: "credit-screen", fields: [], message: "Resolve incomplete risk dimensions before CCI can be computed." });
   if (coverage?.missingEvidence) actions.push({ priority: 3, category: "evidence", fields: coverage.fields.filter(item => item.status === "missing-evidence").map(item => item.field), message: `Add field-level evidence for ${coverage.missingEvidence} supplied decision fields.` });
   for (const signal of result?.integritySignals || []) actions.push({ priority: 4, category: "integrity", fields: [], message: signal.message });
-  return actions.sort((left, right) => left.priority - right.priority);
+  // Finch rejects empty arrays and the item schema requires fields, so an action without concrete
+  // decision fields is never emitted; the finding itself still carries the explanation.
+  return actions.filter(action => Array.isArray(action.fields) && action.fields.length > 0).sort((left, right) => left.priority - right.priority);
 }

@@ -2,13 +2,12 @@
   "ok": true,
   "contractVersion": "flowcredit.finch-assess/v0.1",
   "schemaVersion": "flowcredit.risk_result/v0.2.1",
-  "requestId": "fc-9c2df3270dd84576",
-  "timestamp": "2026-09-09T19:24:05.411Z",
+  "requestId": "fc-3216f34694524ef9",
+  "timestamp": "2026-09-11T16:31:46.270Z",
   "data": {
     "ruleVersion": "flowcredit.risk_result/v0.2.1",
     "assessmentMode": "real",
     "decisionStatus": "enhanced-review",
-    "simulatedDecisionStatus": null,
     "verdict": "watch",
     "TAI": 93.8,
     "tokenActivityBand": "coherent",
@@ -35,7 +34,6 @@
     "CCI": 929,
     "riskGrade": "A",
     "grade": "A",
-    "PD_pct": null,
     "pdStatus": "not-calibrated",
     "dimensionScores": {
       "tokenActivity": 93.8,
@@ -58,7 +56,6 @@
       },
       "customer": {
         "top5Score": 87,
-        "hhiScore": null,
         "customerCountScore": 96.8,
         "relatedPartyPenalty": 0
       },
@@ -85,22 +82,16 @@
         "coverage": 75,
         "consistency": 80
       },
-      "caps": [],
       "independentDomains": 3
     },
     "evidenceStrength": "medium",
-    "integritySignals": [],
-    "confirmedIntegrityEvents": [],
     "vetoApplied": false,
     "validNT_M": 90.2,
     "validEfficiency_NT_per_GPUh": 21486,
     "deviationPct": 3,
     "volatilityPct": 2.6,
     "currentExposure": 20000,
-    "recommendedLimit": null,
     "suggestedCreditBand": "manual-only",
-    "expectedLoss": null,
-    "missingInputs": [],
     "integrityFindings": [
       {
         "code": "SIMULATION_REFERENCE_PROVISIONAL_ONLY",
@@ -124,15 +115,10 @@
     "productVersion": "flowcredit.intake/v0.3.1",
     "draftId": "finch-contract-healthy-v01",
     "model": "deepseek-v4-flash",
-    "modelAnalysis": null,
-    "modelReview": null,
     "validation": {
-      "authoritative": "deterministic-v0.2.1",
-      "modelConflicts": [],
-      "ignoredInputs": []
+      "authoritative": "deterministic-v0.2.1"
     },
     "readinessStatus": "ready",
-    "missingByGroup": {},
     "evidenceCoverage": {
       "total": 24,
       "covered": 18,
@@ -249,9 +235,9 @@
       }
     ],
     "harnessStatus": "not-requested",
-    "sessionId": "fc-9c2df3270dd84576",
-    "assessmentId": "fca-d0ffb2fd6eb748add62b07ca",
+    "sessionId": "fc-3216f34694524ef9",
+    "assessmentId": "fca-8b37c2a0a4a6c5d514fcacbb",
     "inputFingerprint": "sha256:eb1d2909df50a36605408a276e26989faea49f8645c3aa51fbcf868e9325a1bd",
-    "assessmentFingerprint": "sha256:d0ffb2fd6eb748add62b07cac4a57caa0c816b9b0417e3e0b556be827c04b1d6"
+    "assessmentFingerprint": "sha256:8b37c2a0a4a6c5d514fcacbb05b7f5ea6d78fa46c625a16d4faf838fedbaf70b"
   }
 }

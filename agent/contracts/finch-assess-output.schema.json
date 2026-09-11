@@ -40,9 +40,9 @@
       "additionalProperties": true,
       "required": [
         "assessmentId", "inputFingerprint", "assessmentFingerprint", "productVersion", "ruleVersion",
-        "assessmentMode", "readinessStatus", "decisionStatus", "TAI", "CCI", "riskGrade",
-        "tokenMetrics", "tokenComponentScores", "dimensionScores", "evidenceCoverage",
-        "integritySignals", "confirmedIntegrityEvents", "vetoApplied", "requiredActions", "limitations"
+        "assessmentMode", "readinessStatus", "decisionStatus",
+        "tokenComponentScores", "evidenceCoverage",
+        "vetoApplied", "limitations"
       ],
       "properties": {
         "assessmentId": { "type": "string", "minLength": 28, "maxLength": 28, "description": "Assessment id: an fca- prefix followed by 24 lowercase hexadecimal characters (28 characters total)." },
@@ -118,9 +118,6 @@
         "limitations": { "$ref": "#/$defs/stringArray" },
         "summary": { "type": "string" },
         "disclaimer": { "type": "string" },
-        "PD_pct": { "type": "null" },
-        "expectedLoss": { "type": "null" },
-        "recommendedLimit": { "type": "null" },
         "sessionId": { "type": "string" },
         "draftId": { "type": "string" },
         "harnessStatus": { "type": "string" }
