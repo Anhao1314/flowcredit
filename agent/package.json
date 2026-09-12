@@ -17,7 +17,9 @@
     "validate:finch-contract": "node scripts/validate-finch-contract.js",
     "verify:release": "node scripts/verify-release.js",
     "verify:finch-submission": "node scripts/verify-finch-submission.js",
-    "check": "node --check src/*.js && node --test test/*.test.js"
+    "check": "npm run check:syntax && npm run typecheck && npm test",
+    "typecheck": "tsc -p tsconfig.json",
+    "check:syntax": "node scripts/check-syntax.js"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.2",
@@ -26,5 +28,9 @@
     "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2",
+    "@types/node": "26.5.0"
   }
 }

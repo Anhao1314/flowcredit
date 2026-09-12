@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true
+  },
+  "files": [
+    "src/constants.js",
+    "src/rules-v02.js",
+    "src/rules-v021.js"
+  ]
+}

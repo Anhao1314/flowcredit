@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: agent
+    env:
+      NODE_ENV: test
+      DSH_TELEMETRY_MODE: DISABLED
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: JavaScript syntax
+        run: npm run check:syntax
+      - name: Rule registry type check
+        run: npm run typecheck
+      - name: Unit and regression tests
+        run: npm test
+      - name: Public API contract
+        run: npm run validate:public-api
+      - name: Finch contract
+        run: npm run validate:finch-contract

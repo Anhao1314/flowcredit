@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { RELEASE_VERSION } from "../src/constants.js";
 
 process.env.NODE_ENV = "test";
-process.env.FC_SITE_ROOT = "/Users/yimingyang/fc.v1";
-process.env.FC_RUNTIME_ROOT = "/Users/yimingyang/fc-agent/runtime-test";
+process.env.FC_SITE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const testRuntime = await mkdtemp(join(tmpdir(), "flowcredit-http-test-"));
+process.env.FC_RUNTIME_ROOT = testRuntime;
+after(() => rm(testRuntime, { recursive: true, force: true }));
 const { createFlowCreditServer } = await import("../src/server.js");
 const { getPresetV021 } = await import("../src/presets.js");
 

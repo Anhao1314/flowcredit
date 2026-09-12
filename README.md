@@ -1,79 +1,89 @@
-# FlowCredit
+# FlowCredit — Risk Intelligence Infrastructure for the AI-Native Economy
 
-**Risk Intelligence Infrastructure for the AI-Native Economy**
+An evidence-aware risk API for AI-native businesses and agents: normalize operational evidence, compute deterministic risk signals, and return review status and prioritized actions.
 
-FlowCredit is an evidence-aware counterparty risk intelligence system designed for AI-native businesses, agents, API providers, and compute-intensive operators.
+**Evidence → Risk → Action**
 
-It transforms operational, compute, commercial, and verifiable evidence into deterministic, machine-readable risk intelligence.
+**Stack:** JavaScript · Node.js · JSON Schema / Ajv · Docker
 
-> **Evidence → Risk → Action**
+**Status:** External Alpha `v0.1.1`; experimental risk intelligence, not calibrated lending decisions.
 
-**External Alpha v0.1** · Git release published · Public HTTPS deployment pending
+[Quick Start](#quick-start) · [API](docs/public-api-v1.md) · [Methodology](docs/flowcredit-rules-v0.2.1.md) · [Validation](docs/portfolio-validation.md) · [MIT](LICENSE)
 
-Public API v1 · Docker · MIT License
+## Key Results
 
-FlowCredit is External Alpha software. Current outputs are experimental and must not be interpreted as calibrated production credit decisions, statutory audit opinions, or financial advice. Public HTTPS deployment is pending.
+| Verified capability | Scope / evidence |
+| --- | --- |
+| **67/67 tests passed** | Local Node.js 24.19.0 run on 2026-09-12; [validation record](docs/portfolio-validation.md) |
+| **5 TAI components; 5 CCI dimensions** | Versioned deterministic weights, [rule registry](agent/src/rules-v021.js) |
+| **6 evidence source domains; 3 confirmed-event veto codes** | Input/provenance model, not six connected external providers; [rules](agent/src/rules-v021.js) |
+| Public API + Finch contract validators passed | Synthetic fixtures; no Finch approval or publication implied |
 
-## Why FlowCredit
+These are engineering checks and structural properties, not model accuracy, production users or commercial traction.
 
-AI-native counterparties can generate substantial activity before conventional financial records tell the full story. Token usage alone is not proof of healthy operations, and an opaque AI-generated score is not enough for accountable review.
+## What is FlowCredit
 
-FlowCredit helps answer three practical questions:
+FlowCredit assesses evidence readiness, field coverage, activity consistency, counterparty-risk signals and required follow-up. Intended consumers include AI service operators, compute providers and agent marketplaces. They retain final policy and transaction decisions.
 
-| Stage | Question | Output |
-| --- | --- | --- |
-| Evidence | What do we reliably know? | Readiness, coverage, provenance, and missing items |
-| Risk | What risks are present, and why? | Deterministic activity and counterparty-risk signals |
-| Action | What should happen next? | Review status and prioritized evidence requests |
+## Why AI-native businesses need a different risk model
 
-## What FlowCredit Provides
+Token activity alone does not establish revenue quality or repayment capacity. FlowCredit connects compute, commercial and provenance evidence, exposes missing or inconsistent fields, and avoids substituting an opaque model-generated score for accountable rules.
 
-- Evidence readiness and field-level coverage.
-- AI Token and compute-activity analysis.
-- Deterministic Token Activity Index (TAI) and Compute Credibility Index (CCI).
-- Risk grade and review status without automatic lending approval.
-- Risk signals, confirmed integrity findings, and Veto handling.
-- Missing evidence and prioritized required actions.
-- Reproducible request and assessment fingerprints.
-- A versioned, machine-readable JSON API.
-- Optional LLM-assisted evidence extraction and explanation.
+## Evidence → Risk → Action
 
-## Designed Use Cases
+| Stage | Implemented output |
+| --- | --- |
+| Evidence | Normalized fields, provenance, recency, coverage and missing evidence |
+| Risk | TAI, CCI, evidence-quality score, grade, risk signals and confirmed-integrity veto |
+| Action | Review status and prioritized evidence requests; no automatic loan approval |
 
-### Agent Marketplace
+Multi-source evidence **acceptance and normalization** are implemented. Live billing, bank, identity and chain connectors are future work; input verification metadata is not itself a proof that an external source is authentic.
 
-Assess counterparty risk before allowing higher-value transactions.
+## Architecture
 
-### Compute or GPU Provider
+```mermaid
+flowchart TD
+    S[Structured intake] --> I[Validate and normalize]
+    T[Consent-gated descriptive text] --> L[Optional LLM extraction]
+    L --> I
+    I --> E[Readiness and evidence coverage]
+    E --> R[Deterministic v0.2.1 risk engine]
+    R --> V[Output and contract validation]
+    V --> A[Public API v1: evidence / risk / actions]
+    R --> X[Optional grounded explanation]
+```
 
-Evaluate operational and commercial evidence before extending exposure or payment terms.
+Implementation: [intake](agent/src/intake-v03.js), [normalization](agent/src/normalize-v021.js), [risk engine](agent/src/risk-core-v021.js), [validation](agent/src/validate-v021.js), [API server](agent/src/server.js).
 
-### API or AI Service Provider
+## Risk Pipeline
 
-Review usage, commercial, and evidence signals before increasing limits.
+1. Validate the intake contract and normalize numeric/evidence fields.
+2. Reconcile Token totals and classification buckets; identify missing or inconsistent periods.
+3. Compute evidence quality and TAI/CCI only when required components are computable.
+4. Apply integrity rules: unverified indicators are signals; eligible confirmed events can trigger veto.
+5. Validate authoritative output and serialize the versioned API envelope.
 
-### Risk or Fintech System
+The static browser retains a **mock-hash Merkle tree/proof demonstration** and simulated shock → de-risk → recover sequence in [state.js](assets/js/state.js). These are historical UI demonstrations, not cryptographic integrity verification, blockchain transactions or an exposed production stress-testing API. API fingerprints are reproducibility identifiers, not evidence authenticity guarantees.
 
-Consume machine-readable risk signals as one input to a broader decision process.
+## TAI / CCI
 
-These are intended use cases, not claims of current customers or production deployments.
+[Version v0.2.1 methodology](docs/flowcredit-rules-v0.2.1.md):
 
-## Example Assessment Journey
+```text
+TAI (0–100) = reconciliation×10% + validity×35% + physical×25%
+            + commercial×20% + continuity×10%
 
-An AI service operator submits recent Token activity, GPU usage, revenue, compute spend, repayment behavior, customer concentration, operating history, and evidence metadata.
+CCI (0–1000) = round((TAI×40% + repayment×25% + customer×15%
+              + economics×10% + operatingContinuity×10%) × 10)
+```
 
-FlowCredit may identify that customer concentration is elevated, compute costs are growing faster than activity, and recent supporting evidence is incomplete. Instead of inventing missing facts or issuing an automatic lending decision, it returns prioritized actions such as:
+Missing required components produce `null`, rather than redistributing weights. Current normalization/peer profiles are simulated references; their sample-size fields are fixture metadata, not a verified real-world cohort. TAI is not revenue and CCI is not a calibrated default probability. `PD_pct`, `expectedLoss` and `recommendedLimit` remain `null` in v0.2.1.
 
-- Provide recent GPU invoices or telemetry.
-- Update customer-concentration evidence.
-- Resolve inconsistent Token classification.
-- Review exposure before increasing limits.
+## Deterministic Engine vs LLM Sidecar
 
-The exact result is determined from the submitted structured evidence. See the [representative input and output](agent/contracts/README.md) for a reproducible contract example.
+**LLM may assist with evidence extraction or explanation, but deterministic rules own authoritative risk outputs.** Structured assessments remain available without DeepSeek. Descriptive text extraction requires explicit model consent; model output cannot overwrite authoritative scores. This project integrates a model provider; it does not train a foundation model.
 
-## Public API
-
-The stable external assessment endpoint is:
+## API
 
 ```http
 POST /api/v1/assess
@@ -82,74 +92,14 @@ Content-Type: application/json
 ```
 
 ```text
-Public API:  flowcredit.api/v1
+API:         flowcredit.api/v1
 Intake:      flowcredit.intake/v0.3.1
-Risk Engine: flowcredit.risk_result/v0.2.1
+Risk engine: flowcredit.risk_result/v0.2.1
 ```
 
-Public HTTPS deployment is pending. The API can currently be run locally at `http://127.0.0.1:8787`.
-
-From the `agent/` directory:
-
-```bash
-curl http://127.0.0.1:8787/health
-
-curl --fail-with-body \
-  -X POST http://127.0.0.1:8787/api/v1/assess \
-  -H 'Authorization: Bearer <YOUR_LOCAL_API_KEY>' \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: example-assessment-001' \
-  --data-binary @contracts/finch-test-input.json
-```
-
-Canonical business results are returned under `data.*`. Contract details, limits, error semantics, and schemas are documented in [Public API v1](docs/public-api-v1.md).
-
-## Architecture
-
-```text
-Structured Evidence or Consent-Gated Text
-                   ↓
-        Normalization and Validation
-                   ↓
-        Evidence Readiness and Coverage
-                   ↓
-         Deterministic Risk Engine
-                   ↓
-             Risk Intelligence
-                   ↓
-         Versioned Machine-Readable API
-```
-
-### Deterministic Risk Authority
-
-LLMs may assist with evidence interpretation and explanation, but they do not own the authoritative risk calculation. TAI, CCI, evidence quality, risk grade, integrity handling, and review status are calculated and validated by versioned deterministic rules.
-
-The optional LLM provider can be unavailable or unconfigured while deterministic assessment remains available. FlowCredit is not an LLM wrapper and does not allow model output to overwrite authoritative scores.
-
-## Finch Agent
-
-```text
-Agent: FlowCredit Risk Intelligence Agent
-Type:  Direct API Agent
-```
-
-FlowCredit is being prepared for delivery through Finch as a Direct API Agent. Finch is the first target distribution channel, not a separate FlowCredit product fork.
-
-```text
-Finch
-  ↓
-FlowCredit Public API v1
-  ↓
-POST /api/v1/assess
-  ↓
-Deterministic Risk Engine
-```
-
-The submission package is ready, but the Agent has not been submitted, approved, certified, or published by Finch. See the [Finch submission package](docs/finch/SUBMISSION.md).
+Read canonical business fields under `data.*`. Bearer authentication, bounded payloads, rate limits, timeout and single-instance idempotency are implemented. See [schemas and fixtures](agent/contracts/README.md) and [API semantics](docs/public-api-v1.md).
 
 ## Quick Start
-
-### Docker API and web interface
 
 ```bash
 git clone https://github.com/Anhao1314/flowcredit.git
@@ -157,98 +107,67 @@ cd flowcredit/agent
 cp .env.example .env
 ```
 
-Set a unique local `FLOWCREDIT_API_KEY` of at least 16 characters in `.env`, then start the service:
+Set a unique `FLOWCREDIT_API_KEY` of at least 16 characters in the untracked `.env`, then:
 
 ```bash
 docker compose up --build -d
-curl http://127.0.0.1:8787/ready
+curl --fail http://127.0.0.1:8787/ready
 ```
 
-Open `http://127.0.0.1:8787/` for the browser experience. DeepSeek configuration is optional; without it, structured deterministic assessments still work.
+For a local authenticated assessment, replace the key placeholder:
 
-### Static example mode
-
-The repository also retains the original zero-build browser experience. Open `index.html` directly to explore simulated cases without a backend. This is a compatibility and demonstration mode, not the primary product architecture.
-
-Never commit `.env` or API keys. Public deployment must use managed secrets, Bearer authentication, and an HTTPS gateway.
-
-## Repository Structure
-
-```text
-agent/                 API service, deterministic engines, tests, and Docker
-agent/contracts/       Draft 2020-12 schemas and representative fixtures
-assets/                Static web interface
-deploy/                Reverse-proxy deployment example
-docs/                  API, methodology, deployment, Finch, and release docs
-index.html             Zero-build local example entry point
+```bash
+curl --fail-with-body -X POST http://127.0.0.1:8787/api/v1/assess   -H 'Authorization: Bearer <YOUR_LOCAL_API_KEY>'   -H 'Content-Type: application/json'   -H 'Idempotency-Key: example-assessment-001'   --data-binary @contracts/finch-test-input.json
 ```
 
-## Current Status
+Open `http://127.0.0.1:8787/` for the interface. Public-style configuration protects browser mutating calls too; never embed the API secret in static JavaScript. DeepSeek is optional. Offline simulated browsing remains available by opening root `index.html`.
 
-| Capability | Status |
+## Docker
+
+[Dockerfile](agent/Dockerfile) pins the base image digest and installs production dependencies from the lockfile. Compose publishes to loopback by default. External deployment requires managed secrets, enabled authentication and HTTPS; see [deployment guide](docs/external-alpha-deployment.md) and [checklist](docs/public-deployment-checklist.md). No new deployment is performed by the Portfolio documentation update.
+
+## Example Risk Cases
+
+| Synthetic case | Expected behavior |
 | --- | --- |
-| External Alpha v0.1.1 patch release | Current — tag `external-alpha-v0.1.1` (Finch Direct API compatibility + YYYY-MM validation hardening) |
-| External Alpha v0.1 Git release | Frozen baseline — tag `external-alpha-v0.1` |
-| Public API contract | Ready |
-| Finch Direct API contract | Ready |
-| Docker deployment artifact | Ready |
-| Release verification | Passing |
-| Finch submission package | Ready |
-| Public HTTPS deployment | Pending |
-| Finch Marketplace submission | Pending |
-| Production calibration | Not available |
+| Complete simulated operator | Computable activity/risk signals with `simulation-only` status |
+| Missing components or unreconciled Token buckets | Missing-data findings and non-computable scores where required |
+| Unverified Sybil indicator | Risk signal, not a confirmed veto by itself |
+| Eligible confirmed integrity event | Veto reflected in grade/review result |
 
-The historical `external-alpha-v0.1` frozen tag points to commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9` and is never moved. The current active patch release is `external-alpha-v0.1.1`; later documentation commits on `main` do not move or redefine either release.
+See [test cases](agent/test/risk-core-v021.test.js) and [representative input/output](agent/contracts/README.md). Legacy browser PD/limit values are simulation calibration and are not the current API's lending outputs.
 
-## Security and Data Principles
+## Finch Integration
 
-- Bearer-protected assessment endpoint.
-- Bounded request and response sizes.
-- Fixed-window rate limiting and invocation timeout.
-- Idempotency support for single-instance External Alpha operation.
-- No API secrets committed to the repository.
-- Raw sensitive payloads are not intended for application logs.
-- Deterministic assessment remains independent of optional LLM availability.
+A Direct API contract, validators and technical handoff package exist. **Not submitted, approved, certified or published by Finch.** Finch is a target integration channel. Read [submission package](docs/finch/SUBMISSION.md), [contract](docs/finch/CONTRACT.md) and [handoff guide](docs/finch/FINCH_HANDOFF_GUIDE.md).
 
-> Raw data stays private. Evidence becomes machine-readable. Decisions stay accountable.
+## Reproduction / Tests & Quality
 
-VPC deployment, private evidence connectors, distributed persistence, formal data-residency controls, and compliance certification are not current capabilities.
+Use the Node versions declared in [package.json](agent/package.json). From `agent/`:
 
-## What FlowCredit Does Not Do
+```bash
+npm ci
+npm run check
+npm run validate:public-api
+npm run validate:finch-contract
+npm run verify:release
+```
 
-FlowCredit does not:
+`check` runs syntax checks, TypeScript `checkJs` for the constants and v0.2/v0.2.1 **rule registries**, and the unit/regression suite. It does not type-check the entire API/sidecar. Deterministic checks use synthetic fixtures without a configured LLM. [CI configuration](.github/workflows/ci.yml) runs installation, tests and these checks; its presence alone does not assert a passing Actions run.
 
-- Automatically approve or reject loans.
-- Issue calibrated production lending decisions.
-- Guarantee repayment or counterparty performance.
-- Generate production PD, Expected Loss, or lending limits.
-- Execute lending or payment transactions.
-- Provide investment, legal, or financial advice.
-- Replace regulated financial review or statutory audit.
+## Current Status / Limitations
 
-FlowCredit provides risk intelligence. Final decisions remain with the user, marketplace, provider, or policy system.
+- Git tags `external-alpha-v0.1` and `external-alpha-v0.1.1` are existing release references; GitHub Releases is currently empty.
+- [Public HTTPS health endpoint](https://flowcredit-api.onrender.com/health) returned `external-alpha-v0.1.1` on 2026-09-12, with LLM disabled. This is a point-in-time availability check, not an uptime or production-readiness claim.
+- Final lending/payment decisions, live evidence connectors, production calibration, distributed persistence and compliance certification are outside current capabilities.
+- Input provenance and integrity-event confirmation depend on trustworthy upstream verification; the API does not independently verify all supplied evidence.
 
-## Documentation
+[Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-- [Public API v1](docs/public-api-v1.md)
-- [Contract schemas and fixtures](agent/contracts/README.md)
-- [External Alpha deployment guide](docs/external-alpha-deployment.md)
-- [Public deployment checklist](docs/public-deployment-checklist.md)
-- [External Alpha v0.1 release notes](docs/releases/external-alpha-v0.1.md)
-- [External Alpha v0.1.1 patch release notes](docs/releases/external-alpha-v0.1.1.md)
-- [Finch submission profile](docs/finch/SUBMISSION.md)
-- [Finch listing copy](docs/finch/LISTING.md)
-- [Finch contract summary](docs/finch/CONTRACT.md)
-- [Finch testing guide](docs/finch/TESTING.md)
-- [Intake contract](docs/flowcredit-intake-v0.3.md)
-- [Risk methodology v0.2.1](docs/flowcredit-rules-v0.2.1.md)
+## Roadmap
 
-## Roadmap and Project History
+Priorities: trusted evidence connectors and profiles, independent calibration, persistent multi-instance storage, and a reviewed Finch submission. See [roadmap](docs/roadmap.md); these remain future work.
 
-FlowCredit originated as a hackathon prototype and has evolved into an External Alpha risk-intelligence API and Finch-ready Direct API Agent. The static simulated experience remains available for transparent demonstrations and regression compatibility.
+## Hackathon Origin
 
-Future work is documented in the [roadmap](docs/roadmap.md). It is not part of the current release. The repository has adopted the concise name `Anhao1314/flowcredit` for broader external distribution.
-
-## License
-
-FlowCredit is available under the [MIT License](LICENSE).
+Originated from the Shenzhen–Hong Kong Hackathon and continued as a post-hackathon productization project. The private historical `DEMO.FlowCredit` repository preserves the original simulated interface; **this repository is the current project**. Hackathon provenance is maintainer-provided context, not an award claim.
