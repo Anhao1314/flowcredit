@@ -1,0 +1,56 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="1280" height="640" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1280" height="8" fill="#15803D"/>
+
+  <text x="80" y="118" font-size="22" letter-spacing="4" fill="#64748B" font-weight="600">AI-NATIVE RISK INTELLIGENCE INFRASTRUCTURE</text>
+  <text x="78" y="222" font-size="72" font-weight="800" fill="#0F172A">FlowCredit</text>
+  <text x="80" y="300" font-size="28" fill="#334155">Risk intelligence for AI-native businesses</text>
+  <text x="80" y="338" font-size="28" fill="#334155">and agents — Evidence → Risk → Action.</text>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="600">
+    <rect x="80" y="384" width="172" height="46" rx="8" fill="#F0FDF4" stroke="#15803D" stroke-width="1.5"/>
+    <text x="166" y="414" fill="#15803D" text-anchor="middle">Risk Engine</text>
+    <rect x="268" y="384" width="186" height="46" rx="8" fill="#F0FDF4" stroke="#15803D" stroke-width="1.5"/>
+    <text x="361" y="414" fill="#15803D" text-anchor="middle">Versioned API</text>
+    <rect x="470" y="384" width="146" height="46" rx="8" fill="#F0FDF4" stroke="#15803D" stroke-width="1.5"/>
+    <text x="543" y="414" fill="#15803D" text-anchor="middle">AI-native</text>
+  </g>
+
+  <g font-size="21" fill="#475569">
+    <text x="80" y="510" font-weight="700" fill="#0F172A">Deterministic TAI / CCI</text>
+    <text x="372" y="510" fill="#94A3B8">·</text>
+    <text x="392" y="510" font-weight="700" fill="#0F172A">Integrity veto</text>
+    <text x="588" y="510" fill="#94A3B8">·</text>
+    <text x="608" y="510" font-weight="700" fill="#0F172A">67/67 tests</text>
+  </g>
+  <text x="80" y="556" font-size="19" fill="#64748B">LLMs assist extraction / explanation; deterministic rules own the score.</text>
+
+  <!-- right vertical pipeline -->
+  <g>
+    <rect x="858" y="96" width="322" height="56" rx="10" fill="#F0FDF4" stroke="#15803D" stroke-width="2"/>
+    <text x="1019" y="132" text-anchor="middle" font-size="19" font-weight="700" fill="#0F172A">Evidence</text>
+    <path d="M1019 152 L1019 172" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arG)"/>
+    <rect x="858" y="176" width="322" height="56" rx="10" fill="#F0FDF4" stroke="#15803D" stroke-width="2"/>
+    <text x="1019" y="212" text-anchor="middle" font-size="19" font-weight="700" fill="#0F172A">Verification &amp; coverage</text>
+    <path d="M1019 232 L1019 252" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arG)"/>
+    <rect x="858" y="256" width="322" height="56" rx="10" fill="#F0FDF4" stroke="#15803D" stroke-width="2"/>
+    <text x="1019" y="292" text-anchor="middle" font-size="19" font-weight="700" fill="#0F172A">TAI / CCI</text>
+    <path d="M1019 312 L1019 332" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arG)"/>
+    <rect x="858" y="336" width="322" height="60" rx="10" fill="#15803D"/>
+    <text x="1019" y="372" text-anchor="middle" font-size="19" font-weight="700" fill="#FFFFFF">Deterministic risk engine</text>
+    <path d="M1019 396 L1019 416" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arG)"/>
+    <rect x="858" y="420" width="322" height="56" rx="10" fill="#F0FDF4" stroke="#15803D" stroke-width="2"/>
+    <text x="1019" y="456" text-anchor="middle" font-size="19" font-weight="700" fill="#0F172A">Grade / veto</text>
+    <path d="M1019 476 L1019 496" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arG)"/>
+    <rect x="858" y="500" width="322" height="56" rx="10" fill="#0F172A"/>
+    <text x="1019" y="536" text-anchor="middle" font-size="19" font-weight="700" fill="#FFFFFF">Action</text>
+  </g>
+
+  <defs>
+    <marker id="arG" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto">
+      <path d="M1,1 L7,5 L1,9" stroke="#94A3B8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <text x="1200" y="600" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="600" fill="#15803D">github.com/Anhao1314</text>
+</svg>

@@ -4,11 +4,15 @@ An evidence-aware risk API for AI-native businesses and agents: normalize operat
 
 **Evidence → Risk → Action**
 
+`Deterministic Risk Engine` `TAI / CCI` `Integrity Veto` `Versioned API` `Docker`
+
 **Stack:** JavaScript · Node.js · JSON Schema / Ajv · Docker
 
 **Status:** External Alpha `v0.1.1`; experimental risk intelligence, not calibrated lending decisions.
 
 [Quick Start](#quick-start) · [API](docs/public-api-v1.md) · [Methodology](docs/flowcredit-rules-v0.2.1.md) · [Validation](docs/portfolio-validation.md) · [MIT](LICENSE)
+
+![Evidence flows through validation and coverage into the deterministic v0.2.1 risk engine that produces TAI/CCI, grade and veto; an optional consent-gated LLM sidecar only assists extraction and explanation and cannot overwrite authoritative scores; output is a versioned API with review status and actions, never automatic approval.](assets/img/evidence-risk-action.svg)
 
 ## Key Results
 
@@ -41,19 +45,13 @@ Multi-source evidence **acceptance and normalization** are implemented. Live bil
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    S[Structured intake] --> I[Validate and normalize]
-    T[Consent-gated descriptive text] --> L[Optional LLM extraction]
-    L --> I
-    I --> E[Readiness and evidence coverage]
-    E --> R[Deterministic v0.2.1 risk engine]
-    R --> V[Output and contract validation]
-    V --> A[Public API v1: evidence / risk / actions]
-    R --> X[Optional grounded explanation]
-```
+The pipeline and the deterministic-engine / LLM-sidecar boundary are shown in the diagram at the top of this README. Implementation entry points:
 
-Implementation: [intake](agent/src/intake-v03.js), [normalization](agent/src/normalize-v021.js), [risk engine](agent/src/risk-core-v021.js), [validation](agent/src/validate-v021.js), [API server](agent/src/server.js).
+- [intake](agent/src/intake-v03.js): structured intake and consent-gated descriptive text.
+- [normalization](agent/src/normalize-v021.js): validate and normalize numeric/evidence fields.
+- [risk engine](agent/src/risk-core-v021.js): deterministic v0.2.1 TAI/CCI, signals and veto.
+- [validation](agent/src/validate-v021.js): output and contract validation.
+- [API server](agent/src/server.js): public API v1 (evidence / risk / actions).
 
 ## Risk Pipeline
 
@@ -117,7 +115,11 @@ curl --fail http://127.0.0.1:8787/ready
 For a local authenticated assessment, replace the key placeholder:
 
 ```bash
-curl --fail-with-body -X POST http://127.0.0.1:8787/api/v1/assess   -H 'Authorization: Bearer <YOUR_LOCAL_API_KEY>'   -H 'Content-Type: application/json'   -H 'Idempotency-Key: example-assessment-001'   --data-binary @contracts/finch-test-input.json
+curl --fail-with-body -X POST http://127.0.0.1:8787/api/v1/assess \
+  -H 'Authorization: Bearer <YOUR_LOCAL_API_KEY>' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: example-assessment-001' \
+  --data-binary @contracts/finch-test-input.json
 ```
 
 Open `http://127.0.0.1:8787/` for the interface. Public-style configuration protects browser mutating calls too; never embed the API secret in static JavaScript. DeepSeek is optional. Offline simulated browsing remains available by opening root `index.html`.
