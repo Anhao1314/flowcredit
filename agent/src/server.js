@@ -23,8 +23,9 @@ import { IdempotencyStore } from "./idempotency-store.js";
 import {
   FINCH_CONTRACT_HEADER, FINCH_CONTRACT_VERSION, FINCH_RESPONSE_MAX_BYTES, addFinchIdentity, deterministicFingerprintPayload,
   finchAssessmentFingerprint, finchInputFingerprint, finchRequestFingerprint, isFinchContractRequest,
-  isPublicAssessRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, validateFinchAssessInput
+  isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
+import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
@@ -426,6 +427,71 @@ async function handleV03Assessment(req, requestId, context) {
   return { ...stored.value, replayed: stored.replayed };
 }
 
+// Natural Language Adapter v0.1. The prompt is read deterministically and non-authoritatively,
+// then handed to the same internal assessment service that POST /api/v1/assess uses. There is no
+// model provider on this path: scoring, readiness and decisions stay with the FlowCredit runtime.
+//
+// Two drafts exist and must not be confused:
+//   - extracted facts: exactly the whitelisted fields the parser read from the prompt. This is what
+//     the response reports as extractedDraft, so consumers can audit what the user actually stated.
+//   - effective draft: the extracted facts plus the deterministic server-derived metadata that the
+//     shared sanitizer adds (assessmentMode, modelTier, normalizationProfileId, peerProfileId).
+//     It stays internal and is all the runtime ever sees.
+const CHAT_REQUEST_FIELDS = Object.freeze(["prompt"]);
+const CHAT_PROMPT_MAX_CHARS = INTAKE_SCHEMA_V03.maxTextLength;
+const CHAT_MESSAGES = Object.freeze({
+  "insufficient-evidence": "FlowCredit read the facts stated in the message, but the supplied information is not yet sufficient for a complete risk assessment. Add the fields listed in missingInputs and resubmit.",
+  assessed: "FlowCredit completed the risk assessment from the supplied information."
+});
+
+function validateChatRequest(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { valid: false, errors: [{ path: "/", keyword: "type", message: "Request body must be a JSON object." }] };
+  }
+  const errors = [];
+  for (const key of Object.keys(value)) {
+    if (!CHAT_REQUEST_FIELDS.includes(key)) errors.push({ path: `/${key}`, keyword: "additionalProperties", message: "must NOT have additional properties" });
+  }
+  const prompt = value.prompt;
+  if (prompt === undefined) errors.push({ path: "/prompt", keyword: "required", message: "must have required property 'prompt'" });
+  else if (typeof prompt !== "string") errors.push({ path: "/prompt", keyword: "type", message: "must be string" });
+  else if (!prompt.trim()) errors.push({ path: "/prompt", keyword: "minLength", message: "must not be empty or whitespace only" });
+  else if (prompt.length > CHAT_PROMPT_MAX_CHARS) errors.push({ path: "/prompt", keyword: "maxLength", message: `must NOT have more than ${CHAT_PROMPT_MAX_CHARS} characters` });
+  return errors.length ? { valid: false, errors } : { valid: true, prompt: prompt.trim() };
+}
+
+async function serveChat(req, res, requestId, context) {
+  const canonical = { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 };
+  const body = await readJson(req);
+  const request = validateChatRequest(body);
+  if (!request.valid) {
+    return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit chat input schema.", errorDetails: request.errors }, requestId, canonical);
+  }
+  const extraction = extractNaturalLanguageDraft(request.prompt);
+  const effectiveDraft = sanitizeExtractedDraftV03(extraction.draft).draft;
+  const draftId = `nl-${requestId}`;
+  const assessment = await withTimeout(
+    buildV03Assessment({ draft: effectiveDraft, draftId, modelConsent: false }, requestId, context),
+    context.security.invocationTimeoutMs
+  );
+  if (assessment.status !== 200) {
+    return sendJson(res, assessment.status, { ...assessment.body, draftId, extractedDraft: extraction.draft, parserVersion: NL_DRAFT_PARSER_VERSION }, requestId, canonical);
+  }
+  const result = assessment.body;
+  const status = result.decisionStatus === "insufficient-evidence" ? "insufficient-evidence" : "assessed";
+  const data = {
+    status, message: CHAT_MESSAGES[status], parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
+    extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
+    assessment: result,
+    readinessStatus: result.readinessStatus, decisionStatus: result.decisionStatus,
+    TAI: result.TAI, CCI: result.CCI, riskGrade: result.riskGrade, verdict: result.verdict,
+    evidenceStrength: result.evidenceStrength, suggestedCreditBand: result.suggestedCreditBand,
+    missingInputs: result.missingInputs, missingByGroup: result.missingByGroup, requiredActions: result.requiredActions,
+    sessionId: result.sessionId, assessmentId: result.assessmentId
+  };
+  return sendJson(res, 200, data, requestId, { ...canonical, maxBytes: FINCH_RESPONSE_MAX_BYTES });
+}
+
 async function serveAssessment(req, res, requestId, context, { publicApi = false } = {}) {
   const canonical = publicApi || isFinchContractRequest(req);
   const response = await withTimeout(handleV03Assessment(req, requestId, context), context.security.invocationTimeoutMs);
@@ -479,7 +545,7 @@ async function route(req, res, requestId, context = {}) {
     return sendJson(res, 200, {
       service: "FlowCredit Risk Intelligence API", release: RELEASE_VERSION, apiVersion: PUBLIC_API_VERSION,
       intakeVersion: PRODUCT_VERSION_V03, riskEngineVersion: RULE_VERSION_V021,
-      endpoints: { assess: PUBLIC_ASSESS_PATH, health: "/health", ready: "/ready" }
+      endpoints: { assess: PUBLIC_ASSESS_PATH, chat: PUBLIC_CHAT_PATH, health: "/health", ready: "/ready" }
     }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: RULE_VERSION_V021 });
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/config") {
@@ -508,6 +574,9 @@ async function route(req, res, requestId, context = {}) {
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/v0.3/schema") {
     return sendJson(res, 200, INTAKE_SCHEMA_V03, requestId);
+  }
+  if (req.method === "POST" && url.pathname === PUBLIC_CHAT_PATH) {
+    return serveChat(req, res, requestId, context);
   }
   if (req.method === "POST" && url.pathname === PUBLIC_ASSESS_PATH) {
     return serveAssessment(req, res, requestId, context, { publicApi: true });
@@ -709,7 +778,8 @@ export function createFlowCreditServer(options = {}) {
       const contractHeader = String(req.headers[FINCH_CONTRACT_HEADER] || "");
       const contractMode = isFinchContractRequest(req);
       const publicMode = isPublicAssessRequest(req);
-      const canonicalOptions = { canonical: contractMode || publicMode, apiVersion: publicMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : undefined };
+      const chatMode = isPublicChatRequest(req);
+      const canonicalOptions = { canonical: contractMode || publicMode || chatMode, apiVersion: publicMode || chatMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode ? PRODUCT_VERSION_V03 : undefined };
       if (isProtectedApi(req.method, url.pathname)) {
         const rate = limiter.consume(clientKey(req, security));
         res.setHeader("RateLimit-Limit", String(rate.limit));
@@ -732,11 +802,12 @@ export function createFlowCreditServer(options = {}) {
       errorClass = error.code || error.name;
       const contractMode = isFinchContractRequest(req);
       const publicMode = isPublicAssessRequest(req);
+      const chatMode = isPublicChatRequest(req);
       status = error.code === "BODY_TOO_LARGE" ? 413
         : error.code === "IDEMPOTENCY_CONFLICT" ? 409
           : error.code === "HARNESS_BUSY" ? 429
             : error.code === "INVOCATION_TIMEOUT" || /timeout/i.test(error.message) ? 504
-              : ["INVALID_JSON", "INVALID_IDEMPOTENCY_KEY"].includes(error.code) ? 400 : publicMode ? 500 : 502;
+              : ["INVALID_JSON", "INVALID_IDEMPOTENCY_KEY"].includes(error.code) ? 400 : publicMode || chatMode ? 500 : 502;
       const code = error.code === "BODY_TOO_LARGE" ? "PAYLOAD_TOO_LARGE"
         : error.code === "INVALID_JSON" ? "INVALID_JSON"
           : error.code === "IDEMPOTENCY_CONFLICT" ? "IDEMPOTENCY_CONFLICT"
@@ -747,7 +818,7 @@ export function createFlowCreditServer(options = {}) {
         : status === 502 ? "Model service unavailable."
         : error.code === "INVOCATION_TIMEOUT" ? "Assessment invocation timed out."
           : status === 504 ? "Model service timed out." : error.message;
-      output = sendJson(res, status, { errorCode: code, error: message }, requestId, { canonical: contractMode || publicMode, apiVersion: publicMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : undefined });
+      output = sendJson(res, status, { errorCode: code, error: message }, requestId, { canonical: contractMode || publicMode || chatMode, apiVersion: publicMode || chatMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode ? PRODUCT_VERSION_V03 : undefined });
     } finally {
       const url = new URL(req.url, "http://localhost");
       status = res.statusCode || status;

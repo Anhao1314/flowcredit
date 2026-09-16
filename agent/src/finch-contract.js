@@ -8,6 +8,7 @@ export const FINCH_CONTRACT_VERSION = "flowcredit.finch-assess/v0.1";
 export const FINCH_CONTRACT_HEADER = "x-flowcredit-contract-version";
 export const PUBLIC_API_VERSION = "flowcredit.api/v1";
 export const PUBLIC_ASSESS_PATH = "/api/v1/assess";
+export const PUBLIC_CHAT_PATH = "/api/v1/chat";
 export const FINCH_RESPONSE_MAX_BYTES = 65_536;
 export const FINCH_SCHEMA_MAX_BYTES = 32_768;
 
@@ -53,6 +54,12 @@ export function isFinchContractRequest(req) {
 export function isPublicAssessRequest(req) {
   if (req.method !== "POST") return false;
   return new URL(req.url, "http://localhost").pathname === PUBLIC_ASSESS_PATH;
+}
+
+// The natural-language chat surface shares the public API envelope, version and auth policy.
+export function isPublicChatRequest(req) {
+  if (req.method !== "POST") return false;
+  return new URL(req.url, "http://localhost").pathname === PUBLIC_CHAT_PATH;
 }
 
 export function deterministicFingerprintPayload({ result, validation, evidenceCoverage, requiredActions }) {

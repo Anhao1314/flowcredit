@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-const MUTATING_API = /^\/api\/v1\/assess$|^\/fc\/ai\/(?:v0\.2(?:\.1)?\/)?(?:run|assess|ask)$|^\/fc\/ai\/v0\.3\/(?:extract|assess|ask)$/;
+const MUTATING_API = /^\/api\/v1\/(?:assess|chat)$|^\/fc\/ai\/(?:v0\.2(?:\.1)?\/)?(?:run|assess|ask)$|^\/fc\/ai\/v0\.3\/(?:extract|assess|ask)$/;
 
 function positiveInteger(value, fallback) {
   const parsed = Number(value);

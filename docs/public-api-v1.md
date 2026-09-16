@@ -47,6 +47,39 @@ Public deployments must set `AUTH_ENABLED=true` and a strong `FLOWCREDIT_API_KEY
 
 The current store is in memory. Multi-instance production deployment requires shared storage.
 
+## Natural Language Endpoint (v0.1)
+
+```text
+POST /api/v1/chat
+Authorization: Bearer <FLOWCREDIT_API_KEY>
+Content-Type: application/json
+
+{ "prompt": "请帮我评估一家 AI 推理服务商的交易对手风险。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。" }
+```
+
+`/api/v1/chat` shares the authentication, rate-limit, canonical envelope and timeout policy of `/api/v1/assess`. `prompt` is the only accepted property: it must be a non-empty string of at most 10,000 characters, and unknown properties are rejected rather than silently accepted.
+
+The endpoint is a deterministic adapter, not a model call:
+
+1. a whitelist parser reads only what the text states explicitly (`taskType`, `gpuModel`, `gpuHours`, `revenueUsd`, `computeSpendUsd`, `repaymentRatePct`, `overdue30Pct`, `payingCustomers`, `top5ConcentrationPct`);
+2. the shared intake sanitizer and validator add server-derived metadata, canonicalize values such as `H100` to `h100-equivalent`, and validate the draft (that metadata — `assessmentMode`, `modelTier`, `normalizationProfileId`, `peerProfileId` — stays internal and never appears in `extractedDraft`);
+3. the same deterministic `flowcredit.risk_result/v0.2.1` runtime used by `/api/v1/assess` produces the assessment.
+
+Unstated fields are never interpolated, estimated or filled in, and no model provider is contacted. Authoritative fields (`TAI`, `CCI`, `riskGrade`, `decisionStatus`, `readinessStatus`, `verdict`, limits) can only be produced by the runtime.
+
+Response fields under `data.*`:
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `assessed`, or `insufficient-evidence` when the runtime cannot rate the supplied evidence |
+| `message` | deterministic template text suitable for a chat surface; it explains no score |
+| `extractedDraft` | exactly the whitelisted fields read from the prompt (`taskType` included when the text states an inference business); it is omitted when the prompt states no whitelisted field |
+| `parsedFields` | which whitelisted fields the prompt stated |
+| `assessment` | the complete deterministic payload that `/api/v1/assess` returns under `data`, with identical field names |
+| `readinessStatus`, `decisionStatus`, `missingInputs`, `missingByGroup`, `requiredActions` | echoed from the runtime for convenient consumption |
+
+Insufficient information is a business result, not a client or server error: it returns HTTP 200 with `data.status = insufficient-evidence`. `TAI`, `CCI` and `riskGrade` are omitted whenever the runtime cannot compute them, exactly as in the assessment response.
+
 ## Representative Request
 
 The checked-in request [`agent/contracts/finch-test-input.json`](../agent/contracts/finch-test-input.json) is the complete machine-verifiable example. It is synthetic test data, not a customer record.
@@ -137,7 +170,7 @@ Documented statuses are 400, 401, 409, 413, 415, 429, 500, 502 and 504.
 | Canonical response | 65,536 encoded bytes |
 | Input or output schema | 32,768 bytes each |
 | Invocation timeout | 30,000 ms default; configurable from 1,000–120,000 ms |
-| Natural-language extraction | Not part of this endpoint |
+| Natural-language extraction | `POST /api/v1/chat`: deterministic whitelist parser only, no model provider |
 
 An oversized response fails with `RESPONSE_TOO_LARGE`; it is never truncated into invalid JSON. Rate-limit responses include `Retry-After` and rate-limit headers.
 

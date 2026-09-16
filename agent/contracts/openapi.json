@@ -1,0 +1,631 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FlowCredit Public Assessment API",
+    "version": "flowcredit.api/v1",
+    "description": "External Alpha. Supplied-evidence risk assessment; no live data connectors, calibrated lending decisions or automatic approval. This development repository does not deploy."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787",
+      "description": "Local development only"
+    }
+  ],
+  "paths": {
+    "/api/v1/assess": {
+      "post": {
+        "operationId": "assessOperatingEvidence",
+        "summary": "Assess supplied operating evidence",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            },
+            "description": "Single-instance, in-memory replay. Same key plus different payload returns 409."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./finch-assess-input.schema.json"
+              },
+              "example": {
+                "apiVersion": "flowcredit.api/v1",
+                "draftId": "finch-contract-healthy-v01",
+                "modelConsent": false,
+                "draft": {
+                  "subjectId": "finch-contract-operator-01",
+                  "label": "Contract Reference AI Operator",
+                  "periodStart": "2026-08-01",
+                  "periodEnd": "2026-08-31",
+                  "assessmentAsOf": "2026-09-01T00:00:00Z",
+                  "modelTier": "flagship",
+                  "taskType": "inference",
+                  "rawTokensM": 80,
+                  "inputTokensM": 64,
+                  "outputTokensM": 16,
+                  "validRatePct": 94,
+                  "tokenBucketsM": {
+                    "valid": 75.2,
+                    "idle": 1.6,
+                    "duplicate": 1.6,
+                    "pulse": 0.8,
+                    "unclassified": 0.8
+                  },
+                  "gpuHours": 4200,
+                  "gpuModel": "h100-equivalent",
+                  "revenueUsd": 100000,
+                  "computeSpendUsd": 58000,
+                  "repaymentRatePct": 96,
+                  "overdue30Pct": 2,
+                  "payingCustomers": 168,
+                  "top5ConcentrationPct": 36,
+                  "relatedPartyRevenuePct": 8,
+                  "monthlySeries": [
+                    {
+                      "period": "2026-03",
+                      "rawTokensM": 72,
+                      "validRatePct": 92,
+                      "revenueUsd": 94000,
+                      "computeSpendUsd": 55000
+                    },
+                    {
+                      "period": "2026-04",
+                      "rawTokensM": 75,
+                      "validRatePct": 93,
+                      "revenueUsd": 96000,
+                      "computeSpendUsd": 56000
+                    },
+                    {
+                      "period": "2026-05",
+                      "rawTokensM": 77,
+                      "validRatePct": 93,
+                      "revenueUsd": 97000,
+                      "computeSpendUsd": 56500
+                    },
+                    {
+                      "period": "2026-06",
+                      "rawTokensM": 79,
+                      "validRatePct": 94,
+                      "revenueUsd": 99000,
+                      "computeSpendUsd": 57500
+                    },
+                    {
+                      "period": "2026-07",
+                      "rawTokensM": 81,
+                      "validRatePct": 94,
+                      "revenueUsd": 101000,
+                      "computeSpendUsd": 59000
+                    },
+                    {
+                      "period": "2026-08",
+                      "rawTokensM": 80,
+                      "validRatePct": 94,
+                      "revenueUsd": 100000,
+                      "computeSpendUsd": 58000
+                    }
+                  ],
+                  "operatingHistoryDays": 720,
+                  "dataCoveragePct": 100,
+                  "R": [
+                    64,
+                    65,
+                    63,
+                    67,
+                    68,
+                    66,
+                    70,
+                    71
+                  ],
+                  "C": [
+                    62,
+                    63,
+                    62,
+                    65,
+                    66,
+                    65,
+                    68,
+                    69
+                  ],
+                  "loopWashRatePct": 2,
+                  "currentExposure": 20000,
+                  "evidence": [
+                    {
+                      "fields": [
+                        "periodStart",
+                        "periodEnd",
+                        "inputTokensM",
+                        "outputTokensM",
+                        "validRatePct",
+                        "revenueUsd",
+                        "computeSpendUsd",
+                        "monthlySeries"
+                      ],
+                      "sourceDomain": "billing",
+                      "verification": "system_api",
+                      "observedAt": "2026-09-01T00:00:00Z",
+                      "coveragePct": 100,
+                      "referenceHash": "sha256:2f083fd14111819f0f35e9af881a51c4ef09f1ae7c7b2f82391a94f5e3641e23"
+                    },
+                    {
+                      "fields": [
+                        "gpuHours",
+                        "gpuModel",
+                        "R",
+                        "C",
+                        "dataCoveragePct"
+                      ],
+                      "sourceDomain": "gpu_telemetry",
+                      "verification": "system_api",
+                      "observedAt": "2026-09-01T00:00:00Z",
+                      "coveragePct": 100,
+                      "referenceHash": "sha256:bb88b0840f232612a0e3f21262b51ac0276588dbe90b77e6f101dc3955711508"
+                    },
+                    {
+                      "fields": [
+                        "repaymentRatePct",
+                        "overdue30Pct",
+                        "payingCustomers",
+                        "top5ConcentrationPct",
+                        "operatingHistoryDays"
+                      ],
+                      "sourceDomain": "bank_treasury",
+                      "verification": "system_api",
+                      "observedAt": "2026-09-01T00:00:00Z",
+                      "coveragePct": 100,
+                      "referenceHash": "sha256:f77056f01a934111be6e16b47fb2826ce4e7780ed13a2afad7cb8d3d297808c7"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conservative deterministic assessment, including valid incomplete evidence. Business results are under data.*.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./finch-assess-output.schema.json"
+                }
+              }
+            },
+            "headers": {
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "boolean"
+                },
+                "description": "Present when an idempotency key was supplied."
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, schema, fields or idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency key reused for different facts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds the configured maximum",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type is not application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Client rate limit or service concurrency exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "description": "Seconds before retrying."
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected internal error; details are not exposed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Invocation or upstream timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat": {
+      "post": {
+        "operationId": "assessNaturalLanguagePrompt",
+        "summary": "Assess a natural-language counterparty prompt",
+        "description": "Deterministic Natural Language Adapter v0.1. The prompt is parsed with no model provider: only explicitly stated, whitelisted intake fields are extracted and then handed to the same deterministic risk runtime used by POST /api/v1/assess. Authoritative fields (TAI, CCI, risk grade, decision, evidence) can only come from that runtime. Insufficient information is a valid business result rather than an error: this endpoint returns HTTP 200 with data.status = insufficient-evidence plus missingInputs and requiredActions.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatInput"
+              },
+              "example": {
+                "prompt": "请帮我评估一家 AI 推理服务商的交易对手风险。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。请根据这些信息给出风险评估，如果信息不足，请明确告诉我还缺哪些数据，不要自行编造"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic assessment of the extracted draft. data.status is assessed or insufficient-evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, unknown properties, missing, empty or oversized prompt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds the configured maximum",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type is not application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Assessment invocation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "ok",
+          "apiVersion",
+          "schemaVersion",
+          "requestId",
+          "timestamp",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "apiVersion": {
+            "const": "flowcredit.api/v1"
+          },
+          "schemaVersion": {
+            "const": "flowcredit.risk_result/v0.2.1"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "details"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {}
+              }
+            }
+          }
+        }
+      },
+      "ChatInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000,
+            "description": "Free-text counterparty description. It is treated as untrusted data, never as instructions. Only the deterministic field whitelist is read."
+          }
+        }
+      },
+      "ChatOutput": {
+        "type": "object",
+        "required": [
+          "ok",
+          "apiVersion",
+          "schemaVersion",
+          "requestId",
+          "timestamp",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "apiVersion": {
+            "const": "flowcredit.api/v1"
+          },
+          "schemaVersion": {
+            "const": "flowcredit.intake/v0.3.1"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "status",
+              "message",
+              "parserVersion",
+              "extractedDraft",
+              "assessment",
+              "readinessStatus",
+              "decisionStatus",
+              "missingInputs",
+              "requiredActions"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "assessed",
+                  "insufficient-evidence"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "description": "Deterministic template text for a chat surface. It never explains a score."
+              },
+              "parserVersion": {
+                "const": "nl-draft-v0.1"
+              },
+              "draftId": {
+                "type": "string"
+              },
+              "extractedDraft": {
+                "type": "object",
+                "description": "Exactly the whitelisted intake fields read from the prompt, including taskType when the text states an inference business. Server-derived metadata (assessmentMode, modelTier, normalizationProfileId, peerProfileId) stays internal to the assessment pipeline. Unstated fields are absent, and the key is omitted entirely when the prompt states no whitelisted field."
+              },
+              "parsedFields": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "parserWarnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "assessment": {
+                "type": "object",
+                "description": "The deterministic payload POST /api/v1/assess returns under data, with identical field names: readinessStatus, decisionStatus, missingInputs, missingByGroup, requiredActions, evidenceCoverage, evidenceQuality, verdict, evidenceStrength, suggestedCreditBand, integrity signals and fingerprints."
+              },
+              "readinessStatus": {
+                "enum": [
+                  "ready",
+                  "limited",
+                  "not-ready"
+                ]
+              },
+              "decisionStatus": {
+                "type": "string"
+              },
+              "TAI": {
+                "type": "number",
+                "description": "Present only when the deterministic runtime can compute it, exactly as in the assess response."
+              },
+              "CCI": {
+                "type": "number",
+                "description": "Present only when the deterministic runtime can compute it."
+              },
+              "riskGrade": {
+                "type": "string",
+                "description": "Present only when the deterministic runtime can compute it."
+              },
+              "verdict": {
+                "type": "string"
+              },
+              "evidenceStrength": {
+                "type": "string"
+              },
+              "suggestedCreditBand": {
+                "type": "string"
+              },
+              "missingInputs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missingByGroup": {
+                "type": "object"
+              },
+              "requiredActions": {
+                "type": "array",
+                "items": {}
+              },
+              "sessionId": {
+                "type": "string"
+              },
+              "assessmentId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

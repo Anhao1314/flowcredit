@@ -76,7 +76,7 @@ export const INTAKE_SCHEMA_V03 = Object.freeze({
 
 function object(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
 
-function canonicalGpu(value) {
+export function canonicalGpu(value) {
   const normalized = String(value || "").trim().toLowerCase().replace(/[_\s]+/g, "-");
   if (["h100", "nvidia-h100", "h100-equivalent", "nvidia-h100-equivalent"].includes(normalized)) return "h100-equivalent";
   if (["mixed", "mixed-general", "general", "mixed-gpu"].includes(normalized)) return "mixed";
