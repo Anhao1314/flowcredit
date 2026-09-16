@@ -10,12 +10,19 @@ process.env.NODE_ENV = "test";
 process.env.FC_SITE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const testRuntime = await mkdtemp(join(tmpdir(), "flowcredit-http-test-"));
 process.env.FC_RUNTIME_ROOT = testRuntime;
-after(() => rm(testRuntime, { recursive: true, force: true }));
+const startedServers = [];
+after(async () => {
+  // Log appends are queued asynchronously. Drain them before removal and keep a
+  // retry budget, otherwise a late write turns the recursive delete into ENOTEMPTY.
+  await Promise.all(startedServers.map(server => server.drainLogs?.()));
+  await rm(testRuntime, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 const { createFlowCreditServer } = await import("../src/server.js");
 const { getPresetV021 } = await import("../src/presets.js");
 
 async function withServer(run, options) {
   const server = createFlowCreditServer(options);
+  startedServers.push(server);
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   try { await run(`http://127.0.0.1:${address.port}`); }

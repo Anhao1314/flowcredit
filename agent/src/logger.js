@@ -30,6 +30,10 @@ export class SafeLogger {
     return this.queue;
   }
 
+  // Appends are queued asynchronously. Callers that are about to remove the log
+  // directory (tests, shutdown) await this so no write lands after the tree walk.
+  drain() { return this.queue.catch(() => {}); }
+
   async #append(event) {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
     const day = event.timestamp.slice(0, 10);

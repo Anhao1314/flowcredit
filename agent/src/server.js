@@ -698,7 +698,7 @@ export function createFlowCreditServer(options = {}) {
   const limiter = new FixedWindowRateLimiter({ windowMs: security.rateLimitWindowMs, maxRequests: security.rateLimitMaxRequests, now: options.now || Date.now });
   const idempotency = options.idempotencyStore || new IdempotencyStore({ ttlMs: security.idempotencyTtlMs, maxEntries: security.idempotencyMaxEntries, now: options.now || Date.now });
   const context = { security, idempotency, assessmentRunner: options.assessmentRunner };
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     const requestId = `fc-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const started = Date.now();
     let output;
@@ -754,6 +754,9 @@ export function createFlowCreditServer(options = {}) {
       logger.write({ requestId, route: url.pathname, model: MODEL, durationMs: Date.now() - started, status, outputHash: output ? hash(output) : undefined, inputHash: output?.inputFingerprint || output?.data?.inputFingerprint, harnessStatus: output?.harnessStatus || output?.data?.harnessStatus, errorClass });
     }
   });
+  // Log appends are queued asynchronously; tests and shutdown await this before cleanup.
+  server.drainLogs = () => logger.drain();
+  return server;
 }
 
 const server = createFlowCreditServer();
