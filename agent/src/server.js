@@ -26,6 +26,7 @@ import {
   isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
 import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
+import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
@@ -439,10 +440,6 @@ async function handleV03Assessment(req, requestId, context) {
 //     It stays internal and is all the runtime ever sees.
 const CHAT_REQUEST_FIELDS = Object.freeze(["prompt"]);
 const CHAT_PROMPT_MAX_CHARS = INTAKE_SCHEMA_V03.maxTextLength;
-const CHAT_MESSAGES = Object.freeze({
-  "insufficient-evidence": "FlowCredit read the facts stated in the message, but the supplied information is not yet sufficient for a complete risk assessment. Add the fields listed in missingInputs and resubmit.",
-  assessed: "FlowCredit completed the risk assessment from the supplied information."
-});
 
 function validateChatRequest(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -479,8 +476,13 @@ async function serveChat(req, res, requestId, context) {
   }
   const result = assessment.body;
   const status = result.decisionStatus === "insufficient-evidence" ? "insufficient-evidence" : "assessed";
+  const presentationInput = {
+    extractedDraft: extraction.draft, assessment: result,
+    missingByGroup: result.missingByGroup, requiredActions: result.requiredActions
+  };
   const data = {
-    status, message: CHAT_MESSAGES[status], parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
+    status, message: buildChatUserMessage(presentationInput), presentation: buildChatPresentation(presentationInput),
+    parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
     extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
     assessment: result,
     readinessStatus: result.readinessStatus, decisionStatus: result.decisionStatus,

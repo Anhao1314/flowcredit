@@ -47,7 +47,17 @@ test("TEST 9 natural-language chat is a canonical HTTP 200 with insufficient-evi
     assert.equal(body.ok, true);
     assert.equal(body.apiVersion, "flowcredit.api/v1");
     assert.equal(body.data.status, "insufficient-evidence");
-    assert.match(body.data.message, /not yet sufficient/i);
+    assert.match(body.data.message, /信息或证据不足/);
+    assert.match(body.data.message, /基于当前已提供、尚未充分核验的数据，可计算的局部维度：/);
+    assert.match(body.data.message, /不代表完整风险评级/);
+    for (const fragment of ["FlowCredit 初步风险评估", "H100", "4,200", "100,000", "58,000", "96%", "2%", "168", "36%", "客户结构：89.9", "偿付表现：94.3", "暂不可计算"]) {
+      assert.ok(body.data.message.includes(fragment), `missing report fragment: ${fragment}`);
+    }
+    assert.deepEqual(body.data.presentation.availableScores, body.data.assessment.dimensionScores);
+    assert.equal(body.data.presentation.assessmentStatus, body.data.readinessStatus);
+    assert.equal(body.data.presentation.evidenceStrength, body.data.evidenceStrength);
+    assert.equal(Object.hasOwn(body.data.presentation, "fullScores"), false);
+    assert.doesNotMatch(JSON.stringify(body.data.presentation), /deepseek/i);
     assert.equal(body.data.parserVersion, "nl-draft-v0.1");
     assert.match(body.data.draftId, /^nl-fc-[0-9a-f]{16}$/);
     assert.deepEqual(body.data.parsedFields, Object.keys(EXPECTED_DRAFT));
@@ -142,6 +152,7 @@ test("a prompt without extractable fields still returns HTTP 200 insufficient-ev
     assert.equal((data.parsedFields ?? []).length, 0);
     // Nothing was stated, so the canonical contract omits the empty extractedDraft entirely.
     assert.equal(Object.hasOwn(data, "extractedDraft"), false);
+    assert.doesNotMatch(data.message, /GPU 使用量|局部维度|不代表完整风险评级/);
     assert.equal((data.extractedDraft ?? {}).revenueUsd, undefined);
     assert.equal(data.assessment.assessmentMode, "real");
     assert.ok(data.missingInputs.length > 10);
