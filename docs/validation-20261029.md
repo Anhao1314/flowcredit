@@ -44,7 +44,7 @@ change. No existing test was deleted, skipped or weakened.
 
 | Item | Status | Reason |
 | --- | --- | --- |
-| GitHub Actions for this branch | NOT_RUN at authoring time | Must be observed on the PR; a workflow file is not evidence of a passing run |
+| GitHub Actions for this branch | **PASS** | [Run 40836009368](https://github.com/Anhao1314/flowcredit/actions/runs/40836009368) on head `6d286ea`; includes the new `Offline agent evaluation` step. A later documentation-only commit does not change runtime code; the PR's latest check run is authoritative |
 | Docker image build | NOT_RUN | `verify:release` validates metadata/runtime, not an image build |
 | Live bank/billing/identity/chain connectors | NOT_RUN | Not implemented; outside this task |
 | Finch submission / approval | NOT_RUN | Unchanged: not submitted, approved, certified or published |
