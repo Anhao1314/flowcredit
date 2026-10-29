@@ -1,25 +1,21 @@
 {
   "artifactVersion": "fc-agent-eval-artifact/v1",
-  "generatedAt": "2026-10-29T07:48:58.142Z",
+  "generatedAt": "2026-10-29T07:57:12.797Z",
   "dataset": {
     "id": "fc-agent-eval",
     "version": "fc-agent-eval/v1",
     "path": "eval/datasets/agent-eval-v1.jsonl",
     "caseCount": 30,
-    "sha256": "be90808a3f71e694b4f20b4e0d57c5c520c343348244101d477fcd5f749eadf6"
+    "sha256": "6fdf90dec5707c00de92a719eb36995a9081eb412e00f659c81d5f3f9e61d1c0"
   },
   "baseline": {
-    "commitSha": "9da87d98476909c4115309d5a182d982d43d9c09",
+    "commitSha": "517923956d6a5477159b0bec8b99220ed6afa2e6",
     "branch": "feat/agent-eval-hardening",
     "dirty": true,
     "dirtyFiles": [
       "M README.md",
-      " M agent/eval/README.md",
       " M agent/eval/datasets/agent-eval-v1.jsonl",
-      " M agent/eval/results/agent-eval-2026-10-29.json",
       " M agent/eval/run-eval.js",
-      " M agent/test/agent-eval.test.js",
-      " M assets/js/view-landing.js",
       " M docs/validation-20261029.md"
     ]
   },
@@ -2188,7 +2184,7 @@
     "All cases are human-written synthetic fixtures; there are no real users, companies or financial records.",
     "Deterministic extractor metrics describe src/nl-draft-v01.js only, not an LLM.",
     "Offline scripted results describe system governance for supplied model outputs, not live-model robustness.",
-    "Known-limitation cases are excluded from scored metrics and reported separately.",
+    "Deterministic extractor known-limitation cases are included in the primary metrics and count as failures against their intended values. Scripted-model declared-verification-levels and no-textual-grounding-check remain open boundaries reported separately, not governance passes.",
     "No online latency, token or cost measurement was performed."
   ]
 }

@@ -626,7 +626,7 @@ export function runEval({ datasetPath = DEFAULT_DATASET, now = new Date() } = {}
       "All cases are human-written synthetic fixtures; there are no real users, companies or financial records.",
       "Deterministic extractor metrics describe src/nl-draft-v01.js only, not an LLM.",
       "Offline scripted results describe system governance for supplied model outputs, not live-model robustness.",
-      "Known-limitation cases are excluded from scored metrics and reported separately.",
+      "Deterministic extractor known-limitation cases are included in the primary metrics and count as failures against their intended values. Scripted-model declared-verification-levels and no-textual-grounding-check remain open boundaries reported separately, not governance passes.",
       "No online latency, token or cost measurement was performed."
     ]
   };

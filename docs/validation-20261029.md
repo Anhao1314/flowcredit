@@ -64,7 +64,7 @@ After independent acceptance, this branch was tightened without changing scope:
 
 | Item | Status | Reason |
 | --- | --- | --- |
-| GitHub Actions for this branch | **PASS (previous head)** | [Run 40836314712](https://github.com/Anhao1314/flowcredit/actions/runs/40836314712) passed on head `9da87d9`, including the `Offline agent evaluation` step. Every new head is re-run by CI on PR #1; the PR checks are the authoritative status for the current head |
+| GitHub Actions for this branch | **PASS (head `5179239`)** | Final head `5179239`: [Run 40837901634](https://github.com/Anhao1314/flowcredit/actions/runs/40837901634) and [Run 40837909468](https://github.com/Anhao1314/flowcredit/actions/runs/40837909468) both passed, including the `Offline agent evaluation` step. Historical: head `9da87d9` passed in [Run 40836314712](https://github.com/Anhao1314/flowcredit/actions/runs/40836314712). Each later head, including documentation-only commits, is re-run by CI on PR #1; the PR checks are authoritative for the latest head |
 | Docker image build | NOT_RUN | `verify:release` validates metadata/runtime, not an image build |
 | Live bank/billing/identity/chain connectors | NOT_RUN | Not implemented; outside this task |
 | Finch submission / approval | NOT_RUN | Unchanged: not submitted, approved, certified or published |

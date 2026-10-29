@@ -50,8 +50,10 @@ Multi-source evidence **acceptance and normalization** are implemented. Live bil
 
 ## End-to-End Flow (runnable, synthetic input)
 
-The public path is one request and one deterministic response. The model never sits on the
-authoritative path.
+The public path is one request and one deterministic response. The deterministic rule engine
+computes authoritative result fields; the model cannot directly provide or overwrite reserved
+result fields, but model-extracted business fields can still become inputs to that computation,
+and textual grounding against the user's original text is not implemented yet.
 
 ```text
 1. Evidence / facts           submit a draft JSON (or free text) — synthetic fixture in this repo
@@ -98,7 +100,9 @@ The pipeline and the deterministic-engine / LLM-sidecar boundary are shown in th
 Current authoritative chain: **intake v0.3.1 → normalize-v021 → risk-core-v021 → validate-v021 → public API v1**.
 
 - **Public authoritative API:** `POST /api/v1/assess`, `POST /api/v1/chat`, plus `/health`, `/ready` and `/api/v1` discovery.
-- **Current optional v0.3 model endpoints (consent-gated, non-authoritative):** `/fc/ai/v0.3/extract` for extraction, `/fc/ai/v0.3/ask` for explanation, `/fc/ai/v0.3/schema|config`, and `/fc/ai/v0.3/assess` as a compatibility alias of the same runtime.
+- **Current optional model-assistance endpoints (require `modelConsent`, non-authoritative output):** `/fc/ai/v0.3/extract` for extraction and `/fc/ai/v0.3/ask` for explanation.
+- **Current support endpoints:** `/fc/ai/v0.3/schema` and `/fc/ai/v0.3/config`.
+- **Compatibility alias:** `/fc/ai/v0.3/assess` invokes the same deterministic runtime; it is not a model scoring endpoint.
 - **Historical demo-sidecar endpoints:** unversioned `/fc/ai/run|assess|ask|config` (v0.1) and `/fc/ai/v0.2...` / `v0.2.1...`. They are retained for the frozen static demo, are not part of the public API contract, and are not the authoritative chain.
 
 ## Risk Pipeline
