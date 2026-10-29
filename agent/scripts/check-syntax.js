@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const agentRoot = fileURLToPath(new URL("../", import.meta.url));
 let count = 0;
-for (const directory of ["src", "scripts", "test", "../assets/js"]) {
+for (const directory of ["src", "scripts", "test", "eval", "../assets/js"]) {
   const root = resolve(agentRoot, directory);
   for (const name of (await readdir(root)).filter(name => name.endsWith(".js")).sort()) {
     const result = spawnSync(process.execPath, ["--check", resolve(root, name)], { stdio: "inherit" });

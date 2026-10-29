@@ -13,6 +13,7 @@
     "test:public-api": "node --test test/public-api.test.js",
     "test:finch-contract": "node --test test/finch-contract.test.js",
     "smoke:external-alpha": "node scripts/external-alpha-smoke.js",
+    "eval:agent": "node eval/run-eval.js",
     "validate:public-api": "node scripts/validate-public-api.js",
     "validate:finch-contract": "node scripts/validate-finch-contract.js",
     "verify:release": "node scripts/verify-release.js",

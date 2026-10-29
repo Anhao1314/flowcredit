@@ -20,7 +20,7 @@
       );
     }).join("");
     host.innerHTML =
-      '<div class="v-home"><section class="v-hero"><div class="v-hero-copy"><p class="v-eyebrow"><span class="v-dot"></span> CREDIT INTELLIGENCE / AI ECONOMY</p><h1>Volume is a claim.<br><em>Trust is evidence.</em></h1><p class="v-hero-deck">Evidence-backed credit risk for AI businesses.</p><p class="v-hero-text">Connect compute, cash flow and on-chain activity. See how verifiable evidence informs a credit decision — and how that decision responds to risk.</p><div class="v-hero-actions"><a class="btn btn-primary" href="#/workspace">Start Demo <span aria-hidden="true">↗</span></a><a class="v-text-link" href="#v-how" id="v-how-link">Explore the workflow ↓</a></div><p class="v-caption">Interactive demo · Simulated data · No funds required</p></div>' +
+      '<div class="v-home"><section class="v-hero"><div class="v-hero-copy"><p class="v-eyebrow"><span class="v-dot"></span> CREDIT INTELLIGENCE / AI ECONOMY</p><h1>Volume is a claim.<br><em>Trust is evidence.</em></h1><p class="v-hero-deck">Evidence-backed credit risk for AI businesses.</p><p class="v-hero-text">Explore a simulated workflow built on compute, cash flow and a reference activity series. See how evidence would inform a credit decision — and how that decision responds to risk.</p><div class="v-hero-actions"><a class="btn btn-primary" href="#/workspace">Start Demo <span aria-hidden="true">↗</span></a><a class="v-text-link" href="#v-how" id="v-how-link">Explore the workflow ↓</a></div><p class="v-caption">Interactive demo · Simulated data · Local mock proofs, not on-chain · No funds required</p></div>' +
       '<div class="v-terminal"><div class="v-terminal-bar"><span>' +
       u.icon("pulse", 16) +
       " FLOWCREDIT / RISK DESK</span>" +

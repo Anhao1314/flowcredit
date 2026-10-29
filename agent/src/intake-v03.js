@@ -105,8 +105,9 @@ export function flattenDraftV03(source) {
   const ignoredInputs = [...new Set(collectForbidden(draft))];
   const input = {};
   for (const [key, value] of Object.entries(merged)) {
+    if (value === undefined) continue;
     if (FORBIDDEN.has(key)) continue;
-    if (FLAT_ALLOWED.has(key) && value !== undefined) input[key] = structuredClone(value);
+    if (FLAT_ALLOWED.has(key)) input[key] = structuredClone(value);
     else if (!GROUPS.has(key) && !["draftId", "businessType"].includes(key)) ignoredInputs.push(key);
   }
   input.assessmentMode = "real";

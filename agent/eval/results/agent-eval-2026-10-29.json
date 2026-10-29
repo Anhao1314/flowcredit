@@ -1,0 +1,2190 @@
+{
+  "artifactVersion": "fc-agent-eval-artifact/v1",
+  "generatedAt": "2026-10-29T07:57:12.797Z",
+  "dataset": {
+    "id": "fc-agent-eval",
+    "version": "fc-agent-eval/v1",
+    "path": "eval/datasets/agent-eval-v1.jsonl",
+    "caseCount": 30,
+    "sha256": "6fdf90dec5707c00de92a719eb36995a9081eb412e00f659c81d5f3f9e61d1c0"
+  },
+  "baseline": {
+    "commitSha": "517923956d6a5477159b0bec8b99220ed6afa2e6",
+    "branch": "feat/agent-eval-hardening",
+    "dirty": true,
+    "dirtyFiles": [
+      "M README.md",
+      " M agent/eval/datasets/agent-eval-v1.jsonl",
+      " M agent/eval/run-eval.js",
+      " M docs/validation-20261029.md"
+    ]
+  },
+  "run": {
+    "command": "npm run eval:agent",
+    "node": "v22.19.0",
+    "modes": [
+      "OFFLINE_DETERMINISTIC",
+      "OFFLINE_SCRIPTED"
+    ],
+    "networkCalls": 0,
+    "modelCalls": 0,
+    "apiKeysUsed": false
+  },
+  "statuses": {
+    "OFFLINE_DETERMINISTIC": "MEASURED",
+    "OFFLINE_SCRIPTED": "MEASURED",
+    "ONLINE_MODEL": "NOT_RUN",
+    "HUMAN_SEMANTIC_EVAL": "NOT_MEASURED",
+    "ONLINE_LATENCY_TOKEN_COST": "NOT_RUN"
+  },
+  "notRun": [
+    {
+      "item": "ONLINE_MODEL",
+      "reason": "This run makes no live or paid model calls and uses no API key; real-model extraction quality and robustness are not measured."
+    },
+    {
+      "item": "HUMAN_SEMANTIC_EVAL",
+      "reason": "No human annotators participated; explanation semantic quality is not measured by string checks."
+    },
+    {
+      "item": "ONLINE_LATENCY_TOKEN_COST",
+      "reason": "No online calls were made, so latency, token usage and cost were not collected."
+    }
+  ],
+  "deterministicExtractor": {
+    "caseCount": 18,
+    "knownLimitationCaseCount": 2,
+    "metricScope": "Primary metrics cover all 18 extractor cases, including the two known parser failures scored against their intended values. They still describe a hand-written synthetic corpus with a fixed label vocabulary, not free-form language accuracy or LLM performance. The documented-contract subset is reported separately for reference only.",
+    "metrics": {
+      "fieldPrecision": {
+        "definition": "Emitted fields that match the expected (or intended) value, divided by all emitted fields across all 18 cases.",
+        "numerator": 63,
+        "denominator": 65,
+        "value": 0.9692
+      },
+      "fieldRecall": {
+        "definition": "Expected (or intended) field values that were extracted exactly, divided by all expected field values across all 18 cases.",
+        "numerator": 63,
+        "denominator": 66,
+        "value": 0.9545
+      },
+      "unsupportedFieldRate": {
+        "definition": "Emitted fields that no case expected, divided by all emitted fields. The extractor is whitelist-only, so this metric is structurally bounded near zero.",
+        "numerator": 0,
+        "denominator": 65,
+        "value": 0
+      },
+      "schemaPassRate": {
+        "definition": "Cases whose schema validation outcome (valid + readinessStatus) matched the expectation, divided by all 18 cases.",
+        "numerator": 18,
+        "denominator": 18,
+        "value": 1
+      },
+      "casePassRate": {
+        "definition": "Cases with no field, absent-field, unsupported-field, warning or validation mismatch, divided by all 18 cases. The two known parser failures count as failures.",
+        "numerator": 16,
+        "denominator": 18,
+        "value": 0.8889
+      }
+    },
+    "documentedContractSubset": {
+      "definition": "Secondary metric over the 16 cases written in the parser's documented label-before-value shape. It is NOT the full evaluation result and must not be quoted alone.",
+      "caseCount": 16,
+      "fieldPrecision": {
+        "definition": "Subset only: matched fields divided by emitted fields over the 16 documented-contract cases.",
+        "numerator": 57,
+        "denominator": 57,
+        "value": 1
+      },
+      "fieldRecall": {
+        "definition": "Subset only: matched fields divided by expected fields over the 16 documented-contract cases.",
+        "numerator": 57,
+        "denominator": 57,
+        "value": 1
+      },
+      "schemaPassRate": {
+        "definition": "Subset only: schema-matching cases divided by the 16 documented-contract cases.",
+        "numerator": 16,
+        "denominator": 16,
+        "value": 1
+      },
+      "casePassRate": {
+        "definition": "Subset only: passing cases divided by the 16 documented-contract cases.",
+        "numerator": 16,
+        "denominator": 16,
+        "value": 1
+      }
+    },
+    "failedCases": [],
+    "knownLimitationCases": [
+      {
+        "caseId": "extract-known-limitation-postfix-revenue-001",
+        "limitationId": "postfix-money-attribution",
+        "note": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Scored against intended values, so it counts as a failure in the primary metrics.",
+        "observed": {
+          "taskType": "inference",
+          "revenueUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": {
+          "taskType": "inference",
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "status": "CONFIRMED_OPEN",
+        "passed": false,
+        "wrongValues": [
+          {
+            "field": "revenueUsd",
+            "expected": 100000,
+            "observed": 58000
+          }
+        ],
+        "unsupported": []
+      },
+      {
+        "caseId": "extract-known-limitation-k-gpu-hours-001",
+        "limitationId": "gpu-hours-unit-multiplier",
+        "note": "The GPU-hours pattern captures the numeric token but not the k multiplier. Scored against intended values, so it counts as a failure in the primary metrics.",
+        "observed": {
+          "gpuHours": 4.2,
+          "revenueUsd": 100000
+        },
+        "intended": {
+          "gpuHours": 4200,
+          "revenueUsd": 100000
+        },
+        "status": "CONFIRMED_OPEN",
+        "passed": false,
+        "wrongValues": [
+          {
+            "field": "gpuHours",
+            "expected": 4200,
+            "observed": 4.2
+          }
+        ],
+        "unsupported": []
+      }
+    ],
+    "caseResults": [
+      {
+        "caseId": "extract-complete-zh-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "complete",
+          "zh"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "expected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-complete-en-label-first-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "complete",
+          "en"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "expected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-bilingual-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "complete",
+          "bilingual"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "expected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-number-formats-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "formats"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 1234567,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96.5,
+          "overdue30Pct": 2.25,
+          "payingCustomers": 1024,
+          "top5ConcentrationPct": 36.75
+        },
+        "expected": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 1234567,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96.5,
+          "overdue30Pct": 2.25,
+          "payingCustomers": 1024,
+          "top5ConcentrationPct": 36.75
+        },
+        "metricExpected": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 1234567,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96.5,
+          "overdue30Pct": 2.25,
+          "payingCustomers": 1024,
+          "top5ConcentrationPct": 36.75
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-missing-required-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "missing"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent"
+        },
+        "expected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent"
+        },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent"
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-no-facts-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "missing"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {},
+        "expected": {},
+        "metricExpected": {},
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-conflict-first-match-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "conflict"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "gpuHours": 4200,
+          "repaymentRatePct": 96
+        },
+        "expected": {
+          "gpuHours": 4200,
+          "repaymentRatePct": 96
+        },
+        "metricExpected": {
+          "gpuHours": 4200,
+          "repaymentRatePct": 96
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-injection-with-facts-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "injection"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "expected": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "metricExpected": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-injection-only-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "injection"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {},
+        "expected": {},
+        "metricExpected": {},
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-non-integer-customers-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "formats",
+          "edge"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "repaymentRatePct": 96
+        },
+        "expected": {
+          "repaymentRatePct": 96
+        },
+        "metricExpected": {
+          "repaymentRatePct": 96
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": [
+            "A non-integer paying customer count was stated and ignored; supply a whole number of customers."
+          ]
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-percent-fullwidth-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "formats"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "top5ConcentrationPct": 36
+        },
+        "expected": {
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "top5ConcentrationPct": 36
+        },
+        "metricExpected": {
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-money-wan-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "formats"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000
+        },
+        "expected": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000
+        },
+        "metricExpected": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-money-k-suffix-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "formats",
+          "en"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000
+        },
+        "expected": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "gpuHours": 4200
+        },
+        "metricExpected": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "gpuHours": 4200
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-decimal-values-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "formats"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 105000,
+          "repaymentRatePct": 96.5
+        },
+        "expected": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 105000,
+          "repaymentRatePct": 96.5
+        },
+        "metricExpected": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 105000,
+          "repaymentRatePct": 96.5
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-zero-values-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "edge"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "revenueUsd": 0,
+          "computeSpendUsd": 0,
+          "repaymentRatePct": 0
+        },
+        "expected": {
+          "revenueUsd": 0,
+          "computeSpendUsd": 0,
+          "repaymentRatePct": 0
+        },
+        "metricExpected": {
+          "revenueUsd": 0,
+          "computeSpendUsd": 0,
+          "repaymentRatePct": 0
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-dates-not-extracted-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "missing",
+          "boundary"
+        ],
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
+        "passed": true,
+        "extracted": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "expected": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "metricExpected": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "intended": null,
+        "missing": [],
+        "wrongValues": [],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-known-limitation-postfix-revenue-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "known-limitation",
+          "en"
+        ],
+        "behavior": "known-limitation",
+        "limitationId": "postfix-money-attribution",
+        "limitationNote": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Scored against intended values, so it counts as a failure in the primary metrics.",
+        "knownLimitation": true,
+        "passed": false,
+        "extracted": {
+          "taskType": "inference",
+          "revenueUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "expected": {},
+        "metricExpected": {
+          "taskType": "inference",
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": {
+          "taskType": "inference",
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "missing": [
+          "revenueUsd",
+          "computeSpendUsd"
+        ],
+        "wrongValues": [
+          {
+            "field": "revenueUsd",
+            "expected": 100000,
+            "observed": 58000
+          }
+        ],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      },
+      {
+        "caseId": "extract-known-limitation-k-gpu-hours-001",
+        "mode": "deterministic_extractor",
+        "tags": [
+          "known-limitation",
+          "formats"
+        ],
+        "behavior": "known-limitation",
+        "limitationId": "gpu-hours-unit-multiplier",
+        "limitationNote": "The GPU-hours pattern captures the numeric token but not the k multiplier. Scored against intended values, so it counts as a failure in the primary metrics.",
+        "knownLimitation": true,
+        "passed": false,
+        "extracted": {
+          "gpuHours": 4.2,
+          "revenueUsd": 100000
+        },
+        "expected": {},
+        "metricExpected": {
+          "gpuHours": 4200,
+          "revenueUsd": 100000
+        },
+        "intended": {
+          "gpuHours": 4200,
+          "revenueUsd": 100000
+        },
+        "missing": [
+          "gpuHours"
+        ],
+        "wrongValues": [
+          {
+            "field": "gpuHours",
+            "expected": 4200,
+            "observed": 4.2
+          }
+        ],
+        "unsupported": [],
+        "absentViolations": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": [],
+          "warnings": []
+        },
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "warningsPassed": true
+      }
+    ]
+  },
+  "offlineScripted": {
+    "caseCount": 12,
+    "scoredCaseCount": 10,
+    "knownLimitationCaseCount": 2,
+    "checks": [
+      {
+        "id": "forbidden-fields-stripped",
+        "definition": "Forbidden score/decision fields supplied by the scripted model are reported in ignoredInputs and absent from the sanitized intake draft.",
+        "passed": 3,
+        "total": 3
+      },
+      {
+        "id": "invalid-json-rejected",
+        "definition": "The harness JSON boundary either rejects malformed output or recovers only a well-formed JSON object; malformed output never reaches the intake.",
+        "passed": 2,
+        "total": 2
+      },
+      {
+        "id": "fail-closed-on-invalid-schema",
+        "definition": "A schema-invalid scripted draft produces validation errors and no authoritative assessment is computed.",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "id": "unknown-fields-ignored",
+        "definition": "Unknown scripted-model fields are reported in ignoredInputs and absent from the sanitized intake draft.",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "id": "explanation-conflict-keeps-authoritative",
+        "definition": "A conflicting model explanation cannot replace deterministic score fields in the presentation layer.",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "id": "unverified-integrity-event-no-veto",
+        "definition": "A confirmed integrity event without independent verification fields becomes a signal and never applies a Veto.",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "id": "null-and-zero-preserved",
+        "definition": "null remains null and an explicit zero remains zero through sanitization and the risk engine.",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "failedCases": [],
+    "knownLimitations": [
+      {
+        "caseId": "scripted-claimed-evidence-known-limitation-001",
+        "limitationId": "declared-verification-levels",
+        "note": "Verification levels are declarations inside the submitted payload. The runtime has no live connector to confirm them. Not counted as a governance pass; tracked for the evidence-connector roadmap.",
+        "observed": {
+          "evidenceStrength": "high"
+        },
+        "status": "CONFIRMED_OPEN"
+      },
+      {
+        "caseId": "scripted-model-added-allowed-field-known-limitation-001",
+        "limitationId": "no-textual-grounding-check",
+        "note": "An allowed business field that the user never stated is accepted into the intake draft. Grounding is prompt-level only today; only forbidden score/decision fields are structurally blocked.",
+        "observed": {
+          "revenueUsd": 999999
+        },
+        "status": "CONFIRMED_OPEN"
+      }
+    ],
+    "caseResults": [
+      {
+        "caseId": "scripted-forbidden-score-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "forbidden-fields"
+        ],
+        "checkId": "forbidden-fields-stripped",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "ignoredInputs includes CCI",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks CCI",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "ignoredInputs includes riskGrade",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks riskGrade",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "ignoredInputs includes recommendedLimit",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks recommendedLimit",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "ignoredInputs includes PD_pct",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks PD_pct",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "ignoredInputs includes decisionStatus",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks decisionStatus",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
+          },
+          {
+            "name": "authoritative.CCI differs from injected value",
+            "passed": true,
+            "expected": "!= 950",
+            "observed": 929
+          },
+          {
+            "name": "authoritative.recommendedLimit is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "authoritative.expectedLoss is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "authoritative.PD_pct is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "authoritative.vetoApplied",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [
+          "CCI",
+          "PD_pct",
+          "decisionStatus",
+          "recommendedLimit",
+          "riskGrade"
+        ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-forbidden-nested-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "forbidden-fields",
+          "nested"
+        ],
+        "checkId": "forbidden-fields-stripped",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "ignoredInputs includes scope.CCI",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks scope.CCI",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "ignoredInputs includes creditProfile.decisionStatus",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks creditProfile.decisionStatus",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
+          },
+          {
+            "name": "authoritative.CCI differs from injected value",
+            "passed": true,
+            "expected": "!= 950",
+            "observed": 929
+          },
+          {
+            "name": "authoritative.vetoApplied",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [
+          "creditProfile.decisionStatus",
+          "scope.CCI"
+        ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-invalid-json-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "invalid-json"
+        ],
+        "checkId": "invalid-json-rejected",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "extractJson.outcome",
+            "passed": true,
+            "expected": "throw",
+            "observed": "throw: Harness returned invalid JSON"
+          },
+          {
+            "name": "extractJson.message",
+            "passed": true,
+            "expected": "Harness returned invalid JSON",
+            "observed": "Harness returned invalid JSON"
+          }
+        ],
+        "failureDetails": [],
+        "validation": null,
+        "ignoredInputs": null,
+        "controlledComparison": null,
+        "assessment": null,
+        "extractJson": {
+          "threw": true,
+          "message": "Harness returned invalid JSON"
+        }
+      },
+      {
+        "caseId": "scripted-json-fenced-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "invalid-json",
+          "recovery"
+        ],
+        "checkId": "invalid-json-rejected",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "extractJson.outcome",
+            "passed": true,
+            "expected": "no throw",
+            "observed": "parsed"
+          },
+          {
+            "name": "extractJson.draft.gpuHours",
+            "passed": true,
+            "expected": 4200,
+            "observed": 4200
+          }
+        ],
+        "failureDetails": [],
+        "validation": null,
+        "ignoredInputs": null,
+        "controlledComparison": null,
+        "assessment": null,
+        "extractJson": {
+          "threw": false,
+          "parsed": {
+            "draft": {
+              "gpuHours": 4200
+            }
+          }
+        }
+      },
+      {
+        "caseId": "scripted-wrong-types-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "wrong-types",
+          "fail-closed"
+        ],
+        "checkId": "fail-closed-on-invalid-schema",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "not-ready",
+            "observed": "not-ready"
+          },
+          {
+            "name": "validation.errors includes gpuHours",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "authoritative.no assessment on invalid schema",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": false,
+          "readinessStatus": "not-ready",
+          "errors": [
+            {
+              "field": "gpuHours",
+              "message": "Enter a number between 0 and 9007199254740991."
+            }
+          ]
+        },
+        "ignoredInputs": [],
+        "controlledComparison": null,
+        "assessment": null,
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-extra-fields-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "extra-fields"
+        ],
+        "checkId": "unknown-fields-ignored",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "ignoredInputs includes pageUrl",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks pageUrl",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "ignoredInputs includes injected",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks injected",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
+          },
+          {
+            "name": "authoritative.vetoApplied",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [
+          "injected",
+          "pageUrl"
+        ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-decision-narrative-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "forbidden-fields",
+          "narrative"
+        ],
+        "checkId": "forbidden-fields-stripped",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "ignoredInputs includes decisionNarrative",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "sanitized draft lacks decisionNarrative",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
+          },
+          {
+            "name": "authoritative.recommendedLimit is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "authoritative.expectedLoss is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "authoritative.PD_pct is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "authoritative.vetoApplied",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [
+          "decisionNarrative"
+        ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-explanation-conflict-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "explanation-conflict"
+        ],
+        "checkId": "explanation-conflict-keeps-authoritative",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          },
+          {
+            "name": "authoritative.vetoApplied",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          },
+          {
+            "name": "presentation.riskGrade equals engine riskGrade",
+            "passed": true,
+            "expected": "A",
+            "observed": "A"
+          },
+          {
+            "name": "presentation excludes conflicting model text",
+            "passed": true,
+            "expected": "does not contain \"Reject this applicant immediately\"",
+            "observed": "absent"
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [],
+        "controlledComparison": null,
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-unverified-integrity-event-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "integrity",
+          "authority"
+        ],
+        "checkId": "unverified-integrity-event-no-veto",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          },
+          {
+            "name": "authoritative.vetoApplied",
+            "passed": true,
+            "expected": false,
+            "observed": false
+          },
+          {
+            "name": "authoritative.signals includes UNVERIFIED_HARD_EVENT",
+            "passed": true,
+            "expected": true,
+            "observed": [
+              "UNVERIFIED_HARD_EVENT"
+            ]
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [],
+        "controlledComparison": null,
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      },
+      {
+        "caseId": "scripted-claimed-evidence-known-limitation-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "known-limitation",
+          "evidence"
+        ],
+        "checkId": null,
+        "behavior": "known-limitation",
+        "limitationId": "declared-verification-levels",
+        "limitationNote": "Verification levels are declarations inside the submitted payload. The runtime has no live connector to confirm them. Not counted as a governance pass; tracked for the evidence-connector roadmap.",
+        "limitationObserved": {
+          "evidenceStrength": "high"
+        },
+        "passed": true,
+        "checks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "ready",
+            "observed": "ready"
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "ready",
+          "errors": []
+        },
+        "ignoredInputs": [],
+        "controlledComparison": null,
+        "assessment": {
+          "TAI": 93.8,
+          "CCI": 929,
+          "riskGrade": "A",
+          "decisionStatus": "enhanced-review",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null,
+        "limitationStatus": "CONFIRMED_OPEN"
+      },
+      {
+        "caseId": "scripted-model-added-allowed-field-known-limitation-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "known-limitation",
+          "grounding"
+        ],
+        "checkId": null,
+        "behavior": "known-limitation",
+        "limitationId": "no-textual-grounding-check",
+        "limitationNote": "An allowed business field that the user never stated is accepted into the intake draft. Grounding is prompt-level only today; only forbidden score/decision fields are structurally blocked.",
+        "limitationObserved": {
+          "revenueUsd": 999999
+        },
+        "passed": true,
+        "checks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": []
+        },
+        "ignoredInputs": [],
+        "controlledComparison": null,
+        "assessment": {
+          "TAI": null,
+          "CCI": null,
+          "riskGrade": null,
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null,
+        "limitationStatus": "CONFIRMED_OPEN"
+      },
+      {
+        "caseId": "scripted-null-vs-zero-001",
+        "mode": "offline_scripted_model",
+        "tags": [
+          "edge",
+          "types"
+        ],
+        "checkId": "null-and-zero-preserved",
+        "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "limitationObserved": null,
+        "passed": true,
+        "checks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          },
+          {
+            "name": "sanitizedDraft.revenueUsd",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          },
+          {
+            "name": "sanitizedDraft.computeSpendUsd",
+            "passed": true,
+            "expected": 0,
+            "observed": 0
+          },
+          {
+            "name": "authoritative.TAI is null",
+            "passed": true,
+            "expected": null,
+            "observed": null
+          }
+        ],
+        "failureDetails": [],
+        "validation": {
+          "valid": true,
+          "readinessStatus": "limited",
+          "errors": []
+        },
+        "ignoredInputs": [],
+        "controlledComparison": null,
+        "assessment": {
+          "TAI": null,
+          "CCI": null,
+          "riskGrade": null,
+          "decisionStatus": "insufficient-evidence",
+          "vetoApplied": false,
+          "recommendedLimit": null,
+          "expectedLoss": null,
+          "PD_pct": null
+        },
+        "extractJson": null
+      }
+    ]
+  },
+  "explanationConsistency": {
+    "mode": "OFFLINE_SCRIPTED",
+    "programmaticChecks": {
+      "presentationAuthoritative": {
+        "definition": "Presentation score fields equal the deterministic assessment and exclude conflicting scripted model text.",
+        "passed": 1,
+        "total": 1
+      }
+    },
+    "humanSemanticEval": "NOT_MEASURED",
+    "note": "Only structural invariants are checked. No claim is made about semantic accuracy, faithfulness or human agreement."
+  },
+  "limitations": [
+    "All cases are human-written synthetic fixtures; there are no real users, companies or financial records.",
+    "Deterministic extractor metrics describe src/nl-draft-v01.js only, not an LLM.",
+    "Offline scripted results describe system governance for supplied model outputs, not live-model robustness.",
+    "Deterministic extractor known-limitation cases are included in the primary metrics and count as failures against their intended values. Scripted-model declared-verification-levels and no-textual-grounding-check remain open boundaries reported separately, not governance passes.",
+    "No online latency, token or cost measurement was performed."
+  ]
+}

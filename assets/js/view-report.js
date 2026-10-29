@@ -80,10 +80,10 @@
     var u = App.ui;
     var flight = stress === "shock" || stress === "derisk" || stress === "notify" || stress === "partial";
     if (flight) {
-      return '<div class="risk-banner" role="alert">' + u.icon("alert", 15) + " MARKET RISK: VALUE SHOCK DETECTED</div>";
+      return '<div class="risk-banner" role="alert">' + u.icon("alert", 15) + " SIMULATED SCENARIO · VALUE SHOCK (DEMO)" + "</div>";
     }
     if (stress === "recover") {
-      return '<div class="risk-banner leave" aria-hidden="true">' + u.icon("alert", 15) + " MARKET RISK: VALUE SHOCK DETECTED</div>";
+      return '<div class="risk-banner leave" aria-hidden="true">' + u.icon("alert", 15) + " SIMULATED SCENARIO · VALUE SHOCK (DEMO)" + "</div>";
     }
     return "";
   }
@@ -102,8 +102,8 @@
       '<div class="modal-head">' + u.icon("check", 18) + " Local proof verification</div>" +
       '<div class="verify-rows">' + rows + "</div>" +
       '<div class="root-hash num" style="font-size:12px;overflow-wrap:anywhere">' + u.esc(anchor.root) + "</div>" +
-      '<p class="modal-note">Testnet mock: the match is computed locally in this session. Production path — ' +
-      "the root is written by an on-chain contract and any third party can independently verify it through a " +
+      '<p class="modal-note">Demo only: the match is computed locally in this session; no testnet or on-chain contract is involved. Production path (not implemented here) — ' +
+      "the root would be written by an on-chain contract and any third party could independently verify it through a " +
       "block explorer; FlowCredit holds no funds and is not the verifier.</p>" +
       '<div style="margin-top:16px;text-align:right"><button type="button" class="btn btn-primary btn-sm" id="verify-close">Close</button></div>'
     );
