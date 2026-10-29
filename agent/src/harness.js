@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { MODEL } from "./constants.js";
 
-function extractJson(text) {
+export function extractJson(text) {
   const value = String(text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try { return JSON.parse(value); } catch {}
   const start = value.indexOf("{");
