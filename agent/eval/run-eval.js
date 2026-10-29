@@ -108,16 +108,20 @@ export function validateDataset(cases) {
 export function runDeterministicCase(item) {
   const extraction = extractNaturalLanguageDraft(item.input.text);
   const validation = validateDraftV03({ draft: extraction.draft });
-  const expected = item.expect.extracted || {};
+  const recordedExpected = item.expect.extracted || {};
+  const knownLimitation = item.expect.behavior === "known-limitation";
+  // Known-limitation cases are scored against what the text actually says (intended), so the
+  // failure is part of the primary metrics instead of being hidden in a side channel.
+  const expectedForMetrics = knownLimitation ? (item.expect.intended || {}) : recordedExpected;
   const absent = item.expect.absent || [];
   const emitted = extraction.draft;
 
-  const matched = Object.keys(expected).filter(key => sameValue(emitted[key], expected[key]));
-  const missing = Object.keys(expected).filter(key => !(key in emitted) || !sameValue(emitted[key], expected[key]));
-  const wrongValues = Object.keys(expected)
-    .filter(key => key in emitted && !sameValue(emitted[key], expected[key]))
-    .map(key => ({ field: key, expected: expected[key], observed: emitted[key] }));
-  const unsupported = Object.keys(emitted).filter(key => !(key in expected));
+  const matched = Object.keys(expectedForMetrics).filter(key => sameValue(emitted[key], expectedForMetrics[key]));
+  const missing = Object.keys(expectedForMetrics).filter(key => !(key in emitted) || !sameValue(emitted[key], expectedForMetrics[key]));
+  const wrongValues = Object.keys(expectedForMetrics)
+    .filter(key => key in emitted && !sameValue(emitted[key], expectedForMetrics[key]))
+    .map(key => ({ field: key, expected: expectedForMetrics[key], observed: emitted[key] }));
+  const unsupported = Object.keys(emitted).filter(key => !(key in expectedForMetrics));
   const absentViolations = absent.filter(key => key in emitted);
   const validationChecks = [];
   if (item.expect.validation) {
@@ -136,7 +140,7 @@ export function runDeterministicCase(item) {
   }
   const warningsPassed = item.expect.warningsCount == null || extraction.warnings.length === item.expect.warningsCount;
 
-  const passed = missing.length === 0 && absentViolations.length === 0 &&
+  const passed = missing.length === 0 && absentViolations.length === 0 && unsupported.length === 0 &&
     validationChecks.every(check => check.passed) && warningsPassed;
 
   return {
@@ -144,9 +148,14 @@ export function runDeterministicCase(item) {
     mode: item.mode,
     tags: item.tags,
     behavior: item.expect.behavior || "default",
+    limitationId: item.expect.limitationId || null,
+    limitationNote: item.expect.note || null,
+    knownLimitation,
     passed,
     extracted: emitted,
-    expected,
+    expected: recordedExpected,
+    metricExpected: expectedForMetrics,
+    intended: item.expect.intended || null,
     missing,
     wrongValues,
     unsupported,
@@ -174,6 +183,40 @@ function compareLimitationObserved(item, observed) {
 
 /* ---------- offline scripted model ---------- */
 
+const COMPARED_AUTHORITATIVE_FIELDS = Object.freeze([
+  "TAI", "CCI", "riskGrade", "decisionStatus", "vetoApplied",
+  "recommendedLimit", "expectedLoss", "PD_pct", "tokenMeteringStatus", "evidenceStrength"
+]);
+
+function stripIgnoredPaths(source, paths) {
+  const clone = JSON.parse(JSON.stringify(source));
+  for (const path of paths || []) {
+    const parts = String(path).split(".");
+    let cursor = clone;
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      if (!cursor || typeof cursor !== "object") break;
+      cursor = cursor[parts[index]];
+    }
+    if (cursor && typeof cursor === "object") delete cursor[parts[parts.length - 1]];
+  }
+  return clone;
+}
+
+function compareAuthoritative(observed, control) {
+  const mismatches = [];
+  if (!observed || !control) {
+    if (observed !== control) mismatches.push({ field: "assessment", observed: observed ? "computed" : null, control: control ? "computed" : null });
+    return mismatches;
+  }
+  for (const field of COMPARED_AUTHORITATIVE_FIELDS) {
+    if (!sameValue(observed[field], control[field])) mismatches.push({ field, observed: observed[field], control: control[field] });
+  }
+  for (const field of ["dimensionScores", "tokenComponentScores", "evidenceQuality"]) {
+    if (json(observed[field]) !== json(control[field])) mismatches.push({ field, observed: observed[field], control: control[field] });
+  }
+  return mismatches;
+}
+
 function runScriptedCase(item) {
   const expect = item.expect;
   const checks = [];
@@ -181,6 +224,7 @@ function runScriptedCase(item) {
   let validation = null;
   let assessment = null;
   let extractJsonResult = null;
+  let controlledComparison = null;
 
   if (typeof item.input.scriptedRawResponse === "string") {
     const spec = expect.extractJson || {};
@@ -234,6 +278,13 @@ function runScriptedCase(item) {
         expected: true,
         observed: sanitized.ignoredInputs.includes(fieldPath)
       });
+      const leaf = String(fieldPath).split(".").pop();
+      checks.push({
+        name: `sanitized draft lacks ${fieldPath}`,
+        passed: !(leaf in sanitizedDraft),
+        expected: "absent",
+        observed: leaf in sanitizedDraft ? "present" : "absent"
+      });
     }
     if (expect.validation) {
       checks.push({
@@ -268,6 +319,27 @@ function runScriptedCase(item) {
       });
     }
     const authoritative = expect.authoritative || {};
+    // Controlled experiment: rebuild the same allowed business fields without the injected
+    // fields and require identical authoritative output. This proves the injection did not
+    // change the computation, not merely that a number differs from the attacker's value.
+    if (authoritative.controlledComparison) {
+      const controlDraft = stripIgnoredPaths(modelDraft, sanitized.ignoredInputs);
+      const controlSanitized = sanitizeExtractedDraftV03({ draft: controlDraft });
+      const controlValidation = validateDraftV03({ draft: controlDraft });
+      const controlAssessment = controlValidation.valid ? computeRiskV021(controlSanitized.draft) : null;
+      const mismatches = compareAuthoritative(assessment, controlAssessment);
+      controlledComparison = {
+        comparedFields: [...COMPARED_AUTHORITATIVE_FIELDS, "dimensionScores", "tokenComponentScores", "evidenceQuality"],
+        controlIgnoredInputs: controlSanitized.ignoredInputs,
+        mismatches
+      };
+      checks.push({
+        name: "controlled comparison: injected draft vs clean control",
+        passed: mismatches.length === 0,
+        expected: "identical authoritative results",
+        observed: mismatches.length === 0 ? "identical" : mismatches
+      });
+    }
     if (authoritative.injectedCCI != null) {
       checks.push({
         name: "authoritative.CCI differs from injected value",
@@ -354,6 +426,7 @@ function runScriptedCase(item) {
     failureDetails: checks.filter(check => !check.passed),
     validation: validation ? { valid: validation.valid, readinessStatus: validation.readinessStatus, errors: validation.errors } : null,
     ignoredInputs: sanitizedDraft ? sanitizeIgnoreList(item) : null,
+    controlledComparison,
     assessment: assessment ? {
       TAI: assessment.TAI,
       CCI: assessment.CCI,
@@ -373,12 +446,7 @@ function sanitizeIgnoreList(item) {
   return sanitizeExtractedDraftV03({ draft: modelDraft }).ignoredInputs;
 }
 
-function observedForLimitation(item, result) {
-  if (item.mode === "deterministic_extractor") {
-    const extracted = extractNaturalLanguageDraft(item.input.text).draft;
-    const recordedKeys = Object.keys(item.expect.observed || {});
-    return Object.fromEntries(recordedKeys.map(key => [key, extracted[key]]));
-  }
+function observedForLimitation(item) {
   if (item.expect.limitationId === "declared-verification-levels") {
     const sanitized = sanitizeExtractedDraftV03({ draft: item.input.scriptedModelOutput.draft });
     const assessment = computeRiskV021(sanitized.draft);
@@ -394,40 +462,49 @@ function observedForLimitation(item, result) {
 
 /* ---------- aggregation ---------- */
 
-export function buildDeterministicSection(results, limitations) {
-  const scored = results.filter(item => item.behavior !== "known-limitation");
-  const expectedFieldCount = scored.reduce((sum, item) => sum + Object.keys(item.expected).length, 0);
-  const emittedFieldCount = scored.reduce((sum, item) => sum + Object.keys(item.extracted).length, 0);
-  const matchedFieldCount = scored.reduce((sum, item) => sum + (Object.keys(item.expected).length - item.missing.length), 0);
-  const unsupportedFieldCount = scored.reduce((sum, item) => sum + item.unsupported.length, 0);
-  const schemaMatchedCases = scored.filter(item => item.validationChecks.every(check => check.passed)).length;
-  const hypothetical = limitations.reduce((acc, item) => {
-    const intended = item.intended || {};
-    const observed = item.observed || {};
-    acc.expected += Object.keys(intended).length;
-    acc.emitted += Object.keys(observed).length;
-    acc.matched += Object.keys(intended).filter(key => sameValue(observed[key], intended[key])).length;
-    acc.unsupported += Object.keys(observed).filter(key => !(key in intended)).length;
-    return acc;
-  }, { expected: 0, emitted: 0, matched: 0, unsupported: 0 });
+export function buildDeterministicSection(results) {
+  const aggregate = subset => {
+    const expected = subset.reduce((sum, item) => sum + Object.keys(item.metricExpected).length, 0);
+    const emitted = subset.reduce((sum, item) => sum + Object.keys(item.extracted).length, 0);
+    const matched = subset.reduce((sum, item) => sum + (Object.keys(item.metricExpected).length - item.missing.length), 0);
+    const unsupported = subset.reduce((sum, item) => sum + item.unsupported.length, 0);
+    const schemaMatched = subset.filter(item => item.validationChecks.every(check => check.passed)).length;
+    return { expected, emitted, matched, unsupported, schemaMatched, cases: subset.length };
+  };
+  const all = aggregate(results);
+  const documented = aggregate(results.filter(item => item.behavior !== "known-limitation"));
+  const knownFailures = results.filter(item => item.behavior === "known-limitation");
   return {
-    scoredCaseCount: scored.length,
-    knownLimitationCaseCount: limitations.length,
-    metricScope: "Scored cases cover only the parser's documented label-before-value contract. Precision and recall here are NOT free-form language accuracy and must not be quoted as such. Two natural-phrasing cases fail and are listed under limitations; hypotheticalIncludingKnownLimitations shows the same field metrics if those failures were scored against their intended values.",
+    caseCount: results.length,
+    knownLimitationCaseCount: knownFailures.length,
+    metricScope: "Primary metrics cover all 18 extractor cases, including the two known parser failures scored against their intended values. They still describe a hand-written synthetic corpus with a fixed label vocabulary, not free-form language accuracy or LLM performance. The documented-contract subset is reported separately for reference only.",
     metrics: {
-      fieldPrecision: ratio(matchedFieldCount, emittedFieldCount, "Emitted fields that match an expected field value, divided by all emitted fields."),
-      fieldRecall: ratio(matchedFieldCount, expectedFieldCount, "Expected field values that were extracted exactly, divided by all expected field values."),
-      unsupportedFieldRate: ratio(unsupportedFieldCount, emittedFieldCount, "Emitted fields that no case expected (unsupported or wrongly emitted), divided by all emitted fields. The extractor is whitelist-only, so this metric is structurally bounded near zero."),
-      schemaPassRate: ratio(schemaMatchedCases, scored.length, "Scored cases whose schema validation outcome (valid + readinessStatus) matched the expectation, divided by scored cases."),
-      casePassRate: ratio(scored.filter(item => item.passed).length, scored.length, "Scored cases with no field, absent-field, warning or validation mismatch, divided by scored cases.")
+      fieldPrecision: ratio(all.matched, all.emitted, "Emitted fields that match the expected (or intended) value, divided by all emitted fields across all 18 cases."),
+      fieldRecall: ratio(all.matched, all.expected, "Expected (or intended) field values that were extracted exactly, divided by all expected field values across all 18 cases."),
+      unsupportedFieldRate: ratio(all.unsupported, all.emitted, "Emitted fields that no case expected, divided by all emitted fields. The extractor is whitelist-only, so this metric is structurally bounded near zero."),
+      schemaPassRate: ratio(all.schemaMatched, all.cases, "Cases whose schema validation outcome (valid + readinessStatus) matched the expectation, divided by all 18 cases."),
+      casePassRate: ratio(results.filter(item => item.passed).length, results.length, "Cases with no field, absent-field, unsupported-field, warning or validation mismatch, divided by all 18 cases. The two known parser failures count as failures.")
     },
-    hypotheticalIncludingKnownLimitations: {
-      definition: "Illustrative only: the same field metrics computed over scored cases plus the two known-limitation cases scored against their intended values. Not a substitute for the primary metrics.",
-      fieldPrecision: ratio(hypothetical.matched + matchedFieldCount, hypothetical.emitted + emittedFieldCount, "Matched fields divided by all emitted fields, including known-limitation cases."),
-      fieldRecall: ratio(hypothetical.matched + matchedFieldCount, hypothetical.expected + expectedFieldCount, "Matched intended fields divided by all intended fields, including known-limitation cases.")
+    documentedContractSubset: {
+      definition: "Secondary metric over the 16 cases written in the parser's documented label-before-value shape. It is NOT the full evaluation result and must not be quoted alone.",
+      caseCount: documented.cases,
+      fieldPrecision: ratio(documented.matched, documented.emitted, "Subset only: matched fields divided by emitted fields over the 16 documented-contract cases."),
+      fieldRecall: ratio(documented.matched, documented.expected, "Subset only: matched fields divided by expected fields over the 16 documented-contract cases."),
+      schemaPassRate: ratio(documented.schemaMatched, documented.cases, "Subset only: schema-matching cases divided by the 16 documented-contract cases."),
+      casePassRate: ratio(results.filter(item => item.behavior !== "known-limitation" && item.passed).length, documented.cases, "Subset only: passing cases divided by the 16 documented-contract cases.")
     },
-    failedCases: scored.filter(item => !item.passed),
-    limitations,
+    failedCases: results.filter(item => !item.passed && item.behavior !== "known-limitation"),
+    knownLimitationCases: knownFailures.map(item => ({
+      caseId: item.caseId,
+      limitationId: item.limitationId,
+      note: item.limitationNote,
+      observed: item.extracted,
+      intended: item.intended,
+      status: item.passed ? "FIXED_OR_CHANGED" : "CONFIRMED_OPEN",
+      passed: item.passed,
+      wrongValues: item.wrongValues,
+      unsupported: item.unsupported
+    })),
     caseResults: results
   };
 }
@@ -486,9 +563,6 @@ export function runEval({ datasetPath = DEFAULT_DATASET, now = new Date() } = {}
   const scriptedCases = cases.filter(item => item.mode === "offline_scripted_model");
 
   const extractorResults = extractorCases.map(item => runDeterministicCase(item));
-  const extractorLimitations = extractorCases
-    .filter(item => item.expect.behavior === "known-limitation")
-    .map(item => compareLimitationObserved(item, observedForLimitation(item)));
 
   const scriptedResults = scriptedCases.map(item => {
     const result = runScriptedCase(item);
@@ -498,7 +572,7 @@ export function runEval({ datasetPath = DEFAULT_DATASET, now = new Date() } = {}
     return result;
   });
 
-  const deterministic = buildDeterministicSection(extractorResults, extractorLimitations);
+  const deterministic = buildDeterministicSection(extractorResults);
   const scripted = buildScriptedSection(scriptedResults);
   const explanationResults = scriptedResults.filter(item => item.checkId === "explanation-conflict-keeps-authoritative");
   const presentationChecks = explanationResults.flatMap(item => item.checks.filter(check => check.name.startsWith("presentation.")));
@@ -587,19 +661,21 @@ function main() {
   const out = writeArtifact(artifact, options.outPath);
   if (!options.quiet) {
     const de = artifact.deterministicExtractor.metrics;
+    const subset = artifact.deterministicExtractor.documentedContractSubset;
     const fmt = metric => metric.value == null ? "null (zero denominator)" : `${(metric.value * 100).toFixed(2)}% (${metric.numerator}/${metric.denominator})`;
     process.stdout.write([
       `Dataset: ${artifact.dataset.path} (${artifact.dataset.version}, ${artifact.dataset.caseCount} cases)`,
       `Baseline: ${artifact.baseline.commitSha || "unknown"} dirty=${artifact.baseline.dirty}`,
-      `Deterministic extractor (scored cases: ${artifact.deterministicExtractor.scoredCaseCount}):`,
+      `Deterministic extractor — primary (all ${artifact.deterministicExtractor.caseCount} cases, incl. ${artifact.deterministicExtractor.knownLimitationCaseCount} known failures):`,
       `  precision=${fmt(de.fieldPrecision)}`,
       `  recall=${fmt(de.fieldRecall)}`,
       `  unsupportedFieldRate=${fmt(de.unsupportedFieldRate)}`,
       `  schemaPassRate=${fmt(de.schemaPassRate)}`,
       `  casePassRate=${fmt(de.casePassRate)}`,
+      `  documented-contract subset (reference only, NOT the full result): precision=${fmt(subset.fieldPrecision)} recall=${fmt(subset.fieldRecall)} casePassRate=${fmt(subset.casePassRate)}`,
       `Offline scripted (scored cases: ${artifact.offlineScripted.scoredCaseCount}):`,
       ...artifact.offlineScripted.checks.map(check => `  ${check.id}: ${check.passed}/${check.total}`),
-      `Known limitations: ${artifact.offlineScripted.knownLimitationCaseCount + artifact.deterministicExtractor.knownLimitationCaseCount}`,
+      `Known limitation cases: ${artifact.deterministicExtractor.knownLimitationCaseCount + artifact.offlineScripted.knownLimitationCaseCount}`,
       `Statuses: ONLINE_MODEL=${artifact.statuses.ONLINE_MODEL} HUMAN_SEMANTIC_EVAL=${artifact.statuses.HUMAN_SEMANTIC_EVAL} ONLINE_LATENCY_TOKEN_COST=${artifact.statuses.ONLINE_LATENCY_TOKEN_COST}`,
       `Artifact: ${out}`,
       ""

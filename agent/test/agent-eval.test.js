@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { extractJson } from "../src/harness.js";
 import { sanitizeExtractedDraftV03 } from "../src/intake-v03.js";
 import {
-  ARTIFACT_VERSION, DATASET_VERSION, buildDeterministicSection, readDataset, runEval, validateDataset
+  ARTIFACT_VERSION, DATASET_VERSION, buildDeterministicSection, readDataset, runDeterministicCase, runEval, validateDataset
 } from "../eval/run-eval.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -39,15 +39,27 @@ test("eval dataset covers every required scenario class", () => {
   assert.deepEqual([...modes].sort(), ["deterministic_extractor", "offline_scripted_model"]);
 });
 
-test("deterministic extractor passes every scored case and keeps known limitations explicit", () => {
+test("deterministic extractor scores all 18 cases and keeps known failures visible", () => {
   const artifact = runEval({ datasetPath: DATASET, now: new Date("2026-10-29T00:00:00Z") });
-  assert.equal(artifact.deterministicExtractor.scoredCaseCount, 16);
+  assert.equal(artifact.deterministicExtractor.caseCount, 18);
   assert.equal(artifact.deterministicExtractor.knownLimitationCaseCount, 2);
   assert.deepEqual(artifact.deterministicExtractor.failedCases, []);
-  for (const limitation of artifact.deterministicExtractor.limitations) {
+  const known = artifact.deterministicExtractor.knownLimitationCases;
+  assert.equal(known.length, 2);
+  for (const limitation of known) {
     assert.equal(limitation.status, "CONFIRMED_OPEN");
+    assert.equal(limitation.passed, false);
     assert.ok(limitation.observed && limitation.intended);
+    assert.ok(limitation.wrongValues.length > 0 || limitation.unsupported.length > 0);
   }
+  const metrics = artifact.deterministicExtractor.metrics;
+  assert.deepEqual([metrics.fieldPrecision.numerator, metrics.fieldPrecision.denominator], [63, 65]);
+  assert.deepEqual([metrics.fieldRecall.numerator, metrics.fieldRecall.denominator], [63, 66]);
+  assert.deepEqual([metrics.casePassRate.numerator, metrics.casePassRate.denominator], [16, 18]);
+  assert.deepEqual([metrics.schemaPassRate.numerator, metrics.schemaPassRate.denominator], [18, 18]);
+  const subset = artifact.deterministicExtractor.documentedContractSubset;
+  assert.deepEqual([subset.fieldPrecision.numerator, subset.fieldPrecision.denominator], [57, 57]);
+  assert.match(subset.definition, /NOT the full evaluation/);
 });
 
 test("deterministic metrics carry definition, numerator and denominator", () => {
@@ -66,11 +78,49 @@ test("deterministic metrics carry definition, numerator and denominator", () => 
 });
 
 test("zero denominators produce null, never 100 percent", () => {
-  const empty = buildDeterministicSection([], []);
+  const empty = buildDeterministicSection([]);
   assert.equal(empty.metrics.fieldPrecision.denominator, 0);
   assert.equal(empty.metrics.fieldPrecision.value, null);
   assert.match(empty.metrics.fieldPrecision.note, /Denominator is zero/);
   assert.equal(empty.metrics.schemaPassRate.value, null);
+});
+
+test("an unexpected extra extracted field makes a case fail", () => {
+  const result = runDeterministicCase({
+    caseId: "regression-unsupported-field",
+    mode: "deterministic_extractor",
+    tags: ["regression"],
+    input: { text: "历史还款率 96%。" },
+    expect: { extracted: {}, absent: [], validation: { valid: true, readinessStatus: "limited" } }
+  });
+  assert.deepEqual(result.unsupported, ["repaymentRatePct"]);
+  assert.equal(result.passed, false);
+});
+
+test("injected score/decision fields leave authoritative results identical to a clean control", () => {
+  const artifact = runEval({ datasetPath: DATASET, now: new Date("2026-10-29T00:00:00Z") });
+  const controlled = artifact.offlineScripted.caseResults.filter(item => item.controlledComparison);
+  assert.equal(controlled.length, 4);
+  const cases = loadCases();
+  const requiredFields = [
+    "TAI", "CCI", "riskGrade", "decisionStatus", "vetoApplied",
+    "recommendedLimit", "expectedLoss", "PD_pct", "dimensionScores", "tokenComponentScores"
+  ];
+  for (const result of controlled) {
+    assert.equal(result.passed, true, result.caseId);
+    assert.deepEqual(result.controlledComparison.mismatches, [], result.caseId);
+    assert.deepEqual(result.controlledComparison.controlIgnoredInputs, [], result.caseId);
+    for (const field of requiredFields) {
+      assert.ok(result.controlledComparison.comparedFields.includes(field), `${result.caseId} compares ${field}`);
+    }
+    const source = cases.find(item => item.caseId === result.caseId);
+    for (const path of source.expect.ignoredInputsInclude || []) {
+      const leaf = String(path).split(".").pop();
+      const sanitized = sanitizeExtractedDraftV03({ draft: source.input.scriptedModelOutput.draft });
+      assert.ok(sanitized.ignoredInputs.includes(path), `${result.caseId} reports ${path}`);
+      assert.ok(!(leaf in sanitized.draft), `${result.caseId} draft lacks ${path}`);
+    }
+  }
 });
 
 test("scripted model runs every governance check without failures", () => {

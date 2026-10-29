@@ -1,32 +1,26 @@
 {
   "artifactVersion": "fc-agent-eval-artifact/v1",
-  "generatedAt": "2026-10-29T07:30:31.343Z",
+  "generatedAt": "2026-10-29T07:48:58.142Z",
   "dataset": {
     "id": "fc-agent-eval",
     "version": "fc-agent-eval/v1",
     "path": "eval/datasets/agent-eval-v1.jsonl",
     "caseCount": 30,
-    "sha256": "39a7928d68888b94d6cf57326f69bac8207c552d920742816ca4697b2883f346"
+    "sha256": "be90808a3f71e694b4f20b4e0d57c5c520c343348244101d477fcd5f749eadf6"
   },
   "baseline": {
-    "commitSha": "d22ee036d3f1db037d66cf8ecb7d0795349f655a",
+    "commitSha": "9da87d98476909c4115309d5a182d982d43d9c09",
     "branch": "feat/agent-eval-hardening",
     "dirty": true,
     "dirtyFiles": [
-      "M .github/workflows/ci.yml",
-      " M README.md",
-      " M agent/package.json",
-      " M agent/scripts/check-syntax.js",
-      " M agent/src/harness.js",
-      " M agent/src/intake-v03.js",
-      " M assets/js/ui.js",
-      " M assets/js/view-audit.js",
+      "M README.md",
+      " M agent/eval/README.md",
+      " M agent/eval/datasets/agent-eval-v1.jsonl",
+      " M agent/eval/results/agent-eval-2026-10-29.json",
+      " M agent/eval/run-eval.js",
+      " M agent/test/agent-eval.test.js",
       " M assets/js/view-landing.js",
-      " M assets/js/view-report.js",
-      "?? agent/eval/",
-      "?? agent/test/agent-eval.test.js",
-      "?? docs/refactor-plan-p2.md",
-      "?? docs/validation-20261029.md"
+      " M docs/validation-20261029.md"
     ]
   },
   "run": {
@@ -62,71 +56,76 @@
     }
   ],
   "deterministicExtractor": {
-    "scoredCaseCount": 16,
+    "caseCount": 18,
     "knownLimitationCaseCount": 2,
-    "metricScope": "Scored cases cover only the parser's documented label-before-value contract. Precision and recall here are NOT free-form language accuracy and must not be quoted as such. Two natural-phrasing cases fail and are listed under limitations; hypotheticalIncludingKnownLimitations shows the same field metrics if those failures were scored against their intended values.",
+    "metricScope": "Primary metrics cover all 18 extractor cases, including the two known parser failures scored against their intended values. They still describe a hand-written synthetic corpus with a fixed label vocabulary, not free-form language accuracy or LLM performance. The documented-contract subset is reported separately for reference only.",
     "metrics": {
       "fieldPrecision": {
-        "definition": "Emitted fields that match an expected field value, divided by all emitted fields.",
-        "numerator": 57,
-        "denominator": 57,
-        "value": 1
-      },
-      "fieldRecall": {
-        "definition": "Expected field values that were extracted exactly, divided by all expected field values.",
-        "numerator": 57,
-        "denominator": 57,
-        "value": 1
-      },
-      "unsupportedFieldRate": {
-        "definition": "Emitted fields that no case expected (unsupported or wrongly emitted), divided by all emitted fields. The extractor is whitelist-only, so this metric is structurally bounded near zero.",
-        "numerator": 0,
-        "denominator": 57,
-        "value": 0
-      },
-      "schemaPassRate": {
-        "definition": "Scored cases whose schema validation outcome (valid + readinessStatus) matched the expectation, divided by scored cases.",
-        "numerator": 16,
-        "denominator": 16,
-        "value": 1
-      },
-      "casePassRate": {
-        "definition": "Scored cases with no field, absent-field, warning or validation mismatch, divided by scored cases.",
-        "numerator": 16,
-        "denominator": 16,
-        "value": 1
-      }
-    },
-    "hypotheticalIncludingKnownLimitations": {
-      "definition": "Illustrative only: the same field metrics computed over scored cases plus the two known-limitation cases scored against their intended values. Not a substitute for the primary metrics.",
-      "fieldPrecision": {
-        "definition": "Matched fields divided by all emitted fields, including known-limitation cases.",
+        "definition": "Emitted fields that match the expected (or intended) value, divided by all emitted fields across all 18 cases.",
         "numerator": 63,
         "denominator": 65,
         "value": 0.9692
       },
       "fieldRecall": {
-        "definition": "Matched intended fields divided by all intended fields, including known-limitation cases.",
+        "definition": "Expected (or intended) field values that were extracted exactly, divided by all expected field values across all 18 cases.",
         "numerator": 63,
         "denominator": 66,
         "value": 0.9545
+      },
+      "unsupportedFieldRate": {
+        "definition": "Emitted fields that no case expected, divided by all emitted fields. The extractor is whitelist-only, so this metric is structurally bounded near zero.",
+        "numerator": 0,
+        "denominator": 65,
+        "value": 0
+      },
+      "schemaPassRate": {
+        "definition": "Cases whose schema validation outcome (valid + readinessStatus) matched the expectation, divided by all 18 cases.",
+        "numerator": 18,
+        "denominator": 18,
+        "value": 1
+      },
+      "casePassRate": {
+        "definition": "Cases with no field, absent-field, unsupported-field, warning or validation mismatch, divided by all 18 cases. The two known parser failures count as failures.",
+        "numerator": 16,
+        "denominator": 18,
+        "value": 0.8889
+      }
+    },
+    "documentedContractSubset": {
+      "definition": "Secondary metric over the 16 cases written in the parser's documented label-before-value shape. It is NOT the full evaluation result and must not be quoted alone.",
+      "caseCount": 16,
+      "fieldPrecision": {
+        "definition": "Subset only: matched fields divided by emitted fields over the 16 documented-contract cases.",
+        "numerator": 57,
+        "denominator": 57,
+        "value": 1
+      },
+      "fieldRecall": {
+        "definition": "Subset only: matched fields divided by expected fields over the 16 documented-contract cases.",
+        "numerator": 57,
+        "denominator": 57,
+        "value": 1
+      },
+      "schemaPassRate": {
+        "definition": "Subset only: schema-matching cases divided by the 16 documented-contract cases.",
+        "numerator": 16,
+        "denominator": 16,
+        "value": 1
+      },
+      "casePassRate": {
+        "definition": "Subset only: passing cases divided by the 16 documented-contract cases.",
+        "numerator": 16,
+        "denominator": 16,
+        "value": 1
       }
     },
     "failedCases": [],
-    "limitations": [
+    "knownLimitationCases": [
       {
         "caseId": "extract-known-limitation-postfix-revenue-001",
         "limitationId": "postfix-money-attribution",
-        "note": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Not counted in extractor metrics.",
+        "note": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Scored against intended values, so it counts as a failure in the primary metrics.",
         "observed": {
-          "taskType": "inference",
-          "revenueUsd": 58000,
-          "repaymentRatePct": 96,
-          "overdue30Pct": 2,
-          "payingCustomers": 168,
-          "top5ConcentrationPct": 36
-        },
-        "recorded": {
           "taskType": "inference",
           "revenueUsd": 58000,
           "repaymentRatePct": 96,
@@ -143,17 +142,22 @@
           "payingCustomers": 168,
           "top5ConcentrationPct": 36
         },
-        "status": "CONFIRMED_OPEN"
+        "status": "CONFIRMED_OPEN",
+        "passed": false,
+        "wrongValues": [
+          {
+            "field": "revenueUsd",
+            "expected": 100000,
+            "observed": 58000
+          }
+        ],
+        "unsupported": []
       },
       {
         "caseId": "extract-known-limitation-k-gpu-hours-001",
         "limitationId": "gpu-hours-unit-multiplier",
-        "note": "The GPU-hours pattern captures the numeric token but not the k multiplier. Not counted in extractor metrics.",
+        "note": "The GPU-hours pattern captures the numeric token but not the k multiplier. Scored against intended values, so it counts as a failure in the primary metrics.",
         "observed": {
-          "gpuHours": 4.2,
-          "revenueUsd": 100000
-        },
-        "recorded": {
           "gpuHours": 4.2,
           "revenueUsd": 100000
         },
@@ -161,7 +165,16 @@
           "gpuHours": 4200,
           "revenueUsd": 100000
         },
-        "status": "CONFIRMED_OPEN"
+        "status": "CONFIRMED_OPEN",
+        "passed": false,
+        "wrongValues": [
+          {
+            "field": "gpuHours",
+            "expected": 4200,
+            "observed": 4.2
+          }
+        ],
+        "unsupported": []
       }
     ],
     "caseResults": [
@@ -173,6 +186,9 @@
           "zh"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "taskType": "inference",
@@ -196,6 +212,18 @@
           "payingCustomers": 168,
           "top5ConcentrationPct": 36
         },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -230,6 +258,9 @@
           "en"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "taskType": "inference",
@@ -253,6 +284,18 @@
           "payingCustomers": 168,
           "top5ConcentrationPct": 36
         },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -287,6 +330,9 @@
           "bilingual"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "taskType": "inference",
@@ -310,6 +356,18 @@
           "payingCustomers": 168,
           "top5ConcentrationPct": 36
         },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -343,6 +401,9 @@
           "formats"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "gpuHours": 4200.5,
@@ -362,6 +423,16 @@
           "payingCustomers": 1024,
           "top5ConcentrationPct": 36.75
         },
+        "metricExpected": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 1234567,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96.5,
+          "overdue30Pct": 2.25,
+          "payingCustomers": 1024,
+          "top5ConcentrationPct": 36.75
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -395,6 +466,9 @@
           "missing"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "taskType": "inference",
@@ -404,6 +478,11 @@
           "taskType": "inference",
           "gpuModel": "h100-equivalent"
         },
+        "metricExpected": {
+          "taskType": "inference",
+          "gpuModel": "h100-equivalent"
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -437,9 +516,14 @@
           "missing"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {},
         "expected": {},
+        "metricExpected": {},
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -473,6 +557,9 @@
           "conflict"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "gpuHours": 4200,
@@ -482,6 +569,11 @@
           "gpuHours": 4200,
           "repaymentRatePct": 96
         },
+        "metricExpected": {
+          "gpuHours": 4200,
+          "repaymentRatePct": 96
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -515,6 +607,9 @@
           "injection"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "gpuModel": "h100-equivalent",
@@ -524,6 +619,11 @@
           "gpuModel": "h100-equivalent",
           "gpuHours": 4200
         },
+        "metricExpected": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -557,9 +657,14 @@
           "injection"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {},
         "expected": {},
+        "metricExpected": {},
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -594,6 +699,9 @@
           "edge"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "repaymentRatePct": 96
@@ -601,6 +709,10 @@
         "expected": {
           "repaymentRatePct": 96
         },
+        "metricExpected": {
+          "repaymentRatePct": 96
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -636,6 +748,9 @@
           "formats"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "repaymentRatePct": 96,
@@ -647,6 +762,12 @@
           "overdue30Pct": 2,
           "top5ConcentrationPct": 36
         },
+        "metricExpected": {
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "top5ConcentrationPct": 36
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -680,6 +801,9 @@
           "formats"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "revenueUsd": 100000,
@@ -689,6 +813,11 @@
           "revenueUsd": 100000,
           "computeSpendUsd": 58000
         },
+        "metricExpected": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -723,6 +852,9 @@
           "en"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "gpuHours": 4200,
@@ -734,6 +866,12 @@
           "computeSpendUsd": 58000,
           "gpuHours": 4200
         },
+        "metricExpected": {
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "gpuHours": 4200
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -767,6 +905,9 @@
           "formats"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "gpuHours": 4200.5,
@@ -778,6 +919,12 @@
           "revenueUsd": 105000,
           "repaymentRatePct": 96.5
         },
+        "metricExpected": {
+          "gpuHours": 4200.5,
+          "revenueUsd": 105000,
+          "repaymentRatePct": 96.5
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -811,6 +958,9 @@
           "edge"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "revenueUsd": 0,
@@ -822,6 +972,12 @@
           "computeSpendUsd": 0,
           "repaymentRatePct": 0
         },
+        "metricExpected": {
+          "revenueUsd": 0,
+          "computeSpendUsd": 0,
+          "repaymentRatePct": 0
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -856,6 +1012,9 @@
           "boundary"
         ],
         "behavior": "default",
+        "limitationId": null,
+        "limitationNote": null,
+        "knownLimitation": false,
         "passed": true,
         "extracted": {
           "gpuModel": "h100-equivalent",
@@ -865,6 +1024,11 @@
           "gpuModel": "h100-equivalent",
           "gpuHours": 4200
         },
+        "metricExpected": {
+          "gpuModel": "h100-equivalent",
+          "gpuHours": 4200
+        },
+        "intended": null,
         "missing": [],
         "wrongValues": [],
         "unsupported": [],
@@ -899,7 +1063,10 @@
           "en"
         ],
         "behavior": "known-limitation",
-        "passed": true,
+        "limitationId": "postfix-money-attribution",
+        "limitationNote": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Scored against intended values, so it counts as a failure in the primary metrics.",
+        "knownLimitation": true,
+        "passed": false,
         "extracted": {
           "taskType": "inference",
           "revenueUsd": 58000,
@@ -909,16 +1076,36 @@
           "top5ConcentrationPct": 36
         },
         "expected": {},
-        "missing": [],
-        "wrongValues": [],
-        "unsupported": [
-          "taskType",
+        "metricExpected": {
+          "taskType": "inference",
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "intended": {
+          "taskType": "inference",
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
+          "repaymentRatePct": 96,
+          "overdue30Pct": 2,
+          "payingCustomers": 168,
+          "top5ConcentrationPct": 36
+        },
+        "missing": [
           "revenueUsd",
-          "repaymentRatePct",
-          "overdue30Pct",
-          "payingCustomers",
-          "top5ConcentrationPct"
+          "computeSpendUsd"
         ],
+        "wrongValues": [
+          {
+            "field": "revenueUsd",
+            "expected": 100000,
+            "observed": 58000
+          }
+        ],
+        "unsupported": [],
         "absentViolations": [],
         "validation": {
           "valid": true,
@@ -926,7 +1113,20 @@
           "errors": [],
           "warnings": []
         },
-        "validationChecks": [],
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
         "warningsPassed": true
       },
       {
@@ -937,18 +1137,34 @@
           "formats"
         ],
         "behavior": "known-limitation",
-        "passed": true,
+        "limitationId": "gpu-hours-unit-multiplier",
+        "limitationNote": "The GPU-hours pattern captures the numeric token but not the k multiplier. Scored against intended values, so it counts as a failure in the primary metrics.",
+        "knownLimitation": true,
+        "passed": false,
         "extracted": {
           "gpuHours": 4.2,
           "revenueUsd": 100000
         },
         "expected": {},
-        "missing": [],
-        "wrongValues": [],
-        "unsupported": [
-          "gpuHours",
-          "revenueUsd"
+        "metricExpected": {
+          "gpuHours": 4200,
+          "revenueUsd": 100000
+        },
+        "intended": {
+          "gpuHours": 4200,
+          "revenueUsd": 100000
+        },
+        "missing": [
+          "gpuHours"
         ],
+        "wrongValues": [
+          {
+            "field": "gpuHours",
+            "expected": 4200,
+            "observed": 4.2
+          }
+        ],
+        "unsupported": [],
         "absentViolations": [],
         "validation": {
           "valid": true,
@@ -956,7 +1172,20 @@
           "errors": [],
           "warnings": []
         },
-        "validationChecks": [],
+        "validationChecks": [
+          {
+            "name": "validation.valid",
+            "passed": true,
+            "expected": true,
+            "observed": true
+          },
+          {
+            "name": "validation.readinessStatus",
+            "passed": true,
+            "expected": "limited",
+            "observed": "limited"
+          }
+        ],
         "warningsPassed": true
       }
     ]
@@ -1051,10 +1280,22 @@
             "observed": true
           },
           {
+            "name": "sanitized draft lacks CCI",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
             "name": "ignoredInputs includes riskGrade",
             "passed": true,
             "expected": true,
             "observed": true
+          },
+          {
+            "name": "sanitized draft lacks riskGrade",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
           },
           {
             "name": "ignoredInputs includes recommendedLimit",
@@ -1063,16 +1304,34 @@
             "observed": true
           },
           {
+            "name": "sanitized draft lacks recommendedLimit",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
             "name": "ignoredInputs includes PD_pct",
             "passed": true,
             "expected": true,
             "observed": true
           },
           {
+            "name": "sanitized draft lacks PD_pct",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
             "name": "ignoredInputs includes decisionStatus",
             "passed": true,
             "expected": true,
             "observed": true
+          },
+          {
+            "name": "sanitized draft lacks decisionStatus",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
           },
           {
             "name": "validation.valid",
@@ -1085,6 +1344,12 @@
             "passed": true,
             "expected": "ready",
             "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
           },
           {
             "name": "authoritative.CCI differs from injected value",
@@ -1130,6 +1395,25 @@
           "recommendedLimit",
           "riskGrade"
         ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1163,10 +1447,22 @@
             "observed": true
           },
           {
+            "name": "sanitized draft lacks scope.CCI",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
             "name": "ignoredInputs includes creditProfile.decisionStatus",
             "passed": true,
             "expected": true,
             "observed": true
+          },
+          {
+            "name": "sanitized draft lacks creditProfile.decisionStatus",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
           },
           {
             "name": "validation.valid",
@@ -1179,6 +1475,12 @@
             "passed": true,
             "expected": "ready",
             "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
           },
           {
             "name": "authoritative.CCI differs from injected value",
@@ -1203,6 +1505,25 @@
           "creditProfile.decisionStatus",
           "scope.CCI"
         ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1244,6 +1565,7 @@
         "failureDetails": [],
         "validation": null,
         "ignoredInputs": null,
+        "controlledComparison": null,
         "assessment": null,
         "extractJson": {
           "threw": true,
@@ -1280,6 +1602,7 @@
         "failureDetails": [],
         "validation": null,
         "ignoredInputs": null,
+        "controlledComparison": null,
         "assessment": null,
         "extractJson": {
           "threw": false,
@@ -1341,6 +1664,7 @@
           ]
         },
         "ignoredInputs": [],
+        "controlledComparison": null,
         "assessment": null,
         "extractJson": null
       },
@@ -1364,10 +1688,22 @@
             "observed": true
           },
           {
+            "name": "sanitized draft lacks pageUrl",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
             "name": "ignoredInputs includes injected",
             "passed": true,
             "expected": true,
             "observed": true
+          },
+          {
+            "name": "sanitized draft lacks injected",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
           },
           {
             "name": "validation.valid",
@@ -1380,6 +1716,12 @@
             "passed": true,
             "expected": "ready",
             "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
           },
           {
             "name": "authoritative.vetoApplied",
@@ -1398,6 +1740,25 @@
           "injected",
           "pageUrl"
         ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1431,6 +1792,12 @@
             "observed": true
           },
           {
+            "name": "sanitized draft lacks decisionNarrative",
+            "passed": true,
+            "expected": "absent",
+            "observed": "absent"
+          },
+          {
             "name": "validation.valid",
             "passed": true,
             "expected": true,
@@ -1441,6 +1808,12 @@
             "passed": true,
             "expected": "ready",
             "observed": "ready"
+          },
+          {
+            "name": "controlled comparison: injected draft vs clean control",
+            "passed": true,
+            "expected": "identical authoritative results",
+            "observed": "identical"
           },
           {
             "name": "authoritative.recommendedLimit is null",
@@ -1476,6 +1849,25 @@
         "ignoredInputs": [
           "decisionNarrative"
         ],
+        "controlledComparison": {
+          "comparedFields": [
+            "TAI",
+            "CCI",
+            "riskGrade",
+            "decisionStatus",
+            "vetoApplied",
+            "recommendedLimit",
+            "expectedLoss",
+            "PD_pct",
+            "tokenMeteringStatus",
+            "evidenceStrength",
+            "dimensionScores",
+            "tokenComponentScores",
+            "evidenceQuality"
+          ],
+          "controlIgnoredInputs": [],
+          "mismatches": []
+        },
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1539,6 +1931,7 @@
           "errors": []
         },
         "ignoredInputs": [],
+        "controlledComparison": null,
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1599,6 +1992,7 @@
           "errors": []
         },
         "ignoredInputs": [],
+        "controlledComparison": null,
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1647,6 +2041,7 @@
           "errors": []
         },
         "ignoredInputs": [],
+        "controlledComparison": null,
         "assessment": {
           "TAI": 93.8,
           "CCI": 929,
@@ -1696,6 +2091,7 @@
           "errors": []
         },
         "ignoredInputs": [],
+        "controlledComparison": null,
         "assessment": {
           "TAI": null,
           "CCI": null,
@@ -1761,6 +2157,7 @@
           "errors": []
         },
         "ignoredInputs": [],
+        "controlledComparison": null,
         "assessment": {
           "TAI": null,
           "CCI": null,
