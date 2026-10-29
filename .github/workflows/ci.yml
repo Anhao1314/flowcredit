@@ -33,3 +33,5 @@ jobs:
         run: npm run validate:public-api
       - name: Finch contract
         run: npm run validate:finch-contract
+      - name: Offline agent evaluation
+        run: npm run eval:agent
