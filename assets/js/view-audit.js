@@ -176,7 +176,7 @@
       '<div class="sec-l">four-factor profile</div><div>' + factorBars(d) + "</div></div>" +
       '<div class="card" style="background:var(--card2);padding:14px">' +
       '<div class="chart-legend"><span><i class="legend-key" style="background:#38BDF8"></i>R · declared value</span>' +
-      '<span><i class="legend-key" style="background:#2DD4BF"></i>C · on-chain trusted</span></div>' +
+      '<span><i class="legend-key" style="background:#2DD4BF"></i>C · reference series (demo, not on-chain)</span></div>' +
       '<div class="chart-box"><div id="line-slot"></div></div>' +
       '<div class="deviation-line"><span class="sdot dot-' + (dev.alert ? "r" : "g") + '"></span>' +
       "<span>Deviation D = +" + dev.pct + "%</span>" +
@@ -198,7 +198,7 @@
       return '<div class="anchor-state">' +
         '<span class="tag tag-success">' + u.icon("check", 10) + " result anchored ✓</span>" +
         '<span class="root-hash num" style="font-size:13px">root ' + u.esc(st.anchor.root) + "</span></div>" +
-        howBlock(["The P1 Merkle root fingerprints this assessment subject on the testnet. Only the root is stored — raw details stay off-chain."]);
+        howBlock(["Historical demo only: the P1 Merkle root fingerprints this assessment subject inside the browser session. No testnet, blockchain or on-chain contract is involved; raw details stay local."]);
     }
     return '<div class="anchor-state">' +
       '<span class="tag tag-warning">pending anchor (go to P1)</span>' +

@@ -204,7 +204,7 @@
         '<text x="' + (ax + 7).toFixed(1) + '" y="' + (ay - 6).toFixed(1) + '" style="fill:#F87171;font-size:9.5px;font-family:var(--mono);font-weight:700">&gt;2σ</text>';
     }
     container.innerHTML =
-      '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Declared vs on-chain value series">' +
+      '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Declared vs reference value series (demo)">' +
       grid +
       '<path d="' + poly + '" fill="rgba(45,212,191,.075)" stroke="none"/>' +
       '<polyline points="' + pts(R) + '" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
