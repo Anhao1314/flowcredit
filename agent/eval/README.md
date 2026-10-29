@@ -32,8 +32,9 @@ Each case states:
 - `expect.extracted` / `expect.absent` — what must and must not be extracted.
 - `expect.validation` — expected schema validity and readiness status.
 - `expect.authoritative` — expected engine-owned outputs (null fields, veto state, grade source).
-- `expect.behavior: "known-limitation"` — a documented boundary, excluded from scored metrics and
-  reported separately with `observed` / `intended` values.
+- `expect.behavior: "known-limitation"` — a documented boundary. Its `intended` values are used as
+  the expectation and its `observed` values as the actual result, so it **counts as a failure** in
+  the primary metrics; `limitationId`, `observed`, `intended` and `CONFIRMED_OPEN` are retained.
 
 Coverage:
 
@@ -60,25 +61,29 @@ node eval/run-eval.js --out <path>    # custom artifact path
 npm test                              # includes test/agent-eval.test.js
 ```
 
-The process exits non-zero if any scored case fails.
+The process exits non-zero if any **unexpected** case fails. Known-limitation cases are expected to
+fail their intended values, so they are reported but do not turn CI red while the limitation is
+tracked as `CONFIRMED_OPEN`.
 
 ## Metrics (deterministic extractor)
 
-All metrics are computed over scored cases only; `known-limitation` cases are excluded and reported
-separately.
+**Primary metrics cover all 18 extractor cases**, including the two known parser failures scored
+against their intended values. They describe a hand-written synthetic corpus with a fixed label
+vocabulary — not free-form language accuracy and not LLM performance.
 
 | Metric | Definition | Numerator / denominator |
 | --- | --- | --- |
-| `fieldPrecision` | Emitted fields that match an expected value | matched fields / all emitted fields |
-| `fieldRecall` | Expected fields extracted exactly | matched fields / all expected fields |
+| `fieldPrecision` | Emitted fields that match the expected (or intended) value | matched fields / all emitted fields |
+| `fieldRecall` | Expected (or intended) fields extracted exactly | matched fields / all expected fields |
 | `unsupportedFieldRate` | Emitted fields no case expected | unsupported fields / all emitted fields |
-| `schemaPassRate` | Cases whose validation outcome matched | matching cases / scored cases |
-| `casePassRate` | Cases with no mismatch of any kind | passing cases / scored cases |
+| `schemaPassRate` | Cases whose validation outcome matched | matching cases / all 18 cases |
+| `casePassRate` | Cases with no field, absent-field, unsupported-field, warning or validation mismatch | passing cases / all 18 cases |
 
 A zero denominator produces `null` plus an explanatory note; it is never written as 100%.
 
-`hypotheticalIncludingKnownLimitations` is illustrative only: the same field metrics with the two
-natural-phrasing failure cases scored against their intended values.
+`documentedContractSubset` is a **secondary reference only**: the same field metrics over the 16
+cases written in the parser's documented label-before-value shape (57/57 precision and recall).
+It is not the full evaluation result and must not be quoted alone.
 
 ## Governance checks (scripted model)
 
@@ -91,6 +96,7 @@ natural-phrasing failure cases scored against their intended values.
 | `explanation-conflict-keeps-authoritative` | Presentation score fields stay engine-owned |
 | `unverified-integrity-event-no-veto` | A bare confirmed event becomes a signal, not a Veto |
 | `null-and-zero-preserved` | `null` and `0` are not coerced into each other |
+| `forbidden-fields-stripped` + `controlledComparison` | For every injected-field case, a clean control is built from the same allowed business fields; TAI, CCI, riskGrade, decisionStatus, vetoApplied, recommendedLimit, expectedLoss, PD_pct, tokenMeteringStatus, evidenceStrength, dimensionScores, tokenComponentScores and evidenceQuality must be identical |
 
 These checks describe the system's handling of **supplied** model output. They do not claim a live
 model has the same robustness.
@@ -106,8 +112,10 @@ model has the same robustness.
    the user is accepted into the intake draft; only forbidden score/decision fields are
    structurally blocked.
 
-These are recorded as `CONFIRMED_OPEN` (or `FIXED_OR_CHANGED` if behaviour later changes) in the
-artifact. They are roadmap inputs, not test failures.
+Limitations 1 and 2 are part of the **primary** extractor metrics (16/18 case pass). Limitations 3
+and 4 are scripted-model boundaries reported with observed values. All four are recorded as
+`CONFIRMED_OPEN` (or `FIXED_OR_CHANGED` if behaviour later changes) in the artifact. They are
+roadmap inputs; only **unexpected** failures turn CI red.
 
 ## Artifact
 
@@ -118,8 +126,11 @@ artifact. They are roadmap inputs, not test failures.
 - run command, Node version, mode list, `networkCalls: 0`, `modelCalls: 0`, `apiKeysUsed: false`
 - status table (`OFFLINE_DETERMINISTIC`, `OFFLINE_SCRIPTED`, `ONLINE_MODEL=NOT_RUN`,
   `HUMAN_SEMANTIC_EVAL=NOT_MEASURED`, `ONLINE_LATENCY_TOKEN_COST=NOT_RUN`)
-- per-metric definition, numerator, denominator and value
-- failed cases, known limitations and per-case results
+- per-metric definition, numerator, denominator and value (primary over all 18 cases)
+- `documentedContractSubset` as a clearly labelled secondary reference
+- `knownLimitationCases` with `observed`, `intended`, `wrongValues`, `unsupported` and status
+- `controlledComparison` results for injected-field cases (compared fields and mismatches)
+- failed cases and per-case results
 - explicit `notRun` reasons
 
 The artifact's `baseline.commitSha` is the commit at generation time; if the artifact itself was

@@ -10,7 +10,7 @@ An evidence-aware risk API for AI-native businesses and agents: normalize operat
 
 **Status:** External Alpha `v0.1.1`; experimental risk intelligence workflow, not a calibrated lending system.
 
-**LLM boundary:** An optional DeepSeek sidecar assists only with information extraction, explanation and text review. The deterministic rule engine owns authoritative scores, risk results and required actions. Model output can never create or overwrite scores, limits, approvals, lending or transaction decisions.
+**LLM boundary:** An optional DeepSeek sidecar assists only with information extraction, explanation and text review. The deterministic rule engine owns authoritative computation. The model cannot directly provide or overwrite reserved score, grade, limit, approval or decision fields. Model-extracted business fields (for example `revenueUsd`) can still become inputs to that computation, and textual grounding between model fields and the user's original text is not implemented yet — this remains a `CONFIRMED_OPEN` risk recorded by the offline evaluation.
 
 **Evidence status:** This revision is validated offline only — local unit/regression tests, synthetic fixtures and contract validators. There are no live bank, billing, identity or chain connectors, and no online model evaluation was run. See [agent evaluation](agent/eval/README.md) and the [validation record](docs/validation-20261029.md).
 
@@ -22,7 +22,7 @@ An evidence-aware risk API for AI-native businesses and agents: normalize operat
 
 | Verified capability | Scope / evidence |
 | --- | --- |
-| **108/108 tests passed** | Local Node.js 22.19.0 run on 2026-10-29; [validation record](docs/validation-20261029.md) |
+| **110/110 tests passed** | Local Node.js 22.19.0 run on 2026-10-29; [validation record](docs/validation-20261029.md) |
 | **30-case offline agent evaluation** | `OFFLINE_DETERMINISTIC` and `OFFLINE_SCRIPTED` measured; `ONLINE_MODEL=NOT_RUN`; `HUMAN_SEMANTIC_EVAL=NOT_MEASURED`; [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
 | **5 TAI components; 5 CCI dimensions** | Versioned deterministic weights, [rule registry](agent/src/rules-v021.js) |
 | **6 evidence source domains; 3 confirmed-event veto codes** | Input/provenance schema, not six connected external providers; [rules](agent/src/rules-v021.js) |
@@ -95,7 +95,11 @@ The pipeline and the deterministic-engine / LLM-sidecar boundary are shown in th
 - [validation](agent/src/validate-v021.js): output and contract validation.
 - [API server](agent/src/server.js): public API v1 (evidence / risk / actions).
 
-Current authoritative chain: **intake v0.3.1 → normalize-v021 → risk-core-v021 → validate-v021 → public API v1**. The v0.1/v0.2 modules (`risk-core.js`, `risk-core-v02.js` and their normalizers/validators) and the `/fc/ai/*` endpoints are **legacy demo-sidecar paths**. They are retained for the frozen static demo, are not part of the public API contract, and are not the authoritative chain.
+Current authoritative chain: **intake v0.3.1 → normalize-v021 → risk-core-v021 → validate-v021 → public API v1**.
+
+- **Public authoritative API:** `POST /api/v1/assess`, `POST /api/v1/chat`, plus `/health`, `/ready` and `/api/v1` discovery.
+- **Current optional v0.3 model endpoints (consent-gated, non-authoritative):** `/fc/ai/v0.3/extract` for extraction, `/fc/ai/v0.3/ask` for explanation, `/fc/ai/v0.3/schema|config`, and `/fc/ai/v0.3/assess` as a compatibility alias of the same runtime.
+- **Historical demo-sidecar endpoints:** unversioned `/fc/ai/run|assess|ask|config` (v0.1) and `/fc/ai/v0.2...` / `v0.2.1...`. They are retained for the frozen static demo, are not part of the public API contract, and are not the authoritative chain.
 
 ## Risk Pipeline
 
@@ -123,7 +127,7 @@ Missing required components produce `null`, rather than redistributing weights. 
 
 ## Deterministic Engine vs LLM Sidecar
 
-**LLM may assist with evidence extraction or explanation, but deterministic rules own authoritative risk outputs.** Structured assessments remain available without DeepSeek. Descriptive text extraction requires explicit model consent; model output cannot overwrite authoritative scores. This project integrates a model provider; it does not train a foundation model.
+**LLM may assist with evidence extraction or explanation, but deterministic rules own authoritative risk outputs.** Structured assessments remain available without DeepSeek. Descriptive text extraction requires explicit model consent; model output cannot overwrite authoritative scores. Model-extracted allowed business fields are intake inputs, not scores: they still pass through schema validation and the deterministic engine, and their factual grounding against the user's text is not yet verified (`CONFIRMED_OPEN`). This project integrates a model provider; it does not train a foundation model.
 
 ## Agent Evaluation (offline, v1)
 
@@ -141,6 +145,8 @@ A versioned, fully offline evaluation harness makes the LLM boundary testable:
 | Live model quality / robustness | `ONLINE_MODEL=NOT_RUN` |
 | Human semantic agreement | `HUMAN_SEMANTIC_EVAL=NOT_MEASURED` |
 | Online latency, tokens, cost | `ONLINE_LATENCY_TOKEN_COST=NOT_RUN` |
+
+Primary extractor metrics cover all 18 cases, including the two known parser failures scored against their intended values: precision **63/65 (96.92%)**, recall **63/66 (95.45%)**, case pass **16/18 (88.89%)**. The 16-case documented-contract subset (57/57 precision and recall) is reported only as a secondary reference, not as the full result.
 
 The evaluation deliberately records four **known limitations** rather than hiding them: postfix English money attribution, `k`-suffixed GPU hours, self-declared evidence verification levels, and the absence of a textual-grounding check for model-added allowed fields. These are roadmap inputs, not claims of robustness.
 
@@ -221,7 +227,7 @@ npm run eval:agent
 
 `check` runs syntax checks, TypeScript `checkJs` for the constants and v0.2/v0.2.1 **rule registries**, and the unit/regression suite. It does not type-check the entire API/sidecar. Deterministic checks use synthetic fixtures without a configured LLM. `eval:agent` writes the offline agent evaluation artifact and makes no model calls.
 
-Latest recorded run on this branch: 2026-10-29, Node.js 22.19.0 — 108 tests passed, syntax check over 62 JavaScript files, both contract validators passed, release verifier passed. Full commands, exit codes and caveats are in the [validation record](docs/validation-20261029.md).
+Latest recorded run on this branch: 2026-10-29, Node.js 22.19.0 — 110 tests passed, syntax check over 62 JavaScript files, both contract validators passed, release verifier passed. Full commands, exit codes and caveats are in the [validation record](docs/validation-20261029.md).
 
 [CI configuration](.github/workflows/ci.yml) runs installation, syntax, typecheck, tests, both contract validators and the offline evaluation. The last observed `main` run before this branch was successful (2026-09-17); a green statement for this branch requires its own PR check run, not the presence of the workflow file.
 
