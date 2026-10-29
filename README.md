@@ -27,14 +27,14 @@ flowchart LR
   E -->|invalid| X["HTTP 400 · fail closed"]
   E -->|valid| F["Deterministic risk engine<br/>risk_result v0.2.1"]
   F --> G["Output validation<br/>+ versioned envelope"]
-  G --> H["Authoritative API response<br/>data.*"]
+  G --> H["Versioned API response<br/>data.*"]
   F -.->|"facts only"| I["Optional explanation / review<br/>(model text, never a score)"]
-  I -.->|"non-authoritative"| H
+  I -.->|"optional non-authoritative annotations"| H
 ```
 
 - The model cannot directly provide or overwrite reserved result fields: `CCI`, `riskGrade`, `recommendedLimit`, `PD_pct`, `expectedLoss`, `decisionStatus`, `TAI`.
 - Model-extracted allowed business fields (for example `revenueUsd`) still enter schema validation and the deterministic calculation. No textual grounding between those fields and the user's original text is implemented.
-- The sidecar can explain or review; it never writes the authoritative response.
+- The sidecar can add non-authoritative modelAnalysis / modelReview annotations, but it never writes or overrides authoritative result fields.
 
 Implementation entry points: [intake](agent/src/intake-v03.js) · [normalization](agent/src/normalize-v021.js) · [risk engine](agent/src/risk-core-v021.js) · [output validation](agent/src/validate-v021.js) · [API server](agent/src/server.js).
 
