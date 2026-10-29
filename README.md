@@ -14,7 +14,7 @@ An evidence-aware risk API for AI-native businesses and agents: normalize operat
 
 **Evidence status:** This revision is validated offline only — local unit/regression tests, synthetic fixtures and contract validators. There are no live bank, billing, identity or chain connectors, and no online model evaluation was run. See [agent evaluation](agent/eval/README.md) and the [validation record](docs/validation-20261029.md).
 
-[Quick Start](#quick-start) · [API](docs/public-api-v1.md) · [Methodology](docs/flowcredit-rules-v0.2.1.md) · [Evaluation](agent/eval/README.md) · [Validation](docs/portfolio-validation.md) · [MIT](LICENSE)
+[Quick Start](#quick-start) · [API](docs/public-api-v1.md) · [Methodology](docs/flowcredit-rules-v0.2.1.md) · [Evaluation](agent/eval/README.md) · [Validation](docs/validation-20261029.md) · [MIT](LICENSE)
 
 ![Evidence flows through validation and coverage into the deterministic v0.2.1 risk engine that produces TAI/CCI, grade and veto; an optional consent-gated LLM sidecar only assists extraction and explanation and cannot overwrite authoritative scores; output is a versioned API with review status and actions, never automatic approval.](assets/img/evidence-risk-action.svg)
 
