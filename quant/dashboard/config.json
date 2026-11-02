@@ -1,0 +1,22 @@
+{
+  "csv": "out/baostock-hs300-2024-12-31-raw.csv",
+  "actions": "out/baostock-hs300-2024-12-31-raw-actions.csv",
+  "oos_csv": "out/baostock-hs300-2024-12-31-raw.csv",
+  "oos_actions": "out/baostock-hs300-2024-12-31-raw-actions.csv",
+  "data_source": "baostock",
+  "lookback": 20,
+  "train_days": 252,
+  "test_days": 63,
+  "lookbacks": "10,20,40,60",
+  "primary_lookback": 40,
+  "oos_start": "2025-01-01",
+  "oos_end": "2026-10-31",
+  "top_n": 2,
+  "rebalance_every": 5,
+  "max_weight": 0.35,
+  "cash": 100000.0,
+  "max_drawdown": 0.12,
+  "commission_bps": 5.0,
+  "slippage_bps": 10.0,
+  "oos_delist_json": "out/baostock-hs300-2024-12-31-raw-delisted.json"
+}

@@ -1,0 +1,20 @@
+{
+  "hypothesis": "20-day cross-sectional momentum persists in liquid AI-infrastructure names.",
+  "rationale": "Slow information diffusion and persistent flow can create short-horizon continuation. This is a hypothesis to be tested out of sample, not a conclusion.",
+  "factor_expression": "rank(momentum(close, 20))",
+  "expected_direction": "long",
+  "confidence": 0.55,
+  "evidence_refs": [
+    "internal-research-note-001",
+    "synthetic-demo-only"
+  ],
+  "universe": ["ALPHA", "BETA", "GAMMA"],
+  "horizon_days": 20,
+  "target_weight": 0.9,
+  "order": {
+    "side": "buy",
+    "qty": 100000
+  },
+  "risk_limit": 999999,
+  "kill_switch": false
+}

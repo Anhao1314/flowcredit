@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlowCredit Quant — Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">FLOWCREDIT QUANT</div>
+      <h1>Research Dashboard</h1>
+      <p class="sub">Post-run · EOD data · NOT live trading</p>
+    </div>
+    <div class="top-actions">
+      <span id="run-badge" class="badge idle">IDLE</span>
+      <span id="updated" class="muted">—</span>
+      <button id="refresh-btn" class="ghost" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner">POST-RUN DASHBOARD · NOT REAL-TIME MARKET DATA · NOT LIVE TRADING</div>
+
+  <div id="run-strip" class="run-strip hidden">
+    <div id="run-strip-text" class="muted"></div>
+    <pre id="run-log" class="log"></pre>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="backtest" class="active">Backtest</button>
+    <button type="button" data-tab="oos">OOS 2025–26</button>
+    <button type="button" data-tab="walkforward">Walk-forward</button>
+    <button type="button" data-tab="robustness">Robustness</button>
+    <button type="button" data-tab="data">Data</button>
+  </nav>
+
+  <main>
+    <section class="tab-panel active" id="panel-backtest">
+      <div class="toolbar">
+        <button type="button" class="primary" data-run="backtest">Run backtest</button>
+        <span id="backtest-meta" class="muted"></span>
+      </div>
+      <div class="cards" id="backtest-cards"></div>
+      <h2>Equity</h2>
+      <div class="panel chart" id="backtest-chart"></div>
+      <h2>Risk events</h2>
+      <div class="panel" id="backtest-risk"></div>
+      <h2>Skipped orders</h2>
+      <div class="panel" id="backtest-skips"></div>
+      <h2>Corporate actions</h2>
+      <div class="panel" id="backtest-actions"></div>
+      <h2>Fills</h2>
+      <div class="panel" id="backtest-fills"></div>
+      <h2>Evidence status</h2>
+      <div class="panel" id="backtest-evidence"></div>
+    </section>
+
+    <section class="tab-panel" id="panel-oos">
+      <div class="toolbar">
+        <button type="button" class="primary" data-run="oos">Run frozen OOS</button>
+        <span id="oos-meta" class="muted"></span>
+      </div>
+      <div class="cards" id="oos-cards"></div>
+      <h2>OOS equity</h2>
+      <div class="panel chart" id="oos-chart"></div>
+      <h2>Pre-registered lookbacks</h2>
+      <div class="panel" id="oos-table"></div>
+      <h2>Evidence status</h2>
+      <div class="panel" id="oos-evidence"></div>
+    </section>
+
+    <section class="tab-panel" id="panel-walkforward">
+      <div class="toolbar">
+        <button type="button" class="primary" data-run="walkforward">Run walk-forward</button>
+        <span id="walkforward-meta" class="muted"></span>
+      </div>
+      <div class="cards" id="walkforward-cards"></div>
+      <h2>Out-of-sample equity</h2>
+      <div class="panel chart" id="walkforward-chart"></div>
+      <h2>Windows</h2>
+      <div class="panel" id="walkforward-windows"></div>
+      <h2>Selection bias</h2>
+      <div class="panel" id="walkforward-bias"></div>
+    </section>
+
+    <section class="tab-panel" id="panel-robustness">
+      <div class="toolbar">
+        <button type="button" class="primary" data-run="robustness">Run robustness</button>
+        <span id="robustness-meta" class="muted"></span>
+      </div>
+      <div class="cards" id="robustness-cards"></div>
+      <h2>Scenarios</h2>
+      <div class="panel" id="robustness-scenarios"></div>
+      <h2>Regime splits</h2>
+      <div class="panel" id="robustness-regimes"></div>
+      <h2>Verdict</h2>
+      <div class="panel" id="robustness-verdict"></div>
+    </section>
+
+    <section class="tab-panel" id="panel-data">
+      <h2>Bars manifest</h2>
+      <div class="panel" id="data-manifest"></div>
+      <h2>Universe manifest</h2>
+      <div class="panel" id="data-universe"></div>
+      <h2>Recent runs</h2>
+      <div class="panel" id="data-runs"></div>
+      <h2>Run configuration</h2>
+      <div class="panel" id="data-config"></div>
+    </section>
+  </main>
+
+  <footer>
+    Local dashboard · reads files under <code>out/</code> · bind 127.0.0.1 only ·
+    not investment advice
+  </footer>
+</body>
+</html>

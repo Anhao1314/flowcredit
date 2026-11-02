@@ -1,0 +1,33 @@
+name: quant-ci
+
+on:
+  push:
+    paths:
+      - "quant/**"
+      - ".github/workflows/quant-ci.yml"
+  pull_request:
+    paths:
+      - "quant/**"
+      - ".github/workflows/quant-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run quant tests
+        working-directory: quant
+        run: python -m unittest discover -s tests -v
+      - name: Compile check
+        working-directory: quant
+        run: python -m compileall -q fcquant tests run.py dashboard
+      - name: Check dashboard JavaScript
+        working-directory: quant
+        run: node --check dashboard/app.js
