@@ -76,36 +76,51 @@ check("output-carries-fingerprints",
   {});
 
 // ── 指标层（eval 报告层专用；不影响权威管线，输出全部带 basis 标记；净口径含成本）──
-const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json"), "utf8"));
-const sp = splitPoint(dataset.series.length);
-const trialMetrics = trials.trials.map(trial => {
-  const backtest = strategyReturns(dataset.series, trial);
-  const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
-  const oos = backtest.returns.slice(sp.firstOosReturnIndex);
-  return {
-    trialId: trial.trialId, ruleId: trial.ruleId,
-    basis: METRICS_BASIS, netOfCost: backtest.netOfCost === true, costOneSideRate: backtest.costOneSideRate,
-    nReturns: backtest.returns.length,
-    sharpeAnnualized: sharpeRatio(backtest.returns),
-    sharpePerPeriod: sharpeRatio(backtest.returns, { annualize: false }),
-    isSharpePerPeriod: sharpeRatio(is, { annualize: false }),
-    oosSharpePerPeriod: sharpeRatio(oos, { annualize: false }),
-    turnover: turnover(backtest.positions),
-    maxDrawdownPct: maxDrawdownPct(backtest.returns)
-  };
-});
-const perPeriodSharpes = trialMetrics.map(item => item.sharpePerPeriod);
-const selectedMetric = trialMetrics.reduce((best, item) => (item.sharpePerPeriod > best.sharpePerPeriod ? item : best));
-const selectedTrial = trials.trials.find(trial => trial.trialId === selectedMetric.trialId);
-const dsr = deflatedSharpe(strategyReturns(dataset.series, selectedTrial).returns, perPeriodSharpes);
-check("metrics-basis-tagged", trialMetrics.every(item => item.basis === METRICS_BASIS) && dsr !== null && dsr.basis === METRICS_BASIS, { version: METRICS_VERSION });
-check("trials-are-distinct", dsr !== null && dsr.trials.std > 0, { sharpesPerPeriod: perPeriodSharpes });
-check("dsr-in-valid-range", dsr !== null && dsr.dsr >= 0 && dsr.dsr <= 1, { dsr: dsr?.dsr, sr0: dsr?.sr0 });
-check("dsr-uses-all-trials", dsr !== null && dsr.trials.count === trials.trials.length, { count: dsr?.trials?.count });
-check("turnover-in-valid-range", trialMetrics.every(item => item.turnover !== null && item.turnover >= 0 && item.turnover <= 1), {});
-check("rules-registered", listRules().length >= 6 && trials.trials.every(trial => listRules().some(rule => rule.ruleId === trial.ruleId)), { rules: listRules().length });
-check("costs-applied", trialMetrics.every(item => item.netOfCost === true && item.costOneSideRate === COST_ONE_SIDE_RATE_V002), { costModel: COST_MODEL_V002 });
-check("split-covers-series", trialMetrics.every(item => sp.isCount + sp.oosCount === item.nReturns), { cut: sp.cut, isCount: sp.isCount, oosCount: sp.oosCount });
+// 双数据集：v001 合成 fixture（legacy 毛口径，回归对照）+ v002 真实 BTC 快照（规则净口径）。
+const datasetV002 = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v002.json"), "utf8"));
+const trialsV001 = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v001.json"), "utf8"));
+const trialsV002 = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json"), "utf8"));
+
+function runDataset(dataset, trials, prefix, { expectCosts }) {
+  const sp = splitPoint(dataset.series.length);
+  const trialMetrics = trials.trials.map(trial => {
+    const backtest = strategyReturns(dataset.series, trial);
+    const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
+    const oos = backtest.returns.slice(sp.firstOosReturnIndex);
+    return {
+      trialId: trial.trialId, ruleId: trial.ruleId ?? null,
+      basis: METRICS_BASIS, netOfCost: backtest.netOfCost === true, costOneSideRate: backtest.costOneSideRate ?? null,
+      nReturns: backtest.returns.length,
+      sharpeAnnualized: sharpeRatio(backtest.returns),
+      sharpePerPeriod: sharpeRatio(backtest.returns, { annualize: false }),
+      isSharpePerPeriod: sharpeRatio(is, { annualize: false }),
+      oosSharpePerPeriod: sharpeRatio(oos, { annualize: false }),
+      turnover: turnover(backtest.positions),
+      maxDrawdownPct: maxDrawdownPct(backtest.returns)
+    };
+  });
+  const perPeriodSharpes = trialMetrics.map(item => item.sharpePerPeriod);
+  const selectedMetric = trialMetrics.reduce((best, item) => (item.sharpePerPeriod > best.sharpePerPeriod ? item : best));
+  const selectedTrial = trials.trials.find(trial => trial.trialId === selectedMetric.trialId);
+  const dsr = deflatedSharpe(strategyReturns(dataset.series, selectedTrial).returns, perPeriodSharpes);
+  check(`${prefix}metrics-basis-tagged`, trialMetrics.every(item => item.basis === METRICS_BASIS) && dsr !== null && dsr.basis === METRICS_BASIS, { version: METRICS_VERSION });
+  check(`${prefix}trials-are-distinct`, dsr !== null && dsr.trials.std > 0, { sharpesPerPeriod: perPeriodSharpes });
+  check(`${prefix}dsr-in-valid-range`, dsr !== null && dsr.dsr >= 0 && dsr.dsr <= 1, { dsr: dsr?.dsr, sr0: dsr?.sr0 });
+  check(`${prefix}dsr-uses-all-trials`, dsr !== null && dsr.trials.count === trials.trials.length, { count: dsr?.trials?.count });
+  check(`${prefix}turnover-in-valid-range`, trialMetrics.every(item => item.turnover !== null && item.turnover >= 0 && item.turnover <= 1), {});
+  check(`${prefix}split-covers-series`, trialMetrics.every(item => sp.isCount + sp.oosCount === item.nReturns), { cut: sp.cut, isCount: sp.isCount, oosCount: sp.oosCount });
+  if (expectCosts) {
+    check(`${prefix}rules-registered`, listRules().length >= 6 && trials.trials.every(trial => listRules().some(rule => rule.ruleId === trial.ruleId)), { rules: listRules().length });
+    check(`${prefix}costs-applied`, trialMetrics.every(item => item.netOfCost === true && item.costOneSideRate === COST_ONE_SIDE_RATE_V002), { costModel: COST_MODEL_V002 });
+  } else {
+    check(`${prefix}legacy-gross-path`, trialMetrics.every(item => item.netOfCost !== true && item.costOneSideRate === null), {});
+  }
+  return { trialMetrics, dsr, selectedMetric, sp };
+}
+
+const v001Result = runDataset(dataset, trialsV001, "v001.", { expectCosts: false });
+const v002Result = runDataset(datasetV002, trialsV002, "v002.", { expectCosts: true });
+check("v002-quality-gates-passed", datasetV002.nature === "real_market_data" && datasetV002.quality?.passed === true, { source: datasetV002.source, fetchedAtUtc: datasetV002.fetchedAtUtc });
 
 const allPassed = checks.every(item => item.passed);
 const runDate = new Date().toISOString();
@@ -118,22 +133,27 @@ const artifact = {
   seed: dataset.seed,
   offline: true,
   injectionsVersion: injections.injectionsVersion,
-  trialsVersion: trials.trialsVersion,
   cases: checks.length,
   checks,
   metrics: {
     version: METRICS_VERSION,
     basis: METRICS_BASIS,
     costModel: COST_MODEL_V002,
-    split: { cut: sp.cut, firstOosReturnIndex: sp.firstOosReturnIndex, isCount: sp.isCount, oosCount: sp.oosCount },
-    trials: trialMetrics,
-    selected: {
-      trialId: selectedMetric.trialId,
-      ruleId: selectedMetric.ruleId,
-      dsr: dsr?.dsr ?? null,
-      sr0: dsr?.sr0 ?? null,
-      n: dsr?.n ?? null,
-      trialsStd: dsr?.trials?.std ?? null
+    datasets: {
+      [dataset.dataVersion]: {
+        trialsVersion: trialsV001.trialsVersion,
+        split: { cut: v001Result.sp.cut, isCount: v001Result.sp.isCount, oosCount: v001Result.sp.oosCount },
+        trials: v001Result.trialMetrics,
+        selected: { trialId: v001Result.selectedMetric.trialId, dsr: v001Result.dsr?.dsr ?? null, sr0: v001Result.dsr?.sr0 ?? null, n: v001Result.dsr?.n ?? null, trialsStd: v001Result.dsr?.trials?.std ?? null }
+      },
+      [datasetV002.dataVersion]: {
+        trialsVersion: trialsV002.trialsVersion,
+        source: datasetV002.source,
+        fetchedAtUtc: datasetV002.fetchedAtUtc,
+        split: { cut: v002Result.sp.cut, isCount: v002Result.sp.isCount, oosCount: v002Result.sp.oosCount },
+        trials: v002Result.trialMetrics,
+        selected: { trialId: v002Result.selectedMetric.trialId, ruleId: v002Result.selectedMetric.ruleId, dsr: v002Result.dsr?.dsr ?? null, sr0: v002Result.dsr?.sr0 ?? null, n: v002Result.dsr?.n ?? null, trialsStd: v002Result.dsr?.trials?.std ?? null }
+      }
     }
   },
   allPassed

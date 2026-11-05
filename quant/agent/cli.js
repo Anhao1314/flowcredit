@@ -26,7 +26,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
 
 function loadFrozen() {
-  const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v001.json"), "utf8"));
+  const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v002.json"), "utf8"));
   const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json"), "utf8"));
   return { dataset, trials };
 }

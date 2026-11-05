@@ -16,6 +16,9 @@
  *     - import 白名单：相对引用 + node:fs + node:readline（仅 CLI 入口用）；其余一律违规（零新依赖）
  *     - 仍禁：Math.random / new Date / Date.now（可重放要求）
  *     - 仍受 Zone B 全域规则约束（禁 @deepseek-ai SDK 包与其他 agent 框架）
+ *   Zone D — quant/data/fetch-*.js（一次性数据抓取脚本，手动运行，不进 CI/agent）：
+ *     - 唯一另一处允许 fetch 的文件；允许 new Date（fetchedAtUtc 需要）
+ *     - 仍禁：Math.random / child_process / LLM SDK（Zone B 全域继续适用）
  *   注释行不参与匹配（文件头"不做什么"禁令文本本身含被禁词，属于文档而非代码）。
  */
 
@@ -119,6 +122,9 @@ for (const path of walk(QUANT)) {
   if (inAgent) {
     scanZoneCImports(path, rel);
     scan(path, ZONE_C_RUNTIME, "zoneC-purity");
+  } else if (/^quant[/\\]data[/\\]fetch-/.test(rel)) {
+    // Zone D：一次性抓取脚本是 agent 之外唯一的 fetch 豁免面。
+    scan(path, [/\bMath\.random\b/], "zoneD-purity");
   } else {
     scan(path, ZONE_B_NET_ENV, "zoneB-net-env");
   }

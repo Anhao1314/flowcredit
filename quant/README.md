@@ -20,6 +20,9 @@ quant/
   risk/guard-v001.js       纯守卫（回撤/单日波动/历史长度限额 → pass|halt，fail-closed）
   pipeline.js              固定管线 data→signal→risk→eval + 白名单/禁入字段剥离
   data/dataset-v001.json   冻结合成数据集（LCG seed=20261102，130 交易日，nature: synthetic_fixture）
+  data/dataset-v002.json   冻结真实数据快照（BTC-USDT 日线 260 根，OKX，nature: real_market_data）
+  data/fetch-btc-daily.js  一次性抓取脚本（手动运行，全仓唯一 agent 外触网面，Zone D）
+  data/quality-gates.js    数据质量门禁（纯函数：日期序/连续性/正值/单日波动闸）
   data/injections-v001.json 冻结注入组（看涨/看跌/混合）
   data/agent-scripts-v001.json 冻结 scripted 模型场景（含恶意夹具，供离线治理测试）
   strategy/rules-v002.js   候选仓位规则注册表（3 族 × 2 参数变体，纯函数，参数冻结于文件内）
@@ -71,9 +74,20 @@ node quant/agent/cli.js repl --consent                           # 交互模式
 
 冻结基线（净口径，fixture 上实测，**不构成任何策略结论**）：全段 pp-Sharpe −0.1796 ~ +0.0532（6 组两两不同，std=0.0967）；选中 composite-percentile-a（pp +0.0532），DSR=0.2705（SR₀=0.1257，n=69）。IS 段 T5/T6 Sharpe 为 null（仅 1 次翻转→零方差），如实报告为 n/a。规则/参数/成本模型任何变更：升版本 + 更新 golden + **人工 review 硬门禁**。
 
+## 阶段 2 数据层（quant-dataset/v0.0.2，2026-11-06）
+
+```sh
+node quant/data/fetch-btc-daily.js          # 手动运行；OKX 主源，失败降级 CoinGecko
+```
+
+- **快照冻结**：`dataset-v002.json` = BTC-USDT 日线收盘 260 根（2026-02-18..2026-11-04，仅已收盘棒，point-in-time）。抓取与回测严格分离——快照落盘后一切评估照旧离线。
+- **质量门禁**（`quality-gates/v0.0.2`，纯函数）：日期严格升序且唯一、24/7 无日历缺口、close 正且有限、单日 |变动| ≤ 25%（行业 10% 基线按 crypto 放宽并记录）；任一 critical → 拒收不落盘。本快照实测 PASS（最大单日波动 8.37%）。
+- **真实数据上的权威结果**（不构成任何策略结论）：signalScore=36.2481；**守卫在真实数据上触发 halt**（maxDrawdown 28.54% > 25% 冻结限额 → decisionStatus=blocked，breach=DRAWDOWN_LIMIT_EXCEEDED）；规则净口径 pp-Sharpe −0.0281 ~ +0.0416（6 组两两不同），选中 T2 sma-cross-b，DSR=0.5522（n=199，IS/OOS=121/78）。
+- 刷新数据 = 重跑 fetch + `fetchedAtUtc` 更新 + dataVersion 升级 + golden 重算 + **人工 review 硬门禁**。
+
 ## 在完整量化系统中的定位
 
-行业七层（数据设施 → 策略引擎 → 风控 → 组合 → 执行 EMS → 订单 OMS → 监控）中，本仓库覆盖**策略引擎（②）+ 事前风控（③前半）+ 回测方法论（DSR/trials）+ 审计指纹**，**永远不进入** 执行（EMS）与订单（OMS）层。agent 定位：**研究层只读解释器**——比 RD-Agent(Q)（自动写因子代码）保守一级，比 TradingAgents（多角色交易决策）保守两级。当前最大缺口是真实数据层与成本模型（阶段 2 候选）。
+行业七层（数据设施 → 策略引擎 → 风控 → 组合 → 执行 EMS → 订单 OMS → 监控）中，本仓库覆盖**数据设施最小可用（快照+门禁，①）+ 策略引擎（②）+ 事前风控（③前半）+ 回测方法论（DSR/trials）+ 审计指纹**，**永远不进入** 执行（EMS）与订单（OMS）层。agent 定位：**研究层只读解释器**——比 RD-Agent(Q)（自动写因子代码）保守一级，比 TradingAgents（多角色交易决策）保守两级。剩余缺口：多市场/复权/实时性、成本模型校准、会话记忆与引用结构（0.2.1 候选）。
 
 ## 运行
 

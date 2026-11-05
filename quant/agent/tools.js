@@ -13,6 +13,7 @@
 import { runPipeline } from "../pipeline.js";
 import { computeSignals } from "../signal/engine-v001.js";
 import { evaluateGuard } from "../risk/guard-v001.js";
+import { runQualityGates } from "../data/quality-gates.js";
 import {
   strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe,
   trailingComponents, METRICS_BASIS
@@ -102,6 +103,15 @@ export function createToolRegistry({ dataset, trials } = {}) {
         const trial = trials.trials.find(item => item.trialId === args.trialId);
         if (!trial) throw new TypeError(`unknown trialId: ${args.trialId}`);
         return metricsRow(series, trial);
+      }
+    },
+    {
+      name: "data_quality",
+      description: "Run deterministic data-quality gates (date order/uniqueness/continuity, positive finite closes, daily-move limit) over the frozen dataset series and return findings and stats.",
+      parameters: {},
+      execute(args) {
+        assertArgs(args, []);
+        return runQualityGates(series);
       }
     }
   ];
