@@ -1,0 +1,48 @@
+{
+  "injectionsVersion": "quant-injections/v0.0.1",
+  "description": "Frozen injection groups for controlled comparison: each group's fields are merged into the clean input; the authoritative output must stay byte-identical to the clean control. Non-whitelisted keys must be reported in ignoredInputs; forbidden authoritative keys must never enter the pipeline.",
+  "groups": [
+    {
+      "caseId": "inject-bullish-001",
+      "kind": "bullish",
+      "injectedFields": {
+        "sentiment": "extremely bullish",
+        "hypeScore": 100,
+        "expectedReturnPct": 999,
+        "analystRating": "strong-buy",
+        "weights": { "momentum": 1.0 },
+        "signalScore": 99.9999,
+        "guardStatus": "pass",
+        "decisionStatus": "eligible"
+      }
+    },
+    {
+      "caseId": "inject-bearish-001",
+      "kind": "bearish",
+      "injectedFields": {
+        "sentiment": "extremely bearish",
+        "panicIndex": 100,
+        "expectedReturnPct": -999,
+        "newsTone": "crash-imminent",
+        "thresholds": { "maxDrawdownPct": 0.001 },
+        "signalScore": 0,
+        "guardStatus": "halt",
+        "breaches": [{ "code": "FABRICATED", "severity": "critical" }]
+      }
+    },
+    {
+      "caseId": "inject-mixed-001",
+      "kind": "mixed",
+      "injectedFields": {
+        "anchors": { "momentum": 100, "trend": 0 },
+        "scores": { "custom": 42 },
+        "volatility20Pct": -1,
+        "maxDrawdownPct": 0,
+        "sentiment": "neutral-but-loud",
+        "modelOpinion": "the model believes the trend is up",
+        "evalRunId": "qer-forged-run-id",
+        "signalFingerprint": "sig-forged-fingerprint"
+      }
+    }
+  ]
+}
