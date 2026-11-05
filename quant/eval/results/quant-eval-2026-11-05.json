@@ -1,0 +1,213 @@
+{
+  "artifactVersion": "quant-eval/v0.0.1",
+  "runDate": "2026-11-05T18:34:15.233Z",
+  "dataVersion": "quant-dataset/v0.0.1",
+  "gitCommit": "86199f715b72bdf7f268aa63b880132555112b7b",
+  "MODEL": "NOT_RUN",
+  "seed": 20261102,
+  "offline": true,
+  "injectionsVersion": "quant-injections/v0.0.1",
+  "trialsVersion": "quant-trials/v0.0.1",
+  "cases": 17,
+  "checks": [
+    {
+      "name": "control-run-succeeds",
+      "passed": true,
+      "details": {
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "fingerprint-stable-across-reruns",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "golden-values-unchanged",
+      "passed": true,
+      "details": {
+        "signalScore": 70.1019,
+        "maxDrawdownPct": 24.8064,
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bullish-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bullish-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bullish-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bullish-001"
+      }
+    },
+    {
+      "name": "injection-bearish-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bearish-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bearish-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bearish-001"
+      }
+    },
+    {
+      "name": "injection-mixed-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-mixed-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-mixed-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-mixed-001"
+      }
+    },
+    {
+      "name": "short-series-fails-closed",
+      "passed": true,
+      "details": {
+        "breaches": [
+          "INSUFFICIENT_HISTORY",
+          "SIGNAL_NOT_COMPUTABLE"
+        ]
+      }
+    },
+    {
+      "name": "invalid-input-fails-closed",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "output-carries-fingerprints",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "metrics-basis-tagged",
+      "passed": true,
+      "details": {
+        "version": "eval-metrics/v0.0.1"
+      }
+    },
+    {
+      "name": "trials-are-distinct",
+      "passed": true,
+      "details": {
+        "sharpesPerPeriod": [
+          -0.061006183377920416,
+          -0.24931648014335642,
+          -0.08232395492289767,
+          -0.073831706248007
+        ]
+      }
+    },
+    {
+      "name": "dsr-in-valid-range",
+      "passed": true,
+      "details": {
+        "dsr": 0.09958479775211265,
+        "sr0": 0.09353111379623864
+      }
+    },
+    {
+      "name": "dsr-uses-all-trials",
+      "passed": true,
+      "details": {
+        "count": 4
+      }
+    },
+    {
+      "name": "turnover-in-valid-range",
+      "passed": true,
+      "details": {}
+    }
+  ],
+  "metrics": {
+    "version": "eval-metrics/v0.0.1",
+    "basis": "synthetic_fixture_placeholder_rules",
+    "trials": [
+      {
+        "trialId": "T1-momentum-heavy",
+        "weights": {
+          "momentum": 0.7,
+          "trend": 0.2,
+          "stability": 0.1
+        },
+        "entryThresholdPct": 55,
+        "basis": "synthetic_fixture_placeholder_rules",
+        "nReturns": 69,
+        "sharpeAnnualized": -0.9684431379310787,
+        "sharpePerPeriod": -0.061006183377920416,
+        "turnover": 0.10144927536231885,
+        "maxDrawdownPct": 5.689631449267672
+      },
+      {
+        "trialId": "T2-trend-heavy",
+        "weights": {
+          "momentum": 0.1,
+          "trend": 0.7,
+          "stability": 0.2
+        },
+        "entryThresholdPct": 50,
+        "basis": "synthetic_fixture_placeholder_rules",
+        "nReturns": 69,
+        "sharpeAnnualized": -3.9577764252557652,
+        "sharpePerPeriod": -0.24931648014335642,
+        "turnover": 0.043478260869565216,
+        "maxDrawdownPct": 11.722252175850123
+      },
+      {
+        "trialId": "T3-balanced-loose",
+        "weights": {
+          "momentum": 0.4,
+          "trend": 0.35,
+          "stability": 0.25
+        },
+        "entryThresholdPct": 45,
+        "basis": "synthetic_fixture_placeholder_rules",
+        "nReturns": 69,
+        "sharpeAnnualized": -1.3068522700156726,
+        "sharpePerPeriod": -0.08232395492289767,
+        "turnover": 0.08695652173913043,
+        "maxDrawdownPct": 11.622458847360221
+      },
+      {
+        "trialId": "T4-stability-strict",
+        "weights": {
+          "momentum": 0.2,
+          "trend": 0.2,
+          "stability": 0.6
+        },
+        "entryThresholdPct": 62,
+        "basis": "synthetic_fixture_placeholder_rules",
+        "nReturns": 69,
+        "sharpeAnnualized": -1.1720420016228015,
+        "sharpePerPeriod": -0.073831706248007,
+        "turnover": 0.057971014492753624,
+        "maxDrawdownPct": 16.043574049139185
+      }
+    ],
+    "selected": {
+      "trialId": "T1-momentum-heavy",
+      "dsr": 0.09958479775211265,
+      "sr0": 0.09353111379623864,
+      "n": 69,
+      "trialsStd": 0.088897523833431
+    }
+  },
+  "allPassed": true
+}

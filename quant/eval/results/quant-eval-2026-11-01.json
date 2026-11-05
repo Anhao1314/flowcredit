@@ -1,0 +1,100 @@
+{
+  "artifactVersion": "quant-eval/v0.0.1",
+  "runDate": "2026-11-01T17:58:09.298Z",
+  "dataVersion": "quant-dataset/v0.0.1",
+  "gitCommit": "86199f715b72bdf7f268aa63b880132555112b7b",
+  "MODEL": "NOT_RUN",
+  "seed": 20261102,
+  "offline": true,
+  "injectionsVersion": "quant-injections/v0.0.1",
+  "cases": 12,
+  "checks": [
+    {
+      "name": "control-run-succeeds",
+      "passed": true,
+      "details": {
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "fingerprint-stable-across-reruns",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "golden-values-unchanged",
+      "passed": true,
+      "details": {
+        "signalScore": 70.1019,
+        "maxDrawdownPct": 24.8064,
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bullish-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bullish-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bullish-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bullish-001"
+      }
+    },
+    {
+      "name": "injection-bearish-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bearish-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bearish-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bearish-001"
+      }
+    },
+    {
+      "name": "injection-mixed-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-mixed-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-mixed-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-mixed-001"
+      }
+    },
+    {
+      "name": "short-series-fails-closed",
+      "passed": true,
+      "details": {
+        "breaches": [
+          "INSUFFICIENT_HISTORY",
+          "SIGNAL_NOT_COMPUTABLE"
+        ]
+      }
+    },
+    {
+      "name": "invalid-input-fails-closed",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "output-carries-fingerprints",
+      "passed": true,
+      "details": {}
+    }
+  ],
+  "allPassed": true
+}

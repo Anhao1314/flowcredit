@@ -1,0 +1,11 @@
+{
+  "trialsVersion": "quant-trials/v0.0.1",
+  "basis": "synthetic_fixture_placeholder_rules",
+  "description": "Frozen trial grid for Deflated Sharpe correction: 4 genuinely distinct configurations (signal weight combinations x entry thresholds). Every trial is scored on the same frozen dataset; variance across trial Sharpes feeds DSR eq.(4). Duplicating one configuration N times is forbidden and rejected at runtime (variance<=0 -> null). Config changes require trialsVersion bump + human review.",
+  "trials": [
+    { "trialId": "T1-momentum-heavy",  "weights": { "momentum": 0.70, "trend": 0.20, "stability": 0.10 }, "entryThresholdPct": 55 },
+    { "trialId": "T2-trend-heavy",     "weights": { "momentum": 0.10, "trend": 0.70, "stability": 0.20 }, "entryThresholdPct": 50 },
+    { "trialId": "T3-balanced-loose",  "weights": { "momentum": 0.40, "trend": 0.35, "stability": 0.25 }, "entryThresholdPct": 45 },
+    { "trialId": "T4-stability-strict","weights": { "momentum": 0.20, "trend": 0.20, "stability": 0.60 }, "entryThresholdPct": 62 }
+  ]
+}
