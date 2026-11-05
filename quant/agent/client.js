@@ -22,7 +22,8 @@ export function createAgentClient(options = {}) {
   const baseUrl = String(options.baseUrl || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
   const apiKey = options.apiKey !== undefined ? options.apiKey : process.env.DEEPSEEK_API_KEY;
   const transport = options.transport || globalThis.fetch;
-  const timeoutMs = options.timeoutMs || 30_000;
+  const envTimeout = Number(process.env.QUANT_AGENT_TIMEOUT_MS);
+  const timeoutMs = options.timeoutMs || (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 30_000);
   if (typeof transport !== "function") throw new TypeError("transport must be a fetch-like function");
 
   async function chat({ messages, tools = [] }) {
