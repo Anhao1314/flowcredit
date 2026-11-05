@@ -4,7 +4,8 @@
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 不是纯函数的逻辑不存在：不读环境变量、不用随机数、不读时钟（同输入永远同输出）。
  *   2. 不调用任何 LLM、不 import 任何 LLM SDK、不 import agent/src/（含 harness.js）。
- *   3. 不发起网络请求；本文件不 import 任何模块（零依赖，仅标准算术）。
+ *   3. 不发起网络请求；唯一 import 是 quant/strategy/rules-v002.js（规则注册表，纯函数），
+ *      方向单向：eval → strategy；signal//risk/ 永远不得反向读取本文件。
  *   4. 只能被 quant/eval/ 报告层调用；不得被 quant/signal/ 或 quant/risk/ 读取，
  *      不得向权威管线回写任何值——本层输出一律带 "basis" 标记，仅供参考。
  *   5. 所有仓位/阈值常量均为占位实现（PLACEHOLDER 注释标明），不构成任何真实策略结论。
@@ -24,8 +25,27 @@
  *   - 注意：PSR/DSR 内部使用与收益同频率的未年化 SR；年化值仅作展示。
  */
 
-export const METRICS_VERSION = "eval-metrics/v0.0.1";
+import { getRule } from "../strategy/rules-v002.js";
+
+export const METRICS_VERSION = "eval-metrics/v0.0.2";
 export const METRICS_BASIS = "synthetic_fixture_placeholder_rules";
+
+// 成本模型（冻结常量，阶段 1）：单边成本 = (佣金 + 滑点) bps，按仓位变动幅度计提在兑现收益的棒上。
+// 数值为占位假设（synthetic fixture 无真实微观结构），修改需走 promotion 人工 review。
+export const COST_MODEL_V002 = Object.freeze({ commissionBps: 2, slippageBps: 5 });
+export const COST_ONE_SIDE_RATE_V002 = (COST_MODEL_V002.commissionBps + COST_MODEL_V002.slippageBps) / 10000;
+
+// 样本内外划分（冻结比例）：按棒数 70/30 切分；报告层在因果回测序列上切分 returns，
+// 规则本身始终只使用 ≤i 的数据（无前视），因此整段计算后切分与分段重算等价。
+export const SPLIT_FRACTION_V002 = 0.7;
+
+/** 返回全段 returns 的样本内/外切分点：{ isCount, oosCount, splitBarIndex, splitDate } 由调用方传入 series 日期。 */
+export function splitPoint(seriesLength, startIndex = BACKTEST_PARAMS_V001.warmupBars, trainFraction = SPLIT_FRACTION_V002) {
+  if (!Number.isInteger(seriesLength) || seriesLength < 2) throw new TypeError("seriesLength must be an integer >= 2");
+  const cut = Math.max(1, Math.floor(seriesLength * trainFraction));
+  const firstOosReturnIndex = Math.max(0, cut - startIndex - 1);
+  return { cut, firstOosReturnIndex, isCount: firstOosReturnIndex, oosCount: Math.max(0, seriesLength - startIndex - 1 - firstOosReturnIndex) };
+}
 
 // trials 方差下限：同配置复制 N 份时浮点均值舍入会残留 ~1e-33 的伪方差，
 // 仅用 >0 判定会被击穿（quant-metrics.test.js 锁定此情形）；1e-12 远低于真实差异、远高于噪声。
@@ -38,7 +58,8 @@ export const BACKTEST_PARAMS_V001 = Object.freeze({
   riskFreeAnnualPct: 0   // PLACEHOLDER 副参数：无风险利率固定为 0
 });
 
-// PLACEHOLDER: 仅用于让收益序列可计算，阶段 1 将被替换，不可用于任何真实策略结论。
+// SUPERSEDED（阶段 1，quant-rules/v0.0.2 取代）：legacy 占位规则保留仅为冻结 golden 可复现对照，
+// 路径走 strategyReturns 的无 ruleId 分支（毛口径）。不可用于任何真实策略结论。
 export const POSITION_RULE_V001 = Object.freeze({
   rule: "binary-composite-threshold",
   description: "position=1 若当日综合分 >= trial.entryThresholdPct，否则 0；T+1 执行（无前视）",
@@ -91,13 +112,37 @@ export function trailingComponents(closes, index) {
 }
 
 /**
- * 固定仓位规则回测（PLACEHOLDER，见 POSITION_RULE_V001）。
- * 输入：series[{date,close}]（已校验）、trial{weights,entryThresholdPct}。
- * 输出：{ returns[], positions[], startIndex }；returns[i] = positions[i-1] × 资产收益（T+1，无前视）。
+ * 回测收益序列（v0.0.2 双路由）：
+ *   - trial.ruleId 存在 → 走 quant/strategy/rules-v002.js 注册规则（净口径：含成本模型）；
+ *   - 否则 → legacy v001 占位路径（weights+entryThresholdPct，毛口径，与冻结 golden 逐位一致，
+ *     仅供可复现性对照；已被 quant-rules/v0.0.2 取代 superseded）。
+ * 共同约定：T+1 执行（无前视）；positions[i] 为 bar startIndex+i 的决策仓位，作用于下一棒收益。
+ * 返回：{ returns[], positions[], startIndex, ruleId?, netOfCost?, costOneSideRate? }。
  */
 export function strategyReturns(series, trial) {
   if (!Array.isArray(series) || series.length < BACKTEST_PARAMS_V001.warmupBars + 2) {
     throw new TypeError(`strategyReturns needs at least ${BACKTEST_PARAMS_V001.warmupBars + 2} bars`);
+  }
+  if (trial && trial.ruleId !== undefined) {
+    const rule = getRule(trial.ruleId);
+    if (!rule) throw new TypeError(`unknown ruleId: ${trial.ruleId}`);
+    const closes = series.map(row => row?.close);
+    if (closes.some(value => !finite(value) || value <= 0)) throw new TypeError("closes must be positive finite numbers");
+    const desired = rule.positions(closes);
+    const startIndex = BACKTEST_PARAMS_V001.warmupBars;
+    const positions = desired.slice(startIndex);
+    const returns = [];
+    let prevEarned = 0;
+    for (let i = 1; i < positions.length; i += 1) {
+      const assetReturn = closes[startIndex + i] / closes[startIndex + i - 1] - 1;
+      const tradeCost = Math.abs(positions[i - 1] - prevEarned) * COST_ONE_SIDE_RATE_V002;
+      returns.push(positions[i - 1] * assetReturn - tradeCost);
+      prevEarned = positions[i - 1];
+    }
+    return {
+      returns, positions, startIndex,
+      ruleId: trial.ruleId, netOfCost: true, costOneSideRate: COST_ONE_SIDE_RATE_V002
+    };
   }
   const { weights, entryThresholdPct } = trial || {};
   const weightSum = (weights?.momentum ?? NaN) + (weights?.trend ?? NaN) + (weights?.stability ?? NaN);

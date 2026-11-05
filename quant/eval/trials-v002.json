@@ -1,0 +1,13 @@
+{
+  "trialsVersion": "quant-trials/v0.0.2",
+  "basis": "synthetic_fixture_placeholder_rules",
+  "description": "Frozen trial grid for phase 1: 6 genuinely distinct registered rules (3 families x 2 frozen param variants, see quant/strategy/rules-v002.js). Metrics are net of the frozen cost model (commission 2bps + slippage 5bps per unit turnover). Duplicating a rule N times is rejected at runtime (variance<=epsilon -> null). Grid changes require trialsVersion bump + rules version bump + human review.",
+  "trials": [
+    { "trialId": "T1-sma-cross-a",     "ruleId": "sma-cross-hysteresis-a" },
+    { "trialId": "T2-sma-cross-b",     "ruleId": "sma-cross-hysteresis-b" },
+    { "trialId": "T3-momentum-cd-a",   "ruleId": "momentum-cooldown-a" },
+    { "trialId": "T4-momentum-cd-b",   "ruleId": "momentum-cooldown-b" },
+    { "trialId": "T5-composite-pct-a", "ruleId": "composite-percentile-a" },
+    { "trialId": "T6-composite-pct-b", "ruleId": "composite-percentile-b" }
+  ]
+}

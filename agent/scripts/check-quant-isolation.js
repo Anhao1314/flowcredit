@@ -79,7 +79,7 @@ function scanZoneAImports(path) {
   });
 }
 
-const ZONE_A_PATHS = new Set([join(QUANT, "signal"), join(QUANT, "risk"), join(QUANT, "pipeline.js")]);
+const ZONE_A_PATHS = new Set([join(QUANT, "signal"), join(QUANT, "risk"), join(QUANT, "strategy"), join(QUANT, "pipeline.js")]);
 const ZONE_A_RUNTIME = [/\bprocess\.env\b/, /\bMath\.random\b/, /\bnew\s+Date\b/, /\bDate\.now\b/, /\bfetch\s*\(/, /\bWebSocket\b/];
 const ZONE_B_FORBIDDEN = [
   /@deepseek-ai/, /agent[/\\]src/, /harness\.js/,

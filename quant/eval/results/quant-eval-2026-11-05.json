@@ -1,14 +1,14 @@
 {
   "artifactVersion": "quant-eval/v0.0.1",
-  "runDate": "2026-11-05T18:34:15.233Z",
+  "runDate": "2026-11-05T19:15:01.026Z",
   "dataVersion": "quant-dataset/v0.0.1",
-  "gitCommit": "86199f715b72bdf7f268aa63b880132555112b7b",
+  "gitCommit": "37d5073a6ca2fbccc4bc64fd067e895469ca290e",
   "MODEL": "NOT_RUN",
   "seed": 20261102,
   "offline": true,
   "injectionsVersion": "quant-injections/v0.0.1",
-  "trialsVersion": "quant-trials/v0.0.1",
-  "cases": 17,
+  "trialsVersion": "quant-trials/v0.0.2",
+  "cases": 20,
   "checks": [
     {
       "name": "control-run-succeeds",
@@ -100,7 +100,7 @@
       "name": "metrics-basis-tagged",
       "passed": true,
       "details": {
-        "version": "eval-metrics/v0.0.1"
+        "version": "eval-metrics/v0.0.2"
       }
     },
     {
@@ -108,10 +108,12 @@
       "passed": true,
       "details": {
         "sharpesPerPeriod": [
-          -0.061006183377920416,
-          -0.24931648014335642,
-          -0.08232395492289767,
-          -0.073831706248007
+          -0.17957770052033098,
+          -0.10313023061758604,
+          0.045748027993513095,
+          -0.10185633401569233,
+          0.05315567046105351,
+          0.019389047554137565
         ]
       }
     },
@@ -119,94 +121,155 @@
       "name": "dsr-in-valid-range",
       "passed": true,
       "details": {
-        "dsr": 0.09958479775211265,
-        "sr0": 0.09353111379623864
+        "dsr": 0.27046094029609197,
+        "sr0": 0.12569920450157213
       }
     },
     {
       "name": "dsr-uses-all-trials",
       "passed": true,
       "details": {
-        "count": 4
+        "count": 6
       }
     },
     {
       "name": "turnover-in-valid-range",
       "passed": true,
       "details": {}
+    },
+    {
+      "name": "rules-registered",
+      "passed": true,
+      "details": {
+        "rules": 6
+      }
+    },
+    {
+      "name": "costs-applied",
+      "passed": true,
+      "details": {
+        "costModel": {
+          "commissionBps": 2,
+          "slippageBps": 5
+        }
+      }
+    },
+    {
+      "name": "split-covers-series",
+      "passed": true,
+      "details": {
+        "cut": 91,
+        "isCount": 30,
+        "oosCount": 39
+      }
     }
   ],
   "metrics": {
-    "version": "eval-metrics/v0.0.1",
+    "version": "eval-metrics/v0.0.2",
     "basis": "synthetic_fixture_placeholder_rules",
+    "costModel": {
+      "commissionBps": 2,
+      "slippageBps": 5
+    },
+    "split": {
+      "cut": 91,
+      "firstOosReturnIndex": 30,
+      "isCount": 30,
+      "oosCount": 39
+    },
     "trials": [
       {
-        "trialId": "T1-momentum-heavy",
-        "weights": {
-          "momentum": 0.7,
-          "trend": 0.2,
-          "stability": 0.1
-        },
-        "entryThresholdPct": 55,
+        "trialId": "T1-sma-cross-a",
+        "ruleId": "sma-cross-hysteresis-a",
         "basis": "synthetic_fixture_placeholder_rules",
+        "netOfCost": true,
+        "costOneSideRate": 0.0007,
         "nReturns": 69,
-        "sharpeAnnualized": -0.9684431379310787,
-        "sharpePerPeriod": -0.061006183377920416,
-        "turnover": 0.10144927536231885,
-        "maxDrawdownPct": 5.689631449267672
-      },
-      {
-        "trialId": "T2-trend-heavy",
-        "weights": {
-          "momentum": 0.1,
-          "trend": 0.7,
-          "stability": 0.2
-        },
-        "entryThresholdPct": 50,
-        "basis": "synthetic_fixture_placeholder_rules",
-        "nReturns": 69,
-        "sharpeAnnualized": -3.9577764252557652,
-        "sharpePerPeriod": -0.24931648014335642,
+        "sharpeAnnualized": -2.850707619537781,
+        "sharpePerPeriod": -0.17957770052033098,
+        "isSharpePerPeriod": -0.2372897194380329,
+        "oosSharpePerPeriod": -0.16012815380508713,
         "turnover": 0.043478260869565216,
-        "maxDrawdownPct": 11.722252175850123
+        "maxDrawdownPct": 10.646605367196688
       },
       {
-        "trialId": "T3-balanced-loose",
-        "weights": {
-          "momentum": 0.4,
-          "trend": 0.35,
-          "stability": 0.25
-        },
-        "entryThresholdPct": 45,
+        "trialId": "T2-sma-cross-b",
+        "ruleId": "sma-cross-hysteresis-b",
         "basis": "synthetic_fixture_placeholder_rules",
+        "netOfCost": true,
+        "costOneSideRate": 0.0007,
         "nReturns": 69,
-        "sharpeAnnualized": -1.3068522700156726,
-        "sharpePerPeriod": -0.08232395492289767,
-        "turnover": 0.08695652173913043,
-        "maxDrawdownPct": 11.622458847360221
+        "sharpeAnnualized": -1.6371416572012312,
+        "sharpePerPeriod": -0.10313023061758604,
+        "isSharpePerPeriod": -0.1646099586607087,
+        "oosSharpePerPeriod": -0.03304701266755834,
+        "turnover": 0.028985507246376812,
+        "maxDrawdownPct": 8.07307782561267
       },
       {
-        "trialId": "T4-stability-strict",
-        "weights": {
-          "momentum": 0.2,
-          "trend": 0.2,
-          "stability": 0.6
-        },
-        "entryThresholdPct": 62,
+        "trialId": "T3-momentum-cd-a",
+        "ruleId": "momentum-cooldown-a",
         "basis": "synthetic_fixture_placeholder_rules",
+        "netOfCost": true,
+        "costOneSideRate": 0.0007,
         "nReturns": 69,
-        "sharpeAnnualized": -1.1720420016228015,
-        "sharpePerPeriod": -0.073831706248007,
+        "sharpeAnnualized": 0.7262274302547412,
+        "sharpePerPeriod": 0.045748027993513095,
+        "isSharpePerPeriod": -0.10799957343356875,
+        "oosSharpePerPeriod": 0.08287080347394782,
         "turnover": 0.057971014492753624,
-        "maxDrawdownPct": 16.043574049139185
+        "maxDrawdownPct": 6.304817652573173
+      },
+      {
+        "trialId": "T4-momentum-cd-b",
+        "ruleId": "momentum-cooldown-b",
+        "basis": "synthetic_fixture_placeholder_rules",
+        "netOfCost": true,
+        "costOneSideRate": 0.0007,
+        "nReturns": 69,
+        "sharpeAnnualized": -1.616919175573505,
+        "sharpePerPeriod": -0.10185633401569233,
+        "isSharpePerPeriod": -0.19745054953519453,
+        "oosSharpePerPeriod": -0.05605134486437507,
+        "turnover": 0.11594202898550725,
+        "maxDrawdownPct": 6.8587975557251175
+      },
+      {
+        "trialId": "T5-composite-pct-a",
+        "ruleId": "composite-percentile-a",
+        "basis": "synthetic_fixture_placeholder_rules",
+        "netOfCost": true,
+        "costOneSideRate": 0.0007,
+        "nReturns": 69,
+        "sharpeAnnualized": 0.843820108877098,
+        "sharpePerPeriod": 0.05315567046105351,
+        "isSharpePerPeriod": null,
+        "oosSharpePerPeriod": 0.0703802590408417,
+        "turnover": 0.014492753623188406,
+        "maxDrawdownPct": 2.509454797875322
+      },
+      {
+        "trialId": "T6-composite-pct-b",
+        "ruleId": "composite-percentile-b",
+        "basis": "synthetic_fixture_placeholder_rules",
+        "netOfCost": true,
+        "costOneSideRate": 0.0007,
+        "nReturns": 69,
+        "sharpeAnnualized": 0.30779158791991895,
+        "sharpePerPeriod": 0.019389047554137565,
+        "isSharpePerPeriod": null,
+        "oosSharpePerPeriod": 0.025647322280162872,
+        "turnover": 0.043478260869565216,
+        "maxDrawdownPct": 3.454600457793111
       }
     ],
     "selected": {
-      "trialId": "T1-momentum-heavy",
-      "dsr": 0.09958479775211265,
-      "sr0": 0.09353111379623864,
+      "trialId": "T5-composite-pct-a",
+      "ruleId": "composite-percentile-a",
+      "dsr": 0.27046094029609197,
+      "sr0": 0.12569920450157213,
       "n": 69,
-      "trialsStd": 0.088897523833431
+      "trialsStd": 0.09668122532503316
     }
   },
   "allPassed": true

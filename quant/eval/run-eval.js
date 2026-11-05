@@ -18,7 +18,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
 
 const { runPipeline } = await import(join(QUANT, "pipeline.js"));
-const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, METRICS_VERSION, METRICS_BASIS } = await import(join(QUANT, "eval", "metrics.js"));
+const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, splitPoint, COST_MODEL_V002, COST_ONE_SIDE_RATE_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(QUANT, "eval", "metrics.js"));
+const { listRules } = await import(join(QUANT, "strategy", "rules-v002.js"));
 const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v001.json"), "utf8"));
 const injections = JSON.parse(readFileSync(join(QUANT, "data", "injections-v001.json"), "utf8"));
 
@@ -74,16 +75,21 @@ check("output-carries-fingerprints",
   /^qer-[0-9a-f]{16}$/.test(control.authoritative.evalRunId),
   {});
 
-// ── 指标层（eval 报告层专用；不影响权威管线，输出全部带 basis 标记）──────────
-const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v001.json"), "utf8"));
+// ── 指标层（eval 报告层专用；不影响权威管线，输出全部带 basis 标记；净口径含成本）──
+const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json"), "utf8"));
+const sp = splitPoint(dataset.series.length);
 const trialMetrics = trials.trials.map(trial => {
   const backtest = strategyReturns(dataset.series, trial);
+  const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
+  const oos = backtest.returns.slice(sp.firstOosReturnIndex);
   return {
-    trialId: trial.trialId, weights: trial.weights, entryThresholdPct: trial.entryThresholdPct,
-    basis: METRICS_BASIS,
+    trialId: trial.trialId, ruleId: trial.ruleId,
+    basis: METRICS_BASIS, netOfCost: backtest.netOfCost === true, costOneSideRate: backtest.costOneSideRate,
     nReturns: backtest.returns.length,
     sharpeAnnualized: sharpeRatio(backtest.returns),
     sharpePerPeriod: sharpeRatio(backtest.returns, { annualize: false }),
+    isSharpePerPeriod: sharpeRatio(is, { annualize: false }),
+    oosSharpePerPeriod: sharpeRatio(oos, { annualize: false }),
     turnover: turnover(backtest.positions),
     maxDrawdownPct: maxDrawdownPct(backtest.returns)
   };
@@ -97,6 +103,9 @@ check("trials-are-distinct", dsr !== null && dsr.trials.std > 0, { sharpesPerPer
 check("dsr-in-valid-range", dsr !== null && dsr.dsr >= 0 && dsr.dsr <= 1, { dsr: dsr?.dsr, sr0: dsr?.sr0 });
 check("dsr-uses-all-trials", dsr !== null && dsr.trials.count === trials.trials.length, { count: dsr?.trials?.count });
 check("turnover-in-valid-range", trialMetrics.every(item => item.turnover !== null && item.turnover >= 0 && item.turnover <= 1), {});
+check("rules-registered", listRules().length >= 6 && trials.trials.every(trial => listRules().some(rule => rule.ruleId === trial.ruleId)), { rules: listRules().length });
+check("costs-applied", trialMetrics.every(item => item.netOfCost === true && item.costOneSideRate === COST_ONE_SIDE_RATE_V002), { costModel: COST_MODEL_V002 });
+check("split-covers-series", trialMetrics.every(item => sp.isCount + sp.oosCount === item.nReturns), { cut: sp.cut, isCount: sp.isCount, oosCount: sp.oosCount });
 
 const allPassed = checks.every(item => item.passed);
 const runDate = new Date().toISOString();
@@ -115,9 +124,12 @@ const artifact = {
   metrics: {
     version: METRICS_VERSION,
     basis: METRICS_BASIS,
+    costModel: COST_MODEL_V002,
+    split: { cut: sp.cut, firstOosReturnIndex: sp.firstOosReturnIndex, isCount: sp.isCount, oosCount: sp.oosCount },
     trials: trialMetrics,
     selected: {
       trialId: selectedMetric.trialId,
+      ruleId: selectedMetric.ruleId,
       dsr: dsr?.dsr ?? null,
       sr0: dsr?.sr0 ?? null,
       n: dsr?.n ?? null,

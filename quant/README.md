@@ -22,8 +22,10 @@ quant/
   data/dataset-v001.json   冻结合成数据集（LCG seed=20261102，130 交易日，nature: synthetic_fixture）
   data/injections-v001.json 冻结注入组（看涨/看跌/混合）
   data/agent-scripts-v001.json 冻结 scripted 模型场景（含恶意夹具，供离线治理测试）
-  eval/metrics.js          报告层指标（Sharpe/MaxDD/换手率/PSR/DSR，纯函数，全部输出带 basis 标记）
-  eval/trials-v001.json    冻结 trials 网格（4 组真正不同的配置，供 DSR 多重检验校正）
+  strategy/rules-v002.js   候选仓位规则注册表（3 族 × 2 参数变体，纯函数，参数冻结于文件内）
+  eval/metrics.js          报告层指标 v0.0.2（净口径含成本模型；Sharpe/MaxDD/换手率/PSR/DSR；IS/OOS 切分点）
+  eval/trials-v001.json    legacy 占位规则网格（冻结 golden 可复现对照，superseded）
+  eval/trials-v002.json    冻结 trials 网格（6 条注册规则，供 DSR 多重检验校正）
   eval/run-eval.js         离线评估（npm run eval）→ eval/results/*.json
   agent/client.js          DeepSeek REST 客户端（transport 可注入，零新依赖）
   agent/tools.js           封闭工具注册表（4 个确定性工具=权威白名单）
@@ -48,6 +50,26 @@ node quant/agent/cli.js repl --consent                           # 交互模式
 - **门禁与降级**：`modelConsent=false` 拒答不触网；缺 key/失败/超时/超步 → 确定性摘要；
 - **权威不变式**：agent 输出只存在于回答文本（注记层），测试用 deepEqual 锁死"会话前后权威零漂移"；
 - **可重放**：同输入+同 transport → 同输出（agent 层禁随机数与时钟）。
+
+在线验证记录：`ONLINE_MODEL=SMOKED` — kimi-k2.6（Moonshot REST，OpenAI 兼容，经 env 切换零代码改动）。
+2026-11-06 三项探测：① 基础对话 ✓；② 工具调用链路 ✓（模型引用数字与冻结 golden 逐位一致，38.7s）；
+③ 活体注入探测 ✓（模型拒绝伪造指令并复述边界）。超时治理路径在真实环境触发过一次并正确降级
+（`QUANT_AGENT_TIMEOUT_MS` env 可调，默认 30s）。密钥仅存于 gitignored `.env`，不入库不入日志。
+
+## 阶段 1 规则注册表（quant-rules/v0.0.2，2026-11-06）
+
+仓位规则全部冻结在 `strategy/rules-v002.js` 内；trials 网格中的"参数变体"以独立注册规则实现（保持纯函数不收外部参数）。回测口径：**净收益**（单边成本 = 佣金 2bps + 滑点 5bps，按仓位变动计提）；IS/OOS 按棒数 70/30 切分（因果回测序列上切分，无前视）。
+
+| ruleId | 规则 | rationale | 已知局限 |
+|---|---|---|---|
+| sma-cross-hysteresis-a | SMA20/60 交叉，入 +0.10% / 出 −0.50% | 迟滞带防震荡抖动 | 整体下行 fixture 中依赖反弹入场 |
+| sma-cross-hysteresis-b | SMA10/40 交叉，入 +0.05% / 出 −0.30% | 更短窗口更快响应 | 假信号更多 |
+| momentum-cooldown-a | 10 日动量 ±1.0%，冷却 5 根 | 抑制连续再入场 | 阈值硬边界、参数敏感 |
+| momentum-cooldown-b | 5 日动量 ±0.5%，冷却 8 根 | 更快入场 | 冷却期长度为占位选择 |
+| composite-percentile-a | 合成分 ≥ 自身 40 棒 70 分位 | 相对自身分布自适应 | 分位含当棒自参考 |
+| composite-percentile-b | 合成分 ≥ 自身 40 棒 60 分位 | 更高持仓比例 | 同上 |
+
+冻结基线（净口径，fixture 上实测，**不构成任何策略结论**）：全段 pp-Sharpe −0.1796 ~ +0.0532（6 组两两不同，std=0.0967）；选中 composite-percentile-a（pp +0.0532），DSR=0.2705（SR₀=0.1257，n=69）。IS 段 T5/T6 Sharpe 为 null（仅 1 次翻转→零方差），如实报告为 n/a。规则/参数/成本模型任何变更：升版本 + 更新 golden + **人工 review 硬门禁**。
 
 ## 在完整量化系统中的定位
 

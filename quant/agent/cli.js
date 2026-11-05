@@ -27,7 +27,7 @@ const QUANT = join(HERE, "..");
 
 function loadFrozen() {
   const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v001.json"), "utf8"));
-  const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v001.json"), "utf8"));
+  const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json"), "utf8"));
   return { dataset, trials };
 }
 
@@ -48,7 +48,7 @@ function render(result) {
   }
   process.stdout.write(`注记：${result.note}\n`);
 }
-const MAX_HINT = "≤4";
+const MAX_HINT = "4";
 
 function parseConsent(args) {
   const index = args.indexOf("--consent");
