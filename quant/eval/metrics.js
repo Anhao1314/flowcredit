@@ -10,19 +10,25 @@
  *      不得向权威管线回写任何值——本层输出一律带 "basis" 标记，仅供参考。
  *   5. 所有仓位/阈值常量均为占位实现（PLACEHOLDER 注释标明），不构成任何真实策略结论。
  *
- * 参考（供人工复核，公式编号按已发表版本，建议对照原文核实）：
- *   - PSR：Bailey & López de Prado (2012), "The Sharpe Ratio Efficient Frontier",
- *     Journal of Risk 15(2), eq. (7)：
- *       PSR(SR*) = Φ( (SR̂ − SR*)·√(n−1) / √(1 − γ₃·SR̂ + ((γ₄−1)/4)·SR̂²) )
- *     n=收益期数，γ₃=偏度，γ₄=原始峰度（正态=3），Φ=标准正态 CDF。
- *   - 期望最大 Sharpe：Bailey & López de Prado (2014), "The Deflated Sharpe Ratio:
- *     Correcting for Selection Bias, Backtest Overfitting and Non-Normality",
- *     Journal of Portfolio Management 40(5):94–107, eq. (4)：
- *       SR₀ = √(V[SR_n]) · ( (1−γ)·Z⁻¹(1 − 1/N) + γ·Z⁻¹(1 − 1/(N·e)) )
- *     γ=Euler–Mascheroni≈0.5772156649，e=Euler 数，Z⁻¹=标准正态分位函数，
- *     V[SR_n]=N 组 trials Sharpe 的方差。
- *   - DSR = PSR(SR₀)，即在 SR* = SR₀ 处求值（2014 论文 "The Deflated Sharpe Ratio" 一节）。
- *   - 注意：PSR/DSR 内部使用与收益同频率的未年化 SR；年化值仅作展示。
+ * 参考（2026-11-07 已对照 SSRN 2460551 / 2014-07-31 版论文原文逐项核实，作者 Snippet 1
+ * getExpMaxSR 代码与我们的公式逐符号一致）：
+ *   - PSR：Bailey & López de Prado [2012a], "The Sharpe Ratio Efficient Frontier",
+ *     Journal of Risk 15(2)（起源）；本文核实的表述是 DSR 论文的 Eq. (2) 内嵌式：
+ *       PSR(SR*) = Φ( (SR̂ − SR*)·√(T−1) / √(1 − γ₃·SR̂ + ((γ₄−1)/4)·SR̂²) )
+ *     T=收益期数，γ₃=偏度，γ₄=原始峰度（正态=3；(γ₄−1)/4 结构在正态下退化为 Lo(2002)
+ *     的 1+SR²/2，反证 γ₄ 必须是原始峰度而非超额峰度），Φ=标准正态 CDF。
+ *   - 期望最大 Sharpe：Bailey & López de Prado (2014), "The Deflated Sharpe Ratio",
+ *     SSRN 2460551, Eq. (1)（主文）/ Eq. (6)（附录 A.1 推导）：
+ *       E[max{SR̂}] = E[{SR̂}] + √(V[{SR̂}])·((1−γ)·Z⁻¹(1−1/N) + γ·Z⁻¹(1−1/(N·e)))
+ *   - DSR：同文 Eq. (2)：DSR = PSR(SR̂₀)，其中零假设（真实 SR=0）下 E[{SR̂}]=0，故
+ *       SR̂₀ = √(V[{SR̂}])·((1−γ)·Z⁻¹(1−1/N) + γ·Z⁻¹(1−1/(N·e)))
+ *     —— 本实现即此零假设形式（无均值项），与论文 Eq. (2) 一致。
+ *   - 已知保守偏差（诚实披露）：Eq. (1) 的 N 是"独立试验数"（附录 A.3 讨论非独立试验的
+ *     有效 N 估计）。我们的 6 条 trials 跑在同一数据集上、正相关 → 有效 N < 6 →
+ *     论文式折减应更小；本实现用名义 N=6，折减偏强（保守方向）。修正需实现有效 N
+ *     估计（A.3），列为阶段 3 候选。
+ *   - 注意：PSR/DSR 内部使用与收益同频率的未年化 SR（论文数值例明确 "non-annualized
+ *     (with 250 observations per year)"）；年化值仅作展示。
  */
 
 import { getRule } from "../strategy/rules-v002.js";
