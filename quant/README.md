@@ -48,11 +48,15 @@ node quant/agent/cli.js repl --consent                           # 交互模式
 
 设计原则（flowcredit 同款"agent 形式、确定性灵魂"）：
 
-- **工具即权威**：注册表只暴露 4 个确定性函数（`assess_frozen_dataset` / `signal_components` / `guard_check` / `trial_metrics`），模型的一切数字必须来自工具输出；
-- **有界循环**：单问工具轮次 ≤ `MAX_STEPS_V002=4`（冻结常量，代码强制）；
+- **工具即权威**：注册表只暴露 5 个确定性函数（`assess_frozen_dataset` / `signal_components` / `guard_check` / `trial_metrics` / `data_quality`），模型的一切数字必须来自工具输出；
+- **有界循环**：单问工具轮次 ≤ `MAX_STEPS_V002=4`（冻结常量，代码强制）；瞬时错误固定重试 ≤ `RETRY_BUDGET_V002=1` 次（配置类/场景耗尽类错误不重试）；
 - **门禁与降级**：`modelConsent=false` 拒答不触网；缺 key/失败/超时/超步 → 确定性摘要；
+- **会话记忆**：`sessionId` 启用 TTL 30 分钟的问答记忆（上限 100 会话 × 8 轮）——只存问答文本，不存工具结果（数字永远靠重新调用工具落地，防陈旧数字复述）；
+- **引用结构**：`citations` 只来自成功工具调用实际返回的 `evalRunId`/`signalFingerprint`，模型文本中的数字不构成引用；
+- **审计日志**：仅元数据 JSONL（问题/回答只存哈希），默认系统临时目录，`QUANT_AUDIT_DIR` 可覆盖，永不写入仓库；`audit.js` 是 agent 层唯一时钟岛；
 - **权威不变式**：agent 输出只存在于回答文本（注记层），测试用 deepEqual 锁死"会话前后权威零漂移"；
-- **可重放**：同输入+同 transport → 同输出（agent 层禁随机数与时钟）。
+- **可重放**：同输入+同 transport → 同输出（agent 层禁随机数与时钟，时钟仅限审计岛）；
+- **密钥配置**：`node quant/agent/set-key.js <key>` 写入 gitignored `.env`（掩码显示，不入库）。
 
 在线验证记录：`ONLINE_MODEL=SMOKED` — kimi-k2.6（Moonshot REST，OpenAI 兼容，经 env 切换零代码改动）。
 2026-11-06 三项探测：① 基础对话 ✓；② 工具调用链路 ✓（模型引用数字与冻结 golden 逐位一致，38.7s）；

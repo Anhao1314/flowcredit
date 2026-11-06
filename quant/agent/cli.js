@@ -70,14 +70,18 @@ async function main() {
     const consent = parseConsent(rest);
     process.stdout.write(`FlowCredit Quant 助手（${assistant.agentVersion}，modelConsent=${consent}）。输入问题，exit 退出。\n`);
     const rl = createInterface({ input: process.stdin, output: process.stdout });
+    let closed = false;
+    // 异步回答可能与后续输入的 exit 竞态：close 之后一律不再 prompt。
+    rl.on("close", () => { closed = true; });
+    const promptSafe = () => { if (!closed && !rl.closed) rl.prompt(); };
     rl.setPrompt("quant> ");
     rl.prompt();
     rl.on("line", async line => {
       const question = line.trim();
-      if (!question) { rl.prompt(); return; }
-      if (["exit", "quit"].includes(question.toLowerCase())) { rl.close(); return; }
+      if (!question) { promptSafe(); return; }
+      if (["exit", "quit"].includes(question.toLowerCase())) { closed = true; rl.close(); return; }
       render(await assistant.askQuant({ question, modelConsent: consent }));
-      rl.prompt();
+      promptSafe();
     });
     return;
   }

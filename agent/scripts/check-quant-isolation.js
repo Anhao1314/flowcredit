@@ -13,8 +13,9 @@
  *     - 禁止网络/env 面（agent/ 豁免，见 Zone C）：node:http(s) / node:dns / node:net / fetch / WebSocket / process.env / Math.random
  *     - child_process 仅允许出现在 quant/eval/run-eval.js（git rev-parse）与 quant/test/**（子进程探针）
  *   Zone C — quant/agent/**（对话式 agent，唯一被授权的触网面）：
- *     - import 白名单：相对引用 + node:fs + node:readline（仅 CLI 入口用）；其余一律违规（零新依赖）
- *     - 仍禁：Math.random / new Date / Date.now（可重放要求）
+ *     - import 白名单：相对引用 + node:fs/node:readline/node:path/node:url + node:crypto/node:os（审计用）；其余一律违规（零新依赖）
+ *     - 仍禁：Math.random / new Date / Date.now（可重放要求）——唯一豁免 audit.js
+ *       （审计时间戳与耗时需要时钟，"时钟岛"；其余文件一律禁）
  *     - 仍受 Zone B 全域规则约束（禁 @deepseek-ai SDK 包与其他 agent 框架）
  *   Zone D — quant/data/fetch-*.js（一次性数据抓取脚本，手动运行，不进 CI/agent）：
  *     - 唯一另一处允许 fetch 的文件；允许 new Date（fetchedAtUtc 需要）
@@ -94,7 +95,7 @@ const ZONE_B_NET_ENV = [
 ];
 // Zone C：agent/ 是唯一被授权的触网面；import 白名单外一律违规；仍禁随机与时钟（可重放）。
 const QUANT_AGENT_DIR = join(QUANT, "agent");
-const ZONE_C_IMPORT_ALLOWED = new Set(["node:fs", "node:readline", "node:path", "node:url"]);
+const ZONE_C_IMPORT_ALLOWED = new Set(["node:fs", "node:readline", "node:path", "node:url", "node:crypto", "node:os"]);
 const ZONE_C_RUNTIME = [/\bMath\.random\b/, /\bnew\s+Date\b/, /\bDate\.now\b/];
 
 function scanZoneCImports(path, rel) {
@@ -121,7 +122,9 @@ for (const path of walk(QUANT)) {
   if (ZONE_A_PATHS.has(path)) scan(path, ZONE_A_RUNTIME, "zoneA-purity");
   if (inAgent) {
     scanZoneCImports(path, rel);
-    scan(path, ZONE_C_RUNTIME, "zoneC-purity");
+    // audit.js 是 agent 层唯一时钟岛（审计时间戳/耗时）；其余文件仍全面禁时钟。
+    if (rel.endsWith("audit.js")) scan(path, [/\bMath\.random\b/], "zoneC-purity-audit");
+    else scan(path, ZONE_C_RUNTIME, "zoneC-purity");
   } else if (/^quant[/\\]data[/\\]fetch-/.test(rel)) {
     // Zone D：一次性抓取脚本是 agent 之外唯一的 fetch 豁免面。
     scan(path, [/\bMath\.random\b/], "zoneD-purity");

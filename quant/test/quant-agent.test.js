@@ -11,6 +11,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
@@ -21,6 +23,8 @@ const { createAgentClient } = await import(join(QUANT, "agent", "client.js"));
 const { createToolRegistry } = await import(join(QUANT, "agent", "tools.js"));
 const { createScriptedTransport } = await import(join(QUANT, "agent", "scripted-model.js"));
 const { createQuantAssistant, MAX_STEPS_V002 } = await import(join(QUANT, "agent", "sidecar.js"));
+const { createAuditLogger } = await import(join(QUANT, "agent", "audit.js"));
+const { upsertEnvFile } = await import(join(QUANT, "agent", "set-key.js"));
 
 const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v001.json"), "utf8"));
 const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v001.json"), "utf8"));
@@ -40,9 +44,9 @@ function assistantFor(scenarioName, { apiKey = "test-key" } = {}) {
 
 const networkProbe = () => { throw new Error("network was touched"); };
 
-test("registry is a closed allowlist of exactly the four deterministic tools", () => {
+test("registry is a closed allowlist of exactly the five deterministic tools", () => {
   assert.deepEqual(registry.list.map(tool => tool.name),
-    ["assess_frozen_dataset", "signal_components", "guard_check", "trial_metrics"]);
+    ["assess_frozen_dataset", "signal_components", "guard_check", "trial_metrics", "data_quality"]);
   for (const schema of registry.schemas) assert.equal(schema.function.parameters.additionalProperties, false);
   assert.equal(registry.get("place_order"), null);
   assert.equal(registry.get("run_backtest_and_trade"), null);
@@ -79,8 +83,8 @@ test("happy path: two tool rounds then a scripted final answer", async () => {
   assert.equal(result.harnessStatus, "ok");
   assert.equal(result.steps, 2);
   assert.deepEqual(result.toolCalls, [
-    { step: 1, name: "assess_frozen_dataset", ok: true },
-    { step: 2, name: "trial_metrics", ok: true }
+    { step: 1, name: "assess_frozen_dataset", ok: true, evalRunId: "qer-dd147a8ca0cb3163", signalFingerprint: "sig-982d57f915e36caf" },
+    { step: 2, name: "trial_metrics", ok: true, evalRunId: null, signalFingerprint: null }
   ]);
   assert.match(result.answer, /工具输出/);
   assert.equal(result.authority, "deterministic-tools");
@@ -97,7 +101,7 @@ test("forged model numbers never land anywhere authoritative", async () => {
   // 模型伪造文本只存在于注记层（answer），不在任何结构化字段或工具轨迹里。
   assert.match(result.answer, /999/);
   assert.equal(result.authoritative, undefined);
-  assert.deepEqual(result.toolCalls, [{ step: 1, name: "assess_frozen_dataset", ok: true }]);
+  assert.deepEqual(result.toolCalls, [{ step: 1, name: "assess_frozen_dataset", ok: true, evalRunId: "qer-dd147a8ca0cb3163", signalFingerprint: "sig-982d57f915e36caf" }]);
   const serialized = JSON.stringify(result);
   assert.ok(!/"signalScore":\s*100/.test(serialized), "forged signalScore must not appear as a field");
   assert.ok(!/"decisionStatus":\s*"approved"/.test(serialized), "forged decisionStatus must not appear as a field");
@@ -151,5 +155,110 @@ test("invalid question is rejected without touching model or tools", async () =>
     const result = await assistant.askQuant({ question: bad, modelConsent: true });
     assert.equal(result.ok, false);
     assert.equal(result.code, "INVALID_QUESTION");
+  }
+});
+
+// ── 0.2.1 补课包：会话记忆 / 引用 / 重试 / usage / 审计 / set-key ──────────────
+
+test("session memory: follow-up sees prior turns within one session, never across sessions", async () => {
+  const bodies = [];
+  const base = createScriptedTransport([...scripts.scenarios["answer-with-tools"], ...scripts.scenarios["answer-with-tools"]]);
+  const recording = async (url, init) => { bodies.push(JSON.parse(init.body)); return base(url, init); };
+  const client = createAgentClient({ apiKey: "test-key", model: "scripted-model", transport: recording });
+  const assistant = createQuantAssistant({ client, registry, dataset, trials });
+
+  const first = await assistant.askQuant({ question: "第一问", modelConsent: true, sessionId: "s1" });
+  assert.equal(first.ok, true);
+  assert.equal(first.sessionId, "s1");
+  const second = await assistant.askQuant({ question: "第二问", modelConsent: true, sessionId: "s1" });
+  assert.equal(second.ok, true);
+  assert.equal(bodies[1].messages.length, bodies[0].messages.length + 2, "session history must be appended");
+  assert.deepEqual(bodies[1].messages[1], { role: "user", content: "第一问" });
+  assert.equal(bodies[1].messages[2].role, "assistant");
+
+  const third = await assistant.askQuant({ question: "别的会话", modelConsent: true, sessionId: "s2" });
+  assert.equal(third.ok, true);
+  // bodies 序列：每次提问消耗 3 次请求（2 轮工具 + 1 次最终回答）→ ask3 首请求在 bodies[6]。
+  assert.equal(bodies[6].messages.length, 2, "no cross-session leakage");
+});
+
+test("citations: only successful authoritative tool results become citations", async () => {
+  const assistant = assistantFor("answer-with-tools");
+  const result = await assistant.askQuant({ question: "评估并比较 trials", modelConsent: true });
+  assert.deepEqual(result.citations, [
+    { tool: "assess_frozen_dataset", evalRunId: "qer-dd147a8ca0cb3163", signalFingerprint: "sig-982d57f915e36caf" }
+  ]);
+});
+
+test("transient model error is retried exactly once (RETRY_BUDGET_V002 = 1)", async () => {
+  let attempts = 0;
+  const base = createScriptedTransport(scripts.scenarios["direct-answer"]);
+  const flaky = async (url, init) => {
+    attempts += 1;
+    if (attempts === 1) { const error = new Error("transient"); error.code = "MODEL_HTTP_ERROR"; throw error; }
+    return base(url, init);
+  };
+  const client = createAgentClient({ apiKey: "test-key", model: "scripted-model", transport: flaky });
+  const assistant = createQuantAssistant({ client, registry, dataset, trials });
+  const result = await assistant.askQuant({ question: "q", modelConsent: true });
+  assert.equal(result.harnessStatus, "ok");
+  assert.equal(attempts, 2);
+
+  // 非瞬时错误（SCRIPT_EXHAUSTED）不重试：恒抛该错误的 transport 只应被调用一次。
+  let exhaustedAttempts = 0;
+  const alwaysExhausted = async () => {
+    exhaustedAttempts += 1;
+    const error = new Error("exhausted");
+    error.code = "SCRIPT_EXHAUSTED";
+    throw error;
+  };
+  const client2 = createAgentClient({ apiKey: "test-key", model: "scripted-model", transport: alwaysExhausted });
+  const assistant2 = createQuantAssistant({ client: client2, registry, dataset, trials });
+  const result2 = await assistant2.askQuant({ question: "q", modelConsent: true });
+  assert.equal(result2.harnessStatus, "unavailable");
+  assert.equal(result2.code, "SCRIPT_EXHAUSTED");
+  assert.equal(exhaustedAttempts, 1);
+});
+
+test("usage from the model response is plumbed into the result", async () => {
+  const usageTransport = async () => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { role: "assistant", content: "ok" } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }) });
+  const client = createAgentClient({ apiKey: "test-key", model: "scripted-model", transport: usageTransport });
+  const assistant = createQuantAssistant({ client, registry, dataset, trials });
+  const result = await assistant.askQuant({ question: "q", modelConsent: true });
+  assert.deepEqual(result.usage, { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+});
+
+test("audit log: metadata-only JSONL, hashes instead of plaintext, one line per ask", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "quant-audit-test-"));
+  try {
+    const base = createScriptedTransport(scripts.scenarios["answer-with-tools"]);
+    const client = createAgentClient({ apiKey: "test-key", model: "scripted-model", transport: base });
+    const assistant = createQuantAssistant({ client, registry, dataset, trials, audit: createAuditLogger({ dir }) });
+    await assistant.askQuant({ question: "审计明文问题", modelConsent: true });
+    const lines = (await readFile(join(dir, "agent-audit.jsonl"), "utf8")).trim().split("\n");
+    assert.equal(lines.length, 1);
+    const entry = JSON.parse(lines[0]);
+    assert.match(entry.questionHash, /^[0-9a-f]{16}$/);
+    assert.ok(!lines[0].includes("审计明文问题"), "question plaintext must never be logged");
+    assert.equal(entry.harnessStatus, "ok");
+    assert.equal(entry.toolCalls, "assess_frozen_dataset:ok>trial_metrics:ok");
+    assert.equal(typeof entry.durationMs, "number");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("set-key helper: upserts keys while preserving unrelated lines", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "quant-setkey-test-"));
+  try {
+    const envPath = join(dir, ".env");
+    upsertEnvFile(envPath, { OTHER_VAR: "keep-me", DEEPSEEK_API_KEY: "sk-old" });
+    upsertEnvFile(envPath, { DEEPSEEK_API_KEY: "sk-new-456" });
+    const content = await readFile(envPath, "utf8");
+    assert.match(content, /^OTHER_VAR=keep-me$/m, "unrelated lines preserved");
+    assert.match(content, /^DEEPSEEK_API_KEY=sk-new-456$/m, "key upserted");
+    assert.ok(!content.includes("sk-old"), "old value replaced");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

@@ -55,7 +55,7 @@ export function createAgentClient(options = {}) {
         error.code = "MODEL_MALFORMED";
         throw error;
       }
-      return message;
+      return { message, usage: body.usage ?? null };
     } catch (error) {
       if (error?.name === "AbortError") {
         const wrapped = new Error("model call timed out");
