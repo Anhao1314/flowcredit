@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const { runPipeline } = await import(join(urlDir(), "pipeline.js"));
-const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, splitPoint, COST_MODEL_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(urlDir(), "eval", "metrics.js"));
+const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, effectiveTrials, splitPoint, COST_MODEL_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(urlDir(), "eval", "metrics.js"));
 const { listRules, RULES_VERSION } = await import(join(urlDir(), "strategy", "rules-v002.js"));
 const { runQualityGates, GATES_VERSION } = await import(join(urlDir(), "data", "quality-gates.js"));
 
@@ -57,8 +57,10 @@ function pipelineOf(dataset) {
 
 function trialRows(dataset, trials) {
   const sp = splitPoint(dataset.series.length);
+  const matrix = [];
   const rows = trials.trials.map(trial => {
     const backtest = strategyReturns(dataset.series, trial);
+    matrix.push(backtest.returns);
     const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
     const oos = backtest.returns.slice(sp.firstOosReturnIndex);
     return {
@@ -76,8 +78,10 @@ function trialRows(dataset, trials) {
   const perPeriod = rows.map(row => row.sharpePerPeriod);
   const bestIndex = perPeriod.reduce((best, value, index) => (value > perPeriod[best] ? index : best), 0);
   const bestTrial = trials.trials[bestIndex];
-  const dsr = deflatedSharpe(strategyReturns(dataset.series, bestTrial).returns, perPeriod);
-  return { rows, best: { trialId: bestTrial.trialId, ruleId: bestTrial.ruleId ?? null }, dsr, sp, net: trials.trials.some(trial => trial.ruleId !== undefined) };
+  const effective = effectiveTrials(matrix);
+  const dsr = deflatedSharpe(matrix[bestIndex], perPeriod, { effectiveTrials: effective.effectiveTrials });
+  const dsrNominal = deflatedSharpe(matrix[bestIndex], perPeriod);
+  return { rows, best: { trialId: bestTrial.trialId, ruleId: bestTrial.ruleId ?? null }, dsr, dsrNominal, effective, sp, net: trials.trials.some(trial => trial.ruleId !== undefined) };
 }
 
 const formatNumber = (value, digits = 4) => (value === null || value === undefined) ? "n/a" : Number(value).toFixed(digits);
@@ -117,8 +121,8 @@ export function computeConsolePayload({ quantDir = urlDir(), auditDir, generated
     },
     rules: listRules(),
     trials: {
-      v001: { trialsVersion: trialsV001.trialsVersion, net: t1.net, rows: t1.rows, best: t1.best, dsr: t1.dsr },
-      v002: { trialsVersion: trialsV002.trialsVersion, net: t2.net, rows: t2.rows, best: t2.best, dsr: t2.dsr }
+      v001: { trialsVersion: trialsV001.trialsVersion, net: t1.net, rows: t1.rows, best: t1.best, dsr: t1.dsr, dsrNominal: t1.dsrNominal, effective: t1.effective },
+      v002: { trialsVersion: trialsV002.trialsVersion, net: t2.net, rows: t2.rows, best: t2.best, dsr: t2.dsr, dsrNominal: t2.dsrNominal, effective: t2.effective }
     },
     eval: evalArtifact ? {
       runDate: evalArtifact.runDate, gitCommit: evalArtifact.gitCommit, MODEL: evalArtifact.MODEL,

@@ -18,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
 
 const { runPipeline } = await import(join(QUANT, "pipeline.js"));
-const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, splitPoint, COST_MODEL_V002, COST_ONE_SIDE_RATE_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(QUANT, "eval", "metrics.js"));
+const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, effectiveTrials, splitPoint, COST_MODEL_V002, COST_ONE_SIDE_RATE_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(QUANT, "eval", "metrics.js"));
 const { listRules } = await import(join(QUANT, "strategy", "rules-v002.js"));
 const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v001.json"), "utf8"));
 const injections = JSON.parse(readFileSync(join(QUANT, "data", "injections-v001.json"), "utf8"));
@@ -83,8 +83,10 @@ const trialsV002 = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json
 
 function runDataset(dataset, trials, prefix, { expectCosts }) {
   const sp = splitPoint(dataset.series.length);
+  const trialReturns = [];
   const trialMetrics = trials.trials.map(trial => {
     const backtest = strategyReturns(dataset.series, trial);
+    trialReturns.push(backtest.returns);
     const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
     const oos = backtest.returns.slice(sp.firstOosReturnIndex);
     return {
@@ -101,21 +103,27 @@ function runDataset(dataset, trials, prefix, { expectCosts }) {
   });
   const perPeriodSharpes = trialMetrics.map(item => item.sharpePerPeriod);
   const selectedMetric = trialMetrics.reduce((best, item) => (item.sharpePerPeriod > best.sharpePerPeriod ? item : best));
-  const selectedTrial = trials.trials.find(trial => trial.trialId === selectedMetric.trialId);
-  const dsr = deflatedSharpe(strategyReturns(dataset.series, selectedTrial).returns, perPeriodSharpes);
+  const selectedIndex = trialMetrics.findIndex(item => item.trialId === selectedMetric.trialId);
+  // 有效 N（论文附录 A.3）：主口径用 N_eff；名义 N 保留对照。
+  const effective = effectiveTrials(trialReturns);
+  const dsr = deflatedSharpe(trialReturns[selectedIndex], perPeriodSharpes, { effectiveTrials: effective.effectiveTrials });
+  const dsrNominal = deflatedSharpe(trialReturns[selectedIndex], perPeriodSharpes);
   check(`${prefix}metrics-basis-tagged`, trialMetrics.every(item => item.basis === METRICS_BASIS) && dsr !== null && dsr.basis === METRICS_BASIS, { version: METRICS_VERSION });
   check(`${prefix}trials-are-distinct`, dsr !== null && dsr.trials.std > 0, { sharpesPerPeriod: perPeriodSharpes });
   check(`${prefix}dsr-in-valid-range`, dsr !== null && dsr.dsr >= 0 && dsr.dsr <= 1, { dsr: dsr?.dsr, sr0: dsr?.sr0 });
   check(`${prefix}dsr-uses-all-trials`, dsr !== null && dsr.trials.count === trials.trials.length, { count: dsr?.trials?.count });
   check(`${prefix}turnover-in-valid-range`, trialMetrics.every(item => item.turnover !== null && item.turnover >= 0 && item.turnover <= 1), {});
   check(`${prefix}split-covers-series`, trialMetrics.every(item => sp.isCount + sp.oosCount === item.nReturns), { cut: sp.cut, isCount: sp.isCount, oosCount: sp.oosCount });
+  check(`${prefix}effective-n-in-range`, effective.effectiveTrials >= 1 && effective.effectiveTrials <= effective.m, { avgCorr: effective.averageCorrelation, nEff: effective.effectiveTrials, m: effective.m });
+  check(`${prefix}effective-n-vs-nominal`, dsr !== null && dsrNominal !== null && dsr.dsr >= dsrNominal.dsr - 1e-12, { dsrNeff: dsr?.dsr, dsrNominal: dsrNominal?.dsr });
+  check(`${prefix}dsr-neff-tagged`, dsr !== null && dsr.nTrials.method === "appendix-A.3" && dsrNominal !== null && dsrNominal.nTrials.method === "nominal", { nTrials: dsr?.nTrials });
   if (expectCosts) {
     check(`${prefix}rules-registered`, listRules().length >= 6 && trials.trials.every(trial => listRules().some(rule => rule.ruleId === trial.ruleId)), { rules: listRules().length });
     check(`${prefix}costs-applied`, trialMetrics.every(item => item.netOfCost === true && item.costOneSideRate === COST_ONE_SIDE_RATE_V002), { costModel: COST_MODEL_V002 });
   } else {
     check(`${prefix}legacy-gross-path`, trialMetrics.every(item => item.netOfCost !== true && item.costOneSideRate === null), {});
   }
-  return { trialMetrics, dsr, selectedMetric, sp };
+  return { trialMetrics, dsr, dsrNominal, effective, selectedMetric, sp };
 }
 
 const v001Result = runDataset(dataset, trialsV001, "v001.", { expectCosts: false });
@@ -143,16 +151,18 @@ const artifact = {
       [dataset.dataVersion]: {
         trialsVersion: trialsV001.trialsVersion,
         split: { cut: v001Result.sp.cut, isCount: v001Result.sp.isCount, oosCount: v001Result.sp.oosCount },
+        effectiveN: v001Result.effective,
         trials: v001Result.trialMetrics,
-        selected: { trialId: v001Result.selectedMetric.trialId, dsr: v001Result.dsr?.dsr ?? null, sr0: v001Result.dsr?.sr0 ?? null, n: v001Result.dsr?.n ?? null, trialsStd: v001Result.dsr?.trials?.std ?? null }
+        selected: { trialId: v001Result.selectedMetric.trialId, dsr: v001Result.dsr?.dsr ?? null, dsrNominal: v001Result.dsrNominal?.dsr ?? null, nTrials: v001Result.dsr?.nTrials ?? null, sr0: v001Result.dsr?.sr0 ?? null, n: v001Result.dsr?.n ?? null, trialsStd: v001Result.dsr?.trials?.std ?? null }
       },
       [datasetV002.dataVersion]: {
         trialsVersion: trialsV002.trialsVersion,
         source: datasetV002.source,
         fetchedAtUtc: datasetV002.fetchedAtUtc,
         split: { cut: v002Result.sp.cut, isCount: v002Result.sp.isCount, oosCount: v002Result.sp.oosCount },
+        effectiveN: v002Result.effective,
         trials: v002Result.trialMetrics,
-        selected: { trialId: v002Result.selectedMetric.trialId, ruleId: v002Result.selectedMetric.ruleId, dsr: v002Result.dsr?.dsr ?? null, sr0: v002Result.dsr?.sr0 ?? null, n: v002Result.dsr?.n ?? null, trialsStd: v002Result.dsr?.trials?.std ?? null }
+        selected: { trialId: v002Result.selectedMetric.trialId, ruleId: v002Result.selectedMetric.ruleId, dsr: v002Result.dsr?.dsr ?? null, dsrNominal: v002Result.dsrNominal?.dsr ?? null, nTrials: v002Result.dsr?.nTrials ?? null, sr0: v002Result.dsr?.sr0 ?? null, n: v002Result.dsr?.n ?? null, trialsStd: v002Result.dsr?.trials?.std ?? null }
       }
     }
   },

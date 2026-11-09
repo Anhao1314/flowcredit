@@ -23,17 +23,19 @@
  *   - DSR：同文 Eq. (2)：DSR = PSR(SR̂₀)，其中零假设（真实 SR=0）下 E[{SR̂}]=0，故
  *       SR̂₀ = √(V[{SR̂}])·((1−γ)·Z⁻¹(1−1/N) + γ·Z⁻¹(1−1/(N·e)))
  *     —— 本实现即此零假设形式（无均值项），与论文 Eq. (2) 一致。
- *   - 已知保守偏差（诚实披露）：Eq. (1) 的 N 是"独立试验数"（附录 A.3 讨论非独立试验的
- *     有效 N 估计）。我们的 6 条 trials 跑在同一数据集上、正相关 → 有效 N < 6 →
- *     论文式折减应更小；本实现用名义 N=6，折减偏强（保守方向）。修正需实现有效 N
- *     估计（A.3），列为阶段 3 候选。
+ *   - 有效 N（附录 A.3，阶段 3.1 已实现）：Eq. (1) 的 N 是独立试验数。A.3 方法：
+ *     取试验两两相关矩阵的等权平均相关 ρ̄（Eq. 8），插值 N̂ = M^(1−ρ̄)（Eq. 9；
+ *     端点：ρ̄→0 ⇒ N̂→M，ρ̄→1 ⇒ N̂→1），并夹在 [1, M]。论文提醒 M 接近或超过样本
+ *     长度 T 时相关估计本身会过拟合——本实现仅在 M 远小于 T 时使用（运行时校验）。
+ *     deflatedSharpe 不传 effectiveTrials 时保持名义 N（旧 golden 不变）；传则主口径
+ *     使用 N_eff，并在 nTrials 字段并列披露 nominal/effective。
  *   - 注意：PSR/DSR 内部使用与收益同频率的未年化 SR（论文数值例明确 "non-annualized
  *     (with 250 observations per year)"）；年化值仅作展示。
  */
 
 import { getRule } from "../strategy/rules-v002.js";
 
-export const METRICS_VERSION = "eval-metrics/v0.0.2";
+export const METRICS_VERSION = "eval-metrics/v0.0.3";
 export const METRICS_BASIS = "synthetic_fixture_placeholder_rules";
 
 // 成本模型（冻结常量，阶段 1）：单边成本 = (佣金 + 滑点) bps，按仓位变动幅度计提在兑现收益的棒上。
@@ -199,6 +201,53 @@ export function turnover(positions) {
   return flips / (positions.length - 1);
 }
 
+function pearson(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length || left.length < 2) return null;
+  let sumL = 0, sumR = 0, sumLL = 0, sumRR = 0, sumLR = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    if (!finite(left[i]) || !finite(right[i])) return null;
+    sumL += left[i]; sumR += right[i];
+    sumLL += left[i] * left[i]; sumRR += right[i] * right[i]; sumLR += left[i] * right[i];
+  }
+  const n = left.length;
+  const numerator = n * sumLR - sumL * sumR;
+  const denomL = n * sumLL - sumL * sumL;
+  const denomR = n * sumRR - sumR * sumR;
+  if (!(denomL > 0) || !(denomR > 0)) return null;
+  return numerator / Math.sqrt(denomL * denomR);
+}
+
+/**
+ * 有效独立试验数（DSR 论文附录 A.3，Eq. 8/9）：
+ *   ρ̄ = 等权平均非对角相关；N̂ = M^(1−ρ̄)，夹在 [1, M]。
+ * 输入：收益矩阵（M 条等长收益序列）。输出：{ method, m, averageCorrelation, effectiveTrials, nominalTrials, basis }。
+ * 论文的 M≪T 前提在此校验：M 超过 T 的一半则拒绝（相关估计会过拟合）。
+ */
+export function effectiveTrials(returnsMatrix) {
+  if (!Array.isArray(returnsMatrix) || returnsMatrix.length < 2) throw new TypeError("effectiveTrials needs at least 2 return series");
+  const m = returnsMatrix.length;
+  const t = Array.isArray(returnsMatrix[0]) ? returnsMatrix[0].length : 0;
+  if (t < 2) throw new TypeError("return series must have at least 2 observations");
+  if (returnsMatrix.some(series => !Array.isArray(series) || series.length !== t)) throw new TypeError("all return series must share the same length");
+  if (m * 2 > t) throw new TypeError("M exceeds T/2 — correlation-based effective-N is unreliable (paper A.3 caveat)");
+  let sum = 0, pairs = 0;
+  for (let i = 0; i < m; i += 1) {
+    for (let j = i + 1; j < m; j += 1) {
+      const rho = pearson(returnsMatrix[i], returnsMatrix[j]);
+      if (rho === null) throw new TypeError(`degenerate return series at pair (${i},${j})`);
+      sum += rho;
+      pairs += 1;
+    }
+  }
+  const averageCorrelation = sum / pairs;
+  const raw = Math.pow(m, 1 - averageCorrelation);
+  const clamped = Math.min(m, Math.max(1, raw));
+  return {
+    method: "average-correlation (DSR paper A.3, Eq. 8/9)",
+    m, averageCorrelation, nominalTrials: m, effectiveTrials: clamped, basis: METRICS_BASIS
+  };
+}
+
 /** 最大回撤（%），与引擎口径一致（峰谷、零基）。 */
 export function maxDrawdownPct(returns, base = 1) {
   if (!Array.isArray(returns) || !returns.length) return null;
@@ -276,23 +325,26 @@ export function probabilisticSharpe(returns, srStar) {
  * 输出：{ dsr, sr, sr0, n, gamma3, gamma4, trials:{count,mean,variance,std}, basis, note }。
  * trials 方差 ≤ 0（配置雷同凑数）→ 返回 null（fail-closed）。
  */
-export function deflatedSharpe(returns, trialSharpes) {
+export function deflatedSharpe(returns, trialSharpes, options = {}) {
   if (!Array.isArray(trialSharpes) || trialSharpes.length < 3) return null;
   if (trialSharpes.some(value => !finite(value))) return null;
   const count = trialSharpes.length;
   const mean = trialSharpes.reduce((sum, value) => sum + value, 0) / count;
   const variance = trialSharpes.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (count - 1);
   if (!(variance > TRIALS_VARIANCE_EPSILON_V001)) return null; // trials 必须真正不同；同配置复制凑数在此被拒绝（含浮点噪声残留）
+  // 有效 N（A.3）：传入 effectiveTrials 时主口径用 N_eff（夹在 [1, count]），否则名义 N（旧 golden 不变）。
+  const effective = options.effectiveTrials == null ? count : Math.min(count, Math.max(1, options.effectiveTrials));
   const eulerGamma = 0.5772156649015329;
   const e = Math.E;
   const sr0 = Math.sqrt(variance) *
-    ((1 - eulerGamma) * normalQuantile(1 - 1 / count) + eulerGamma * normalQuantile(1 - 1 / (count * e)));
+    ((1 - eulerGamma) * normalQuantile(1 - 1 / effective) + eulerGamma * normalQuantile(1 - 1 / (effective * e)));
   const psrResult = probabilisticSharpe(returns, sr0);
   if (!psrResult || psrResult.psr === null) return null;
   return {
     dsr: psrResult.psr, sr: psrResult.sr, sr0, n: psrResult.n,
     gamma3: psrResult.gamma3, gamma4: psrResult.gamma4,
     trials: { count, mean, variance, std: Math.sqrt(variance) },
+    nTrials: { nominal: count, effective, method: options.effectiveTrials == null ? "nominal" : "appendix-A.3" },
     basis: METRICS_BASIS,
     note: "PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"
   };

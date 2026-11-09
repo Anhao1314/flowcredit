@@ -188,19 +188,21 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 
   <section class="view" data-view="dsr">
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">DEFLATED SHARPE RATIO · 真实数据网格</div><h2>防作弊校正结果</h2></div></div>
+      <div class="card-head"><div><div class="eyebrow">DEFLATED SHARPE RATIO · 真实数据网格</div><h2>防作弊校正结果（双口径）</h2></div></div>
       <div class="metrics">
-        ${metricCard("DSR", fmt(payload.trials.v002.dsr?.dsr), "PSR(SR₀)，Eq.(2)")}
+        ${metricCard("DSR (N_eff)", fmt(payload.trials.v002.dsr?.dsr), "N_eff=" + fmt(payload.trials.v002.effective?.effectiveTrials, 2) + "（A.3 主口径）")}
+        ${metricCard("DSR (名义 N)", fmt(payload.trials.v002.dsrNominal?.dsr), "N=" + (payload.trials.v002.dsrNominal?.trials?.count ?? "n/a") + "（旧口径对照）")}
         ${metricCard("SR₀", fmt(payload.trials.v002.dsr?.sr0), "√V·maxZ（零假设式）")}
         ${metricCard("n returns", payload.trials.v002.dsr?.n ?? "n/a", "选中 " + payload.trials.v002.best.trialId)}
         ${metricCard("trials std", fmt(payload.trials.v002.dsr?.trials?.std), "6 组两两不同")}
       </div>
       <pre>DSR   = Φ( (SR̂ − SR₀)·√(T−1) / √(1 − γ₃·SR̂ + ((γ₄−1)/4)·SR̂²) )      —— Eq.(2), SSRN 2460551
 SR₀   = √(V[{SR̂}]) · ( (1−γ)·Z⁻¹(1−1/N) + γ·Z⁻¹(1−1/(N·e)) )          —— Eq.(1)/(6)，零假设下无均值项
+N_eff = M^(1−ρ̄)，ρ̄ = 等权平均非对角相关（矩阵等长收益两两 Pearson）  —— A.3 Eq.(8)/(9)
 γ₄    = 原始峰度（正态=3；正态下分母退化为 Lo(2002) 的 1+SR²/2）
-SR̂, SR₀ 均为未年化 per-period 口径；2026-11-07 已对照论文原文逐项核实</pre>
+SR̂, SR₀ 均为未年化 per-period 口径；2026-11-07 公式核实、2026-11-10 实现 A.3</pre>
     </div>
-    <div class="callout warn"><b>保守偏差披露</b>：Eq.(1) 要求 N 为独立试验数（附录 A.3）。本网格 6 条规则共用同一数据集、正相关 → 有效 N &lt; 6 → 名义 N=6 的折减偏强（保守方向）。有效 N 估计为阶段 3 候选。</div>
+    <div class="callout good"><b>有效 N 已实现（论文 A.3）</b>：6 条规则两两平均相关 ρ̄=${fmt(payload.trials.v002.effective?.averageCorrelation)} → N_eff=M^(1−ρ̄)=<b>${fmt(payload.trials.v002.effective?.effectiveTrials, 2)}</b>（名义 6）。修正后 DSR 由名义口径 ${fmt(payload.trials.v002.dsrNominal?.dsr)} 提升至 <b>${fmt(payload.trials.v002.dsr?.dsr)}</b>——过度折减被量化。</div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">PROMOTION GATE</div><h2>人工 review 是硬门禁</h2></div></div>
       <div class="kv">

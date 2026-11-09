@@ -1,0 +1,499 @@
+{
+  "artifactVersion": "quant-eval/v0.0.1",
+  "runDate": "2026-11-09T18:01:55.908Z",
+  "dataVersion": "quant-dataset/v0.0.1",
+  "gitCommit": "f9793c1649802ca34e5556da51b563aabc479297",
+  "MODEL": "NOT_RUN",
+  "seed": 20261102,
+  "offline": true,
+  "injectionsVersion": "quant-injections/v0.0.1",
+  "cases": 34,
+  "checks": [
+    {
+      "name": "control-run-succeeds",
+      "passed": true,
+      "details": {
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "fingerprint-stable-across-reruns",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "golden-values-unchanged",
+      "passed": true,
+      "details": {
+        "signalScore": 70.1019,
+        "maxDrawdownPct": 24.8064,
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bullish-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bullish-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bullish-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bullish-001"
+      }
+    },
+    {
+      "name": "injection-bearish-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bearish-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-bearish-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-bearish-001"
+      }
+    },
+    {
+      "name": "injection-mixed-authoritative-identical",
+      "passed": true,
+      "details": {
+        "caseId": "inject-mixed-001",
+        "evalRunId": "qer-dd147a8ca0cb3163"
+      }
+    },
+    {
+      "name": "injection-mixed-inputs-reported",
+      "passed": true,
+      "details": {
+        "caseId": "inject-mixed-001"
+      }
+    },
+    {
+      "name": "short-series-fails-closed",
+      "passed": true,
+      "details": {
+        "breaches": [
+          "INSUFFICIENT_HISTORY",
+          "SIGNAL_NOT_COMPUTABLE"
+        ]
+      }
+    },
+    {
+      "name": "invalid-input-fails-closed",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "output-carries-fingerprints",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "v001.metrics-basis-tagged",
+      "passed": true,
+      "details": {
+        "version": "eval-metrics/v0.0.3"
+      }
+    },
+    {
+      "name": "v001.trials-are-distinct",
+      "passed": true,
+      "details": {
+        "sharpesPerPeriod": [
+          -0.061006183377920416,
+          -0.24931648014335642,
+          -0.08232395492289767,
+          -0.073831706248007
+        ]
+      }
+    },
+    {
+      "name": "v001.dsr-in-valid-range",
+      "passed": true,
+      "details": {
+        "dsr": 0.20672565531899162,
+        "sr0": 0.03743131213502992
+      }
+    },
+    {
+      "name": "v001.dsr-uses-all-trials",
+      "passed": true,
+      "details": {
+        "count": 4
+      }
+    },
+    {
+      "name": "v001.turnover-in-valid-range",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "v001.split-covers-series",
+      "passed": true,
+      "details": {
+        "cut": 91,
+        "isCount": 30,
+        "oosCount": 39
+      }
+    },
+    {
+      "name": "v001.effective-n-in-range",
+      "passed": true,
+      "details": {
+        "avgCorr": 0.5736435116302845,
+        "nEff": 1.8058937031585038,
+        "m": 4
+      }
+    },
+    {
+      "name": "v001.effective-n-vs-nominal",
+      "passed": true,
+      "details": {
+        "dsrNeff": 0.20672565531899162,
+        "dsrNominal": 0.09958479775211265
+      }
+    },
+    {
+      "name": "v001.dsr-neff-tagged",
+      "passed": true,
+      "details": {
+        "nTrials": {
+          "nominal": 4,
+          "effective": 1.8058937031585038,
+          "method": "appendix-A.3"
+        }
+      }
+    },
+    {
+      "name": "v001.legacy-gross-path",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "v002.metrics-basis-tagged",
+      "passed": true,
+      "details": {
+        "version": "eval-metrics/v0.0.3"
+      }
+    },
+    {
+      "name": "v002.trials-are-distinct",
+      "passed": true,
+      "details": {
+        "sharpesPerPeriod": [
+          0.022464236545520964,
+          0.04163722999903313,
+          0.010683848962932249,
+          -0.028056219605292487,
+          0.03726309154859791,
+          0.012299045126963254
+        ]
+      }
+    },
+    {
+      "name": "v002.dsr-in-valid-range",
+      "passed": true,
+      "details": {
+        "dsr": 0.665538146412131,
+        "sr0": 0.012043732296020874
+      }
+    },
+    {
+      "name": "v002.dsr-uses-all-trials",
+      "passed": true,
+      "details": {
+        "count": 6
+      }
+    },
+    {
+      "name": "v002.turnover-in-valid-range",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "v002.split-covers-series",
+      "passed": true,
+      "details": {
+        "cut": 182,
+        "isCount": 121,
+        "oosCount": 78
+      }
+    },
+    {
+      "name": "v002.effective-n-in-range",
+      "passed": true,
+      "details": {
+        "avgCorr": 0.6360424514709673,
+        "nEff": 1.9196144987397485,
+        "m": 6
+      }
+    },
+    {
+      "name": "v002.effective-n-vs-nominal",
+      "passed": true,
+      "details": {
+        "dsrNeff": 0.665538146412131,
+        "dsrNominal": 0.5522314638222234
+      }
+    },
+    {
+      "name": "v002.dsr-neff-tagged",
+      "passed": true,
+      "details": {
+        "nTrials": {
+          "nominal": 6,
+          "effective": 1.9196144987397485,
+          "method": "appendix-A.3"
+        }
+      }
+    },
+    {
+      "name": "v002.rules-registered",
+      "passed": true,
+      "details": {
+        "rules": 6
+      }
+    },
+    {
+      "name": "v002.costs-applied",
+      "passed": true,
+      "details": {
+        "costModel": {
+          "commissionBps": 2,
+          "slippageBps": 5
+        }
+      }
+    },
+    {
+      "name": "v002-quality-gates-passed",
+      "passed": true,
+      "details": {
+        "source": "okx:BTC-USDT:1D",
+        "fetchedAtUtc": "2026-11-05T19:22:18.540Z"
+      }
+    }
+  ],
+  "metrics": {
+    "version": "eval-metrics/v0.0.3",
+    "basis": "synthetic_fixture_placeholder_rules",
+    "costModel": {
+      "commissionBps": 2,
+      "slippageBps": 5
+    },
+    "datasets": {
+      "quant-dataset/v0.0.1": {
+        "trialsVersion": "quant-trials/v0.0.1",
+        "split": {
+          "cut": 91,
+          "isCount": 30,
+          "oosCount": 39
+        },
+        "effectiveN": {
+          "method": "average-correlation (DSR paper A.3, Eq. 8/9)",
+          "m": 4,
+          "averageCorrelation": 0.5736435116302845,
+          "nominalTrials": 4,
+          "effectiveTrials": 1.8058937031585038,
+          "basis": "synthetic_fixture_placeholder_rules"
+        },
+        "trials": [
+          {
+            "trialId": "T1-momentum-heavy",
+            "ruleId": null,
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": false,
+            "costOneSideRate": null,
+            "nReturns": 69,
+            "sharpeAnnualized": -0.9684431379310787,
+            "sharpePerPeriod": -0.061006183377920416,
+            "isSharpePerPeriod": -0.15397821830922692,
+            "oosSharpePerPeriod": -0.030343505964607016,
+            "turnover": 0.10144927536231885,
+            "maxDrawdownPct": 5.689631449267672
+          },
+          {
+            "trialId": "T2-trend-heavy",
+            "ruleId": null,
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": false,
+            "costOneSideRate": null,
+            "nReturns": 69,
+            "sharpeAnnualized": -3.9577764252557652,
+            "sharpePerPeriod": -0.24931648014335642,
+            "isSharpePerPeriod": -0.3245104080654032,
+            "oosSharpePerPeriod": -0.25284148399894596,
+            "turnover": 0.043478260869565216,
+            "maxDrawdownPct": 11.722252175850123
+          },
+          {
+            "trialId": "T3-balanced-loose",
+            "ruleId": null,
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": false,
+            "costOneSideRate": null,
+            "nReturns": 69,
+            "sharpeAnnualized": -1.3068522700156726,
+            "sharpePerPeriod": -0.08232395492289767,
+            "isSharpePerPeriod": -0.3090708920521455,
+            "oosSharpePerPeriod": 0.08704336811970442,
+            "turnover": 0.08695652173913043,
+            "maxDrawdownPct": 11.622458847360221
+          },
+          {
+            "trialId": "T4-stability-strict",
+            "ruleId": null,
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": false,
+            "costOneSideRate": null,
+            "nReturns": 69,
+            "sharpeAnnualized": -1.1720420016228015,
+            "sharpePerPeriod": -0.073831706248007,
+            "isSharpePerPeriod": -0.2888555683549867,
+            "oosSharpePerPeriod": 0.07249486650964856,
+            "turnover": 0.057971014492753624,
+            "maxDrawdownPct": 16.043574049139185
+          }
+        ],
+        "selected": {
+          "trialId": "T1-momentum-heavy",
+          "dsr": 0.20672565531899162,
+          "dsrNominal": 0.09958479775211265,
+          "nTrials": {
+            "nominal": 4,
+            "effective": 1.8058937031585038,
+            "method": "appendix-A.3"
+          },
+          "sr0": 0.03743131213502992,
+          "n": 69,
+          "trialsStd": 0.088897523833431
+        }
+      },
+      "quant-dataset/v0.0.2": {
+        "trialsVersion": "quant-trials/v0.0.2",
+        "source": "okx:BTC-USDT:1D",
+        "fetchedAtUtc": "2026-11-05T19:22:18.540Z",
+        "split": {
+          "cut": 182,
+          "isCount": 121,
+          "oosCount": 78
+        },
+        "effectiveN": {
+          "method": "average-correlation (DSR paper A.3, Eq. 8/9)",
+          "m": 6,
+          "averageCorrelation": 0.6360424514709673,
+          "nominalTrials": 6,
+          "effectiveTrials": 1.9196144987397485,
+          "basis": "synthetic_fixture_placeholder_rules"
+        },
+        "trials": [
+          {
+            "trialId": "T1-sma-cross-a",
+            "ruleId": "sma-cross-hysteresis-a",
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": true,
+            "costOneSideRate": 0.0007,
+            "nReturns": 199,
+            "sharpeAnnualized": 0.35660869975426307,
+            "sharpePerPeriod": 0.022464236545520964,
+            "isSharpePerPeriod": -0.04601375150062451,
+            "oosSharpePerPeriod": 0.0905268606646923,
+            "turnover": 0.01507537688442211,
+            "maxDrawdownPct": 21.794033597134998
+          },
+          {
+            "trialId": "T2-sma-cross-b",
+            "ruleId": "sma-cross-hysteresis-b",
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": true,
+            "costOneSideRate": 0.0007,
+            "nReturns": 199,
+            "sharpeAnnualized": 0.6609705351542389,
+            "sharpePerPeriod": 0.04163722999903313,
+            "isSharpePerPeriod": -0.011527082181515711,
+            "oosSharpePerPeriod": 0.09264473234597712,
+            "turnover": 0.02512562814070352,
+            "maxDrawdownPct": 9.939600598842
+          },
+          {
+            "trialId": "T3-momentum-cd-a",
+            "ruleId": "momentum-cooldown-a",
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": true,
+            "costOneSideRate": 0.0007,
+            "nReturns": 199,
+            "sharpeAnnualized": 0.16960084440536438,
+            "sharpePerPeriod": 0.010683848962932249,
+            "isSharpePerPeriod": -0.062196749101302705,
+            "oosSharpePerPeriod": 0.09855047271805069,
+            "turnover": 0.06532663316582915,
+            "maxDrawdownPct": 13.308210475557846
+          },
+          {
+            "trialId": "T4-momentum-cd-b",
+            "ruleId": "momentum-cooldown-b",
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": true,
+            "costOneSideRate": 0.0007,
+            "nReturns": 199,
+            "sharpeAnnualized": -0.445378678825312,
+            "sharpePerPeriod": -0.028056219605292487,
+            "isSharpePerPeriod": -0.03823924211518666,
+            "oosSharpePerPeriod": -0.016111867167277565,
+            "turnover": 0.11557788944723618,
+            "maxDrawdownPct": 15.16041180508795
+          },
+          {
+            "trialId": "T5-composite-pct-a",
+            "ruleId": "composite-percentile-a",
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": true,
+            "costOneSideRate": 0.0007,
+            "nReturns": 199,
+            "sharpeAnnualized": 0.5915332399141368,
+            "sharpePerPeriod": 0.03726309154859791,
+            "isSharpePerPeriod": -0.0729316487642392,
+            "oosSharpePerPeriod": 0.12102972285619477,
+            "turnover": 0.07035175879396985,
+            "maxDrawdownPct": 8.617880937285
+          },
+          {
+            "trialId": "T6-composite-pct-b",
+            "ruleId": "composite-percentile-b",
+            "basis": "synthetic_fixture_placeholder_rules",
+            "netOfCost": true,
+            "costOneSideRate": 0.0007,
+            "nReturns": 199,
+            "sharpeAnnualized": 0.19524128861703358,
+            "sharpePerPeriod": 0.012299045126963254,
+            "isSharpePerPeriod": -0.07242755505323818,
+            "oosSharpePerPeriod": 0.07620095372548809,
+            "turnover": 0.10050251256281408,
+            "maxDrawdownPct": 8.374748245133636
+          }
+        ],
+        "selected": {
+          "trialId": "T2-sma-cross-b",
+          "ruleId": "sma-cross-hysteresis-b",
+          "dsr": 0.665538146412131,
+          "dsrNominal": 0.5522314638222234,
+          "nTrials": {
+            "nominal": 6,
+            "effective": 1.9196144987397485,
+            "method": "appendix-A.3"
+          },
+          "sr0": 0.012043732296020874,
+          "n": 199,
+          "trialsStd": 0.025036245153799323
+        }
+      }
+    }
+  },
+  "allPassed": true
+}
