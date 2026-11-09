@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FlowCredit Quant · Console</title>
+<style>
+:root{
+  --bg:#212121; --sidebar:#171717; --card:#2f2f2f; --card2:#262626;
+  --border:rgba(255,255,255,.09); --text:#ececec; --muted:#a3a3a3; --faint:#6f6f6f;
+  --accent:#8b5cf6; --accent-soft:rgba(139,92,246,.14);
+  --good:#10a37f; --bad:#ef4444; --warn:#f59e0b;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.55;display:flex;min-height:100vh}
+.sidebar{width:232px;background:var(--sidebar);border-right:1px solid var(--border);padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
+.brand{font-weight:700;font-size:15px;letter-spacing:.2px;padding:6px 10px 16px;display:flex;align-items:center;gap:8px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
+.nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.nav-btn.active{background:var(--accent-soft);color:var(--text)}
+.sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
+main{flex:1;padding:28px 34px 60px;max-width:1060px}
+.topbar{margin-bottom:22px}
+.topbar h1{font-size:22px;font-weight:650}
+.topbar .sub{color:var(--muted);margin-top:4px;font-size:13px}
+.view{display:none}.view.active{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:18px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.card h2{font-size:16px;font-weight:600;margin-top:2px}
+.eyebrow{font-size:11px;color:var(--faint);letter-spacing:.6px;text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.metrics{display:flex;flex-wrap:wrap;gap:12px}
+.metric{flex:1 1 150px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.metric-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.metric-value{font-size:22px;font-weight:650;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.metric-sub{font-size:11px;color:var(--faint);margin-top:2px}
+.metric.good .metric-value{color:var(--good)}
+.metric.bad .metric-value{color:var(--bad)}
+.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+.badge-accent{color:var(--accent);border-color:rgba(139,92,246,.4);background:var(--accent-soft)}
+.badge-good{color:var(--good);border-color:rgba(16,163,127,.4)}
+.badge-bad{color:var(--bad);border-color:rgba(239,68,68,.4)}
+.badge-warn{color:var(--warn);border-color:rgba(245,158,11,.4)}
+.badge-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;color:var(--muted);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border)}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--border)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr.selected td{background:var(--accent-soft)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;padding:12px 16px;margin:14px 0;font-size:13px}
+.callout.warn{border-left-color:var(--warn);background:rgba(245,158,11,.1)}
+.callout.good{border-left-color:var(--good);background:rgba(16,163,127,.1)}
+pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:#cfd3dc}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
+.kv .k{color:var(--muted)}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:190px}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><span class="dot"></span>FlowCredit Quant</div>
+  <button class="nav-btn active" data-view="overview">Overview</button>
+  <button class="nav-btn" data-view="rules">Rules &amp; Trials</button>
+  <button class="nav-btn" data-view="dsr">DSR &amp; Promotion</button>
+  <button class="nav-btn" data-view="quality">Data Quality</button>
+  <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
+  <div class="sidebar-footer">
+    <div>metrics eval-metrics/v0.0.2</div>
+    <div>rules quant-rules/v0.0.2</div>
+    <div>agent quant-agent/v0.0.2</div>
+    <div>built 2026-11-09</div>
+  </div>
+</aside>
+<main>
+  <div class="topbar"><h1 id="view-title">Overview</h1><div class="sub" id="view-sub">双数据集权威快照 · 全部数字来自确定性纯函数</div></div>
+
+  <section class="view active" data-view="overview">
+    <div class="grid2">
+      <div class="card">
+    <div class="card-head"><div><div class="eyebrow">quant-dataset/v0.0.1</div><h2>合成夹具</h2></div><span class="badge badge-muted">SYNTHETIC</span></div>
+    <div class="metrics">
+      <div class="metric "><div class="metric-label">Rows</div><div class="metric-value">130</div><div class="metric-sub">2026-05-01 .. 2026-10-29</div></div>
+      <div class="metric "><div class="metric-label">Signal Score</div><div class="metric-value">70.1019</div><div class="metric-sub">三分量合成分 0-100</div></div>
+      <div class="metric good"><div class="metric-label">Guard</div><div class="metric-value">PASS</div><div class="metric-sub">no breach</div></div>
+      <div class="metric good"><div class="metric-label">Decision</div><div class="metric-value">ELIGIBLE</div><div class="metric-sub">eligible for review</div></div>
+      <div class="metric "><div class="metric-label">Max Drawdown</div><div class="metric-value">24.81%</div><div class="metric-sub">限额 25%</div></div>
+    </div>
+    <div class="chips"><span class="badge badge-mono">evalRunId qer-dd147a8ca0cb3163</span><span class="badge badge-mono">fp sig-982d57f915e36caf</span></div>
+  </div>
+      <div class="card">
+    <div class="card-head"><div><div class="eyebrow">quant-dataset/v0.0.2</div><h2>真实市场数据</h2></div><span class="badge badge-accent">REAL · OKX</span></div>
+    <div class="metrics">
+      <div class="metric "><div class="metric-label">Rows</div><div class="metric-value">260</div><div class="metric-sub">2026-02-18 .. 2026-11-04</div></div>
+      <div class="metric "><div class="metric-label">Signal Score</div><div class="metric-value">36.2481</div><div class="metric-sub">三分量合成分 0-100</div></div>
+      <div class="metric bad"><div class="metric-label">Guard</div><div class="metric-value">HALT</div><div class="metric-sub">breach: DRAWDOWN_LIMIT_EXCEEDED</div></div>
+      <div class="metric bad"><div class="metric-label">Decision</div><div class="metric-value">BLOCKED</div><div class="metric-sub">回撤超 25% 冻结限额</div></div>
+      <div class="metric "><div class="metric-label">Max Drawdown</div><div class="metric-value">28.54%</div><div class="metric-sub">限额 25%</div></div>
+    </div>
+    <div class="chips"><span class="badge badge-mono">evalRunId qer-652332d330f2cdc6</span><span class="badge badge-mono">fp sig-b95d74f104b987e9</span></div>
+  </div>
+    </div>
+    <div class="callout good">真实数据上的权威判定：BTC 快照回撤 28.54% 超过 25% 冻结限额 → 守卫 <b>halt</b>，decisionStatus = <b>blocked</b>（breach: DRAWDOWN_LIMIT_EXCEEDED）。机器先于人说不。</div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">LAST OFFLINE EVAL</div><h2>治理检查 28 / 28 passed</h2></div><span class="badge badge-muted">MODEL NOT_RUN</span></div>
+      <div class="kv">
+        <div class="k">runDate</div><div class="mono">2026-11-05T19:34:35.519Z</div>
+        <div class="k">gitCommit</div><div class="mono">45f5e270e46a</div>
+        <div class="k">failed checks</div><div>none</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" data-view="rules">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">quant-trials/v0.0.2 · 真实 BTC · 净口径（成本 2+5 bps）</div><h2>规则网格 · 6 条注册规则</h2></div><span class="badge badge-mono">basis synthetic_fixture_placeholder_rules</span></div>
+      <table class="tbl"><thead><tr><th>Trial</th><th>Rule</th><th>pp-Sharpe</th><th>年化</th><th>IS</th><th>OOS</th><th>换手</th><th>MaxDD</th></tr></thead><tbody><tr class=""><td class="mono">T1-sma-cross-a</td><td class="mono">sma-cross-hysteresis-a</td><td>0.0225</td><td>0.3566</td><td>-0.0460</td><td>0.0905</td><td>0.0151</td><td>21.79%</td></tr><tr class="selected"><td class="mono">T2-sma-cross-b <span class="badge badge-accent">BEST</span></td><td class="mono">sma-cross-hysteresis-b</td><td>0.0416</td><td>0.6610</td><td>-0.0115</td><td>0.0926</td><td>0.0251</td><td>9.94%</td></tr><tr class=""><td class="mono">T3-momentum-cd-a</td><td class="mono">momentum-cooldown-a</td><td>0.0107</td><td>0.1696</td><td>-0.0622</td><td>0.0986</td><td>0.0653</td><td>13.31%</td></tr><tr class=""><td class="mono">T4-momentum-cd-b</td><td class="mono">momentum-cooldown-b</td><td>-0.0281</td><td>-0.4454</td><td>-0.0382</td><td>-0.0161</td><td>0.1156</td><td>15.16%</td></tr><tr class=""><td class="mono">T5-composite-pct-a</td><td class="mono">composite-percentile-a</td><td>0.0373</td><td>0.5915</td><td>-0.0729</td><td>0.1210</td><td>0.0704</td><td>8.62%</td></tr><tr class=""><td class="mono">T6-composite-pct-b</td><td class="mono">composite-percentile-b</td><td>0.0123</td><td>0.1952</td><td>-0.0724</td><td>0.0762</td><td>0.1005</td><td>8.37%</td></tr></tbody></table>
+      <div class="chips"><span class="badge badge-accent">selected T2-sma-cross-b (sma-cross-hysteresis-b)</span></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">LEGACY · 合成夹具 · 毛口径（superseded）</div><h2>v001 占位规则对照</h2></div><span class="badge badge-muted">legacy</span></div>
+      <table class="tbl"><thead><tr><th>Trial</th><th>Rule</th><th>pp-Sharpe</th><th>年化</th><th>IS</th><th>OOS</th><th>换手</th><th>MaxDD</th></tr></thead><tbody><tr class="selected"><td class="mono">T1-momentum-heavy <span class="badge badge-accent">BEST</span></td><td class="mono">legacy-composite</td><td>-0.0610</td><td>-0.9684</td><td>-0.1540</td><td>-0.0303</td><td>0.1014</td><td>5.69%</td></tr><tr class=""><td class="mono">T2-trend-heavy</td><td class="mono">legacy-composite</td><td>-0.2493</td><td>-3.9578</td><td>-0.3245</td><td>-0.2528</td><td>0.0435</td><td>11.72%</td></tr><tr class=""><td class="mono">T3-balanced-loose</td><td class="mono">legacy-composite</td><td>-0.0823</td><td>-1.3069</td><td>-0.3091</td><td>0.0870</td><td>0.0870</td><td>11.62%</td></tr><tr class=""><td class="mono">T4-stability-strict</td><td class="mono">legacy-composite</td><td>-0.0738</td><td>-1.1720</td><td>-0.2889</td><td>0.0725</td><td>0.0580</td><td>16.04%</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">REGISTERED RULES</div><h2>规则定义（quant-rules/v0.0.2）</h2></div></div>
+      <table class="tbl"><thead><tr><th>ruleId</th><th>族</th><th>说明</th><th>冻结参数</th></tr></thead><tbody>
+        <tr><td class="mono">sma-cross-hysteresis-a</td><td>sma-cross-hysteresis</td><td>SMA20/60 交叉，入场带 +0.10%，退出带 −0.50%</td><td class="mono">{"smaShort":20,"smaLong":60,"entryBandPct":0.1,"exitBandPct":-0.5}</td></tr><tr><td class="mono">sma-cross-hysteresis-b</td><td>sma-cross-hysteresis</td><td>SMA10/40 交叉，入场带 +0.05%，退出带 −0.30%</td><td class="mono">{"smaShort":10,"smaLong":40,"entryBandPct":0.05,"exitBandPct":-0.3}</td></tr><tr><td class="mono">momentum-cooldown-a</td><td>momentum-cooldown</td><td>10 日动量 ≥+1.0% 入场，≤−1.0% 退出，冷却 5 根</td><td class="mono">{"momentumLag":10,"entryPct":1,"exitPct":-1,"cooldownBars":5}</td></tr><tr><td class="mono">momentum-cooldown-b</td><td>momentum-cooldown</td><td>5 日动量 ≥+0.5% 入场，≤−0.5% 退出，冷却 8 根</td><td class="mono">{"momentumLag":5,"entryPct":0.5,"exitPct":-0.5,"cooldownBars":8}</td></tr><tr><td class="mono">composite-percentile-a</td><td>composite-percentile</td><td>合成分 ≥ 自身 40 棒 70 分位持仓</td><td class="mono">{"window":40,"percentile":70}</td></tr><tr><td class="mono">composite-percentile-b</td><td>composite-percentile</td><td>合成分 ≥ 自身 40 棒 60 分位持仓</td><td class="mono">{"window":40,"percentile":60}</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <section class="view" data-view="dsr">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">DEFLATED SHARPE RATIO · 真实数据网格</div><h2>防作弊校正结果</h2></div></div>
+      <div class="metrics">
+        <div class="metric "><div class="metric-label">DSR</div><div class="metric-value">0.5522</div><div class="metric-sub">PSR(SR₀)，Eq.(2)</div></div>
+        <div class="metric "><div class="metric-label">SR₀</div><div class="metric-value">0.0326</div><div class="metric-sub">√V·maxZ（零假设式）</div></div>
+        <div class="metric "><div class="metric-label">n returns</div><div class="metric-value">199</div><div class="metric-sub">选中 T2-sma-cross-b</div></div>
+        <div class="metric "><div class="metric-label">trials std</div><div class="metric-value">0.0250</div><div class="metric-sub">6 组两两不同</div></div>
+      </div>
+      <pre>DSR   = Φ( (SR̂ − SR₀)·√(T−1) / √(1 − γ₃·SR̂ + ((γ₄−1)/4)·SR̂²) )      —— Eq.(2), SSRN 2460551
+SR₀   = √(V[{SR̂}]) · ( (1−γ)·Z⁻¹(1−1/N) + γ·Z⁻¹(1−1/(N·e)) )          —— Eq.(1)/(6)，零假设下无均值项
+γ₄    = 原始峰度（正态=3；正态下分母退化为 Lo(2002) 的 1+SR²/2）
+SR̂, SR₀ 均为未年化 per-period 口径；2026-11-07 已对照论文原文逐项核实</pre>
+    </div>
+    <div class="callout warn"><b>保守偏差披露</b>：Eq.(1) 要求 N 为独立试验数（附录 A.3）。本网格 6 条规则共用同一数据集、正相关 → 有效 N &lt; 6 → 名义 N=6 的折减偏强（保守方向）。有效 N 估计为阶段 3 候选。</div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">PROMOTION GATE</div><h2>人工 review 是硬门禁</h2></div></div>
+      <div class="kv">
+        <div class="k">① 版本</div><div>权重/阈值/规则/数据任何变更 → 文件名与常量升版本</div>
+        <div class="k">② golden</div><div>同步重算并冻结 golden（quant-rules / quant-metrics / dataset-v002 测试）</div>
+        <div class="k">③ 数据版本</div><div>dataVersion / trialsVersion bump（版本化契约）</div>
+        <div class="k">④ 人工批准</div><div>机器永不自我升格；CI 不代替人工批准</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" data-view="quality">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">quality-gates/v0.0.2 · 真实快照</div><h2>数据质量门禁：PASS</h2></div><span class="badge badge-accent">OKX · BTC-USDT · 1D</span></div>
+      <div class="metrics">
+        <div class="metric "><div class="metric-label">Rows</div><div class="metric-value">260</div><div class="metric-sub">2026-02-18 .. 2026-11-04</div></div>
+        <div class="metric "><div class="metric-label">Max |move|</div><div class="metric-value">8.3677%</div><div class="metric-sub">闸值 25%（crypto 放宽，冻结决定）</div></div>
+        <div class="metric "><div class="metric-label">Critical</div><div class="metric-value">0</div><div class="metric-sub">findings 总数 0</div></div>
+        <div class="metric "><div class="metric-label">Close range</div><div class="metric-value">58384 ~ 86419</div><div class="metric-sub">USD</div></div>
+      </div>
+      <div class="chips"><span class="badge badge-mono">fetchedAtUtc 2026-11-05T19:22:18.540Z</span><span class="badge badge-mono">point-in-time：仅已收盘棒</span></div>
+    </div>
+    <div class="callout">门禁项：日期严格升序且唯一 · 24/7 无日历缺口 · close 正且有限 · 单日 |变动| ≤ 25%。任一 critical → 抓取脚本拒收、不落盘。刷新数据 = 重跑 fetch + fetchedAtUtc 更新 + dataVersion 升级 + golden 重算 + 人工 review。</div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">SYNTHETIC BASELINE</div><h2>v001 合成夹具（对照）</h2></div><span class="badge badge-muted">SYNTHETIC</span></div>
+      <div class="kv"><div class="k">dataVersion</div><div class="mono">quant-dataset/v0.0.1</div><div class="k">rows</div><div>130（LCG seed=20261102）</div></div>
+    </div>
+  </section>
+
+  <section class="view" data-view="agent">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">quant-agent/v0.0.2 · 有界对话 agent</div><h2>用法与边界</h2></div><span class="badge badge-mono">authority: deterministic-tools</span></div>
+      <pre>node quant/agent/cli.js ask "当前数据集质量如何？"            # 确定性摘要，永不触网
+node --env-file=.env quant/agent/cli.js ask "解释 DSR" --consent  # 需 DEEPSEEK_API_KEY
+node quant/agent/cli.js repl --consent                            # 交互模式</pre>
+      <div class="chips"><span class="badge badge-mono">assess_frozen_dataset</span><span class="badge badge-mono">signal_components</span><span class="badge badge-mono">guard_check</span><span class="badge badge-mono">trial_metrics</span><span class="badge badge-mono">data_quality</span></div>
+      <div class="callout">封闭注册表 = 权威白名单：模型只能调用以上 5 个确定性工具，不能自供数据、不能下单交易。citations 只来自成功工具返回的 evalRunId/signalFingerprint；模型文本中的数字不构成引用。</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>本机暂无审计记录</h2></div></div>
+      <div class="kv"><div class="k">位置</div><div class="mono">系统临时目录 fc-quant-audit/agent-audit.jsonl（QUANT_AUDIT_DIR 可覆盖）</div><div class="k">说明</div><div>每次 agent 问答落一条仅元数据记录：问题/回答只存 SHA-256 前缀哈希，永不存明文。</div></div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <div>Evidence-based demo · real market snapshot + synthetic baseline · Not investment advice · 不构成任何策略结论</div>
+    <div>All numbers computed by deterministic pure functions · 2026-11-09T16:39:33.271Z</div>
+  </div>
+</main>
+<script>
+var DATA = {"generatedAtUtc":"2026-11-09T16:39:33.271Z","meta":{"metricsVersion":"eval-metrics/v0.0.2","metricsBasis":"synthetic_fixture_placeholder_rules","costModel":{"commissionBps":2,"slippageBps":5},"rulesVersion":"quant-rules/v0.0.2","agentVersion":"quant-agent/v0.0.2","gatesVersion":"quality-gates/v0.0.2"},"datasets":{"v001":{"dataVersion":"quant-dataset/v0.0.1","nature":"synthetic_fixture","rows":130,"span":["2026-05-01","2026-10-29"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.1","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":130,"smaShort":81.1273,"smaLong":80.4618,"trendBps":82.7155,"momentum10Pct":1.1004,"volatility20Pct":1.4692,"maxDrawdownPct":24.8064,"componentScores":{"momentum":55.502,"trend":70.678875,"stability":92.6540137983263},"missingComponents":[],"signalScore":70.1019},"signalScore":70.1019,"guardStatus":"pass","breaches":[],"decisionStatus":"eligible","signalFingerprint":"sig-982d57f915e36caf","evalRunId":"qer-dd147a8ca0cb3163"},"ok":true},"v002":{"dataVersion":"quant-dataset/v0.0.2","nature":"real_market_data","source":"okx:BTC-USDT:1D","fetchedAtUtc":"2026-11-05T19:22:18.540Z","rows":260,"span":["2026-02-18","2026-11-04"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.2","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":260,"smaShort":80170.995,"smaLong":81341.21,"trendBps":-143.865,"momentum10Pct":-5.46,"volatility20Pct":2.195,"maxDrawdownPct":28.5426,"componentScores":{"momentum":22.7,"trend":14.033749999999998,"stability":89.0250556417331},"missingComponents":[],"signalScore":36.2481},"signalScore":36.2481,"guardStatus":"halt","breaches":[{"code":"DRAWDOWN_LIMIT_EXCEEDED","severity":"critical","observed":28.5426,"limit":25,"message":"Max drawdown 28.5426% exceeds the 25% limit."}],"decisionStatus":"blocked","signalFingerprint":"sig-b95d74f104b987e9","evalRunId":"qer-652332d330f2cdc6"},"ok":true,"quality":{"passed":true,"criticalCount":0,"findings":[],"stats":{"rows":260,"firstDate":"2026-02-18","lastDate":"2026-11-04","maxAbsMovePct":8.3677,"minClose":58384,"maxClose":86419}}}},"rules":[{"ruleId":"sma-cross-hysteresis-a","family":"sma-cross-hysteresis","description":"SMA20/60 交叉，入场带 +0.10%，退出带 −0.50%","params":{"smaShort":20,"smaLong":60,"entryBandPct":0.1,"exitBandPct":-0.5},"version":"quant-rules/v0.0.2"},{"ruleId":"sma-cross-hysteresis-b","family":"sma-cross-hysteresis","description":"SMA10/40 交叉，入场带 +0.05%，退出带 −0.30%","params":{"smaShort":10,"smaLong":40,"entryBandPct":0.05,"exitBandPct":-0.3},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-a","family":"momentum-cooldown","description":"10 日动量 ≥+1.0% 入场，≤−1.0% 退出，冷却 5 根","params":{"momentumLag":10,"entryPct":1,"exitPct":-1,"cooldownBars":5},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-b","family":"momentum-cooldown","description":"5 日动量 ≥+0.5% 入场，≤−0.5% 退出，冷却 8 根","params":{"momentumLag":5,"entryPct":0.5,"exitPct":-0.5,"cooldownBars":8},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-a","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 70 分位持仓","params":{"window":40,"percentile":70},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-b","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 60 分位持仓","params":{"window":40,"percentile":60},"version":"quant-rules/v0.0.2"}],"trials":{"v001":{"trialsVersion":"quant-trials/v0.0.1","net":false,"rows":[{"trialId":"T1-momentum-heavy","ruleId":null,"weights":{"momentum":0.7,"trend":0.2,"stability":0.1},"entryThresholdPct":55,"nReturns":69,"sharpeAnnualized":-0.9684431379310787,"sharpePerPeriod":-0.061006183377920416,"isSharpePerPeriod":-0.15397821830922692,"oosSharpePerPeriod":-0.030343505964607016,"turnover":0.10144927536231885,"maxDrawdownPct":5.689631449267672},{"trialId":"T2-trend-heavy","ruleId":null,"weights":{"momentum":0.1,"trend":0.7,"stability":0.2},"entryThresholdPct":50,"nReturns":69,"sharpeAnnualized":-3.9577764252557652,"sharpePerPeriod":-0.24931648014335642,"isSharpePerPeriod":-0.3245104080654032,"oosSharpePerPeriod":-0.25284148399894596,"turnover":0.043478260869565216,"maxDrawdownPct":11.722252175850123},{"trialId":"T3-balanced-loose","ruleId":null,"weights":{"momentum":0.4,"trend":0.35,"stability":0.25},"entryThresholdPct":45,"nReturns":69,"sharpeAnnualized":-1.3068522700156726,"sharpePerPeriod":-0.08232395492289767,"isSharpePerPeriod":-0.3090708920521455,"oosSharpePerPeriod":0.08704336811970442,"turnover":0.08695652173913043,"maxDrawdownPct":11.622458847360221},{"trialId":"T4-stability-strict","ruleId":null,"weights":{"momentum":0.2,"trend":0.2,"stability":0.6},"entryThresholdPct":62,"nReturns":69,"sharpeAnnualized":-1.1720420016228015,"sharpePerPeriod":-0.073831706248007,"isSharpePerPeriod":-0.2888555683549867,"oosSharpePerPeriod":0.07249486650964856,"turnover":0.057971014492753624,"maxDrawdownPct":16.043574049139185}],"best":{"trialId":"T1-momentum-heavy","ruleId":null},"dsr":{"dsr":0.09958479775211265,"sr":-0.061006183377920416,"sr0":0.09353111379623864,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"}},"v002":{"trialsVersion":"quant-trials/v0.0.2","net":true,"rows":[{"trialId":"T1-sma-cross-a","ruleId":"sma-cross-hysteresis-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.35660869975426307,"sharpePerPeriod":0.022464236545520964,"isSharpePerPeriod":-0.04601375150062451,"oosSharpePerPeriod":0.0905268606646923,"turnover":0.01507537688442211,"maxDrawdownPct":21.794033597134998},{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.6609705351542389,"sharpePerPeriod":0.04163722999903313,"isSharpePerPeriod":-0.011527082181515711,"oosSharpePerPeriod":0.09264473234597712,"turnover":0.02512562814070352,"maxDrawdownPct":9.939600598842},{"trialId":"T3-momentum-cd-a","ruleId":"momentum-cooldown-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.16960084440536438,"sharpePerPeriod":0.010683848962932249,"isSharpePerPeriod":-0.062196749101302705,"oosSharpePerPeriod":0.09855047271805069,"turnover":0.06532663316582915,"maxDrawdownPct":13.308210475557846},{"trialId":"T4-momentum-cd-b","ruleId":"momentum-cooldown-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":-0.445378678825312,"sharpePerPeriod":-0.028056219605292487,"isSharpePerPeriod":-0.03823924211518666,"oosSharpePerPeriod":-0.016111867167277565,"turnover":0.11557788944723618,"maxDrawdownPct":15.16041180508795},{"trialId":"T5-composite-pct-a","ruleId":"composite-percentile-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.5915332399141368,"sharpePerPeriod":0.03726309154859791,"isSharpePerPeriod":-0.0729316487642392,"oosSharpePerPeriod":0.12102972285619477,"turnover":0.07035175879396985,"maxDrawdownPct":8.617880937285},{"trialId":"T6-composite-pct-b","ruleId":"composite-percentile-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.19524128861703358,"sharpePerPeriod":0.012299045126963254,"isSharpePerPeriod":-0.07242755505323818,"oosSharpePerPeriod":0.07620095372548809,"turnover":0.10050251256281408,"maxDrawdownPct":8.374748245133636}],"best":{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b"},"dsr":{"dsr":0.5522314638222234,"sr":0.04163722999903313,"sr0":0.03255064350869444,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"}}},"eval":{"runDate":"2026-11-05T19:34:35.519Z","gitCommit":"45f5e270e46a694f4d974e7129b2e41804e8b73a","MODEL":"NOT_RUN","checksPassed":28,"checksTotal":28,"failedChecks":[]},"audit":null};
+(function(){
+  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"] };
+  var buttons = document.querySelectorAll(".nav-btn");
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].addEventListener("click", function() {
+      var name = this.getAttribute("data-view");
+      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === this); }.bind(this));
+      document.querySelectorAll(".view").forEach(function(v){ v.classList.toggle("active", v.getAttribute("data-view") === name); });
+      document.getElementById("view-title").textContent = titles[name][0];
+      document.getElementById("view-sub").textContent = titles[name][1];
+    });
+  }
+})();
+</script>
+</body>
+</html>
