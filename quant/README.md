@@ -101,6 +101,10 @@ node quant/data/fetch-btc-daily.js          # 手动运行；OKX 主源，失败
 - **真实数据上的权威结果**（不构成任何策略结论）：signalScore=36.2481；**守卫在真实数据上触发 halt**（maxDrawdown 28.54% > 25% 冻结限额 → decisionStatus=blocked，breach=DRAWDOWN_LIMIT_EXCEEDED）；规则净口径 pp-Sharpe −0.0281 ~ +0.0416（6 组两两不同），选中 T2 sma-cross-b，DSR=0.5522（n=199，IS/OOS=121/78）。
 - 刷新数据 = 重跑 fetch + `fetchedAtUtc` 更新 + dataVersion 升级 + golden 重算 + **人工 review 硬门禁**。
 
+## LangGraph 对照实验（隔离区，2026-11-10）
+
+用户授权的框架对照实验：`quant/lab-langgraph/`（独立 package.json，LangChain 依赖不进主线；lint Zone LX）。用 LangGraph 1.7.2 StateGraph 重实现编排层，7 个治理对等用例与主线全通过，live kimi 冒烟数字逐位一致。**结论：主线维持 vanilla 零依赖**（实验发现 8 项框架摩擦：config 键位置陷阱、usage 字段名不对齐、BaseChatModel 样板、102MB 依赖树、无 TTL 会话、无内置重试等），详见 `quant/lab-langgraph/REPORT.md`。升级为正式实现的触发条件：批量自动化提案循环成为正式需求。
+
 ## 在完整量化系统中的定位
 
 行业七层（数据设施 → 策略引擎 → 风控 → 组合 → 执行 EMS → 订单 OMS → 监控）中，本仓库覆盖**数据设施最小可用（快照+门禁，①）+ 策略引擎（②）+ 事前风控（③前半）+ 回测方法论（DSR/trials）+ 审计指纹**，**永远不进入** 执行（EMS）与订单（OMS）层。agent 定位：**研究层只读解释器**——比 RD-Agent(Q)（自动写因子代码）保守一级，比 TradingAgents（多角色交易决策）保守两级。剩余缺口：多市场/复权/实时性、成本模型校准、会话记忆与引用结构（0.2.1 候选）。

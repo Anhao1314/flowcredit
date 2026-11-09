@@ -40,6 +40,7 @@ const CHILD_PROCESS_ALLOWED = new Set([
 function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir).sort()) {
+    if (name === "node_modules") continue; // 依赖树不属被审代码；实验区依赖由 package.json 声明面审计
     const path = join(dir, name);
     if (statSync(path).isDirectory()) {
       if (CHILD_PROCESS_ALLOWED.has(path)) { out.push(...walk(path), "__DIR__" + path); continue; }
@@ -93,6 +94,8 @@ const ZONE_B_FORBIDDEN = [
   /@deepseek-ai/, /agent[/\\]src/, /harness\.js/,
   /langchain/i, /autogen/i, /crewai/i, /openai/i, /anthropic/i
 ];
+// Zone LX 实验区专用残留禁令：放开 langchain/openai（实验对象），其余保持。
+const LAB_FORBIDDEN = [/@deepseek-ai/, /agent[/\\]src/, /harness\.js/, /\bchild_process\b/, /\bcrewai\b/i, /\bautogen\b/i];
 const ZONE_B_NET_ENV = [
   /node:http/, /node:https/, /node:dns/, /node:net/, /\bfetch\s*\(/, /\bWebSocket\b/,
   /\bprocess\.env\b/, /\bMath\.random\b/
@@ -132,6 +135,11 @@ for (const path of walk(QUANT)) {
     // 时钟岛：audit.js（审计时间戳）与 server.js（限流窗口）；其余文件仍全面禁时钟。
     if (rel.endsWith("audit.js") || rel.endsWith("server.js")) scan(path, [/\bMath\.random\b/], "zoneC-purity-infra");
     else scan(path, ZONE_C_RUNTIME, "zoneC-purity");
+  } else if (/^quant[/\\]lab-langgraph[/\\]/.test(rel)) {
+    // Zone LX — 隔离实验区（用户 2026-11-10 授权的 LangGraph 对照实验，非主线）：
+    //   允许 langchain/openai 框架依赖；仍禁 @deepseek-ai SDK、agent/src、harness.js、
+    //   child_process、Math.random；产物仅注记层，不得回写权威路径。
+    scan(path, [/@deepseek-ai/, /agent[/\\]src/, /harness\.js/, /\bchild_process\b/, /\bMath\.random\b/], "zoneLX-lab");
   } else if (/^quant[/\\]console[/\\]/.test(rel)) {
     // Zone E — 浏览器 UI 区（展示层，不属于 Node 确定性运行时）：
     //   允许同源 fetch("/api/...") 与 Math.random（浏览器会话 id）；禁跨源 fetch、
@@ -150,7 +158,8 @@ for (const path of walk(QUANT)) {
     const allowed = [...CHILD_PROCESS_ALLOWED].some(base => path === base || path.startsWith(base + "/") || path.startsWith(base + "\\"));
     if (!allowed) violations.push({ file: rel, line: 0, rule: "zoneB-child-process", text: "child_process outside allowlist" });
   }
-  scan(path, ZONE_B_FORBIDDEN, "zoneB-forbidden");
+  if (/^quant[/\\]lab-langgraph[/\\]/.test(rel)) scan(path, LAB_FORBIDDEN, "zoneLX-forbidden");
+  else scan(path, ZONE_B_FORBIDDEN, "zoneB-forbidden");
 }
 
 if (violations.length) {
