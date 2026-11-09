@@ -101,9 +101,16 @@ node quant/data/fetch-btc-daily.js          # 手动运行；OKX 主源，失败
 - **真实数据上的权威结果**（不构成任何策略结论）：signalScore=36.2481；**守卫在真实数据上触发 halt**（maxDrawdown 28.54% > 25% 冻结限额 → decisionStatus=blocked，breach=DRAWDOWN_LIMIT_EXCEEDED）；规则净口径 pp-Sharpe −0.0281 ~ +0.0416（6 组两两不同），选中 T2 sma-cross-b，DSR=0.5522（n=199，IS/OOS=121/78）。
 - 刷新数据 = 重跑 fetch + `fetchedAtUtc` 更新 + dataVersion 升级 + golden 重算 + **人工 review 硬门禁**。
 
-## LangGraph 对照实验（隔离区，2026-11-10）
+## 框架对照实验（隔离区，2026-11-10，三条腿）
 
-用户授权的框架对照实验：`quant/lab-langgraph/`（独立 package.json，LangChain 依赖不进主线；lint Zone LX）。用 LangGraph 1.7.2 StateGraph 重实现编排层，7 个治理对等用例与主线全通过，live kimi 冒烟数字逐位一致。**结论：主线维持 vanilla 零依赖**（实验发现 8 项框架摩擦：config 键位置陷阱、usage 字段名不对齐、BaseChatModel 样板、102MB 依赖树、无 TTL 会话、无内置重试等），详见 `quant/lab-langgraph/REPORT.md`。升级为正式实现的触发条件：批量自动化提案循环成为正式需求。
+用户授权的框架对照实验，全部在独立隔离区（依赖不进主线，lint Zone LX）：
+
+| 实验 | 框架 | 治理对等 | 关键发现 |
+|---|---|---|---|
+| `quant/lab-langgraph/` | LangGraph 1.7.2 | 7/7 ✅ | config 键静默丢弃、102MB 依赖树、未知工具抛错中止、无 TTL/重试 |
+| `quant/lab-vercel-ai-sdk/` | Vercel AI SDK 7.0.166 | 7/7 ✅ | finishReason 形状静默陷阱（最贵）、usage 双层形状、dynamic 工具二等公民、错误回喂内建但轨迹不可见、依赖 ~30MB |
+
+**结论**：主线维持 vanilla 零依赖（三套实现治理对等，框架的静默失败模式拉高排查成本）；若未来必须选框架，Vercel AI SDK 在错误回喂语义/usage/依赖体积上优于 LangGraph。升级触发条件：批量自动化提案循环成为正式需求。详见两份 `REPORT.md`。
 
 ## 在完整量化系统中的定位
 

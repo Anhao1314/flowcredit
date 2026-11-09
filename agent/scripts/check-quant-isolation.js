@@ -135,7 +135,7 @@ for (const path of walk(QUANT)) {
     // 时钟岛：audit.js（审计时间戳）与 server.js（限流窗口）；其余文件仍全面禁时钟。
     if (rel.endsWith("audit.js") || rel.endsWith("server.js")) scan(path, [/\bMath\.random\b/], "zoneC-purity-infra");
     else scan(path, ZONE_C_RUNTIME, "zoneC-purity");
-  } else if (/^quant[/\\]lab-langgraph[/\\]/.test(rel)) {
+  } else if (/^quant[/\\]lab-(?:langgraph|vercel-ai-sdk)[/\\]/.test(rel)) {
     // Zone LX — 隔离实验区（用户 2026-11-10 授权的 LangGraph 对照实验，非主线）：
     //   允许 langchain/openai 框架依赖；仍禁 @deepseek-ai SDK、agent/src、harness.js、
     //   child_process、Math.random；产物仅注记层，不得回写权威路径。
@@ -158,7 +158,7 @@ for (const path of walk(QUANT)) {
     const allowed = [...CHILD_PROCESS_ALLOWED].some(base => path === base || path.startsWith(base + "/") || path.startsWith(base + "\\"));
     if (!allowed) violations.push({ file: rel, line: 0, rule: "zoneB-child-process", text: "child_process outside allowlist" });
   }
-  if (/^quant[/\\]lab-langgraph[/\\]/.test(rel)) scan(path, LAB_FORBIDDEN, "zoneLX-forbidden");
+  if (/^quant[/\\]lab-(?:langgraph|vercel-ai-sdk)[/\\]/.test(rel)) scan(path, LAB_FORBIDDEN, "zoneLX-forbidden");
   else scan(path, ZONE_B_FORBIDDEN, "zoneB-forbidden");
 }
 
