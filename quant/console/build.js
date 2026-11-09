@@ -3,143 +3,33 @@
  * quant/console/build.js — Codex-Web 风控制台生成器（阶段 F1，静态零服务器）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
- *   1. 不发起网络请求、不读环境变量、不用随机数——全部输入是仓库内冻结产物 + quant/ 纯函数。
- *   2. 只读不判：本文件是展示层，不做任何业务判定——权威数字全部来自
- *      runPipeline / metrics / rules / quality-gates 的纯函数输出，与测试同源。
+ *   1. 不发起网络请求、不用随机数——全部输入是仓库内冻结产物 + quant/console/payload.js
+ *      共享数据层（与测试同源的纯函数输出）。
+ *   2. 只读不判：本文件是展示层，不做任何业务判定。
  *   3. 不改动任何权威模块、不写 quant/ 之外的文件（产物仅 quant/console/index.html）。
- *   4. 产物零依赖：单文件 HTML，内嵌数据与 vanilla JS，双击 file:// 即可打开。
+ *   4. 产物零依赖：单文件 HTML，内嵌数据与 vanilla JS，双击 file:// 即可打开
+ *      （file:// 下 Chat 视图会提示需要 serve 启动——见 quant/agent/server.js）。
  *   5. 不提供任何交易类功能或 HTTP 端点——只读仪表盘。
  *
  * 用法：npm run console（在 agent/ 目录）或 node quant/console/build.js
  */
 
-import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
+import { computeConsolePayload } from "./payload.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const QUANT = join(HERE, "..");
 
-const { runPipeline } = await import(join(QUANT, "pipeline.js"));
-const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, splitPoint, COST_MODEL_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(QUANT, "eval", "metrics.js"));
-const { listRules } = await import(join(QUANT, "strategy", "rules-v002.js"));
-const { runQualityGates } = await import(join(QUANT, "data", "quality-gates.js"));
-
-// ── 读取冻结产物 ─────────────────────────────────────────────────────────────
-const readJson = path => JSON.parse(readFileSync(path, "utf8"));
-const datasetV001 = readJson(join(QUANT, "data", "dataset-v001.json"));
-const datasetV002 = readJson(join(QUANT, "data", "dataset-v002.json"));
-const trialsV001 = readJson(join(QUANT, "eval", "trials-v001.json"));
-const trialsV002 = readJson(join(QUANT, "eval", "trials-v002.json"));
-
-function latestEvalArtifact() {
-  const dir = join(QUANT, "eval", "results");
-  if (!existsSync(dir)) return null;
-  const files = readdirSync(dir).filter(name => name.startsWith("quant-eval-") && name.endsWith(".json")).sort();
-  return files.length ? readJson(join(dir, files.at(-1))) : null;
-}
-const evalArtifact = latestEvalArtifact();
-
-function readAuditSummary() {
-  try {
-    const file = join(tmpdir(), "fc-quant-audit", "agent-audit.jsonl");
-    if (!existsSync(file)) return null;
-    const lines = readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
-    const byTool = {};
-    const byStatus = {};
-    let lastTs = null;
-    for (const entry of lines) {
-      byStatus[entry.harnessStatus || "unknown"] = (byStatus[entry.harnessStatus || "unknown"] || 0) + 1;
-      for (const name of String(entry.toolCalls || "").split(">").filter(Boolean)) {
-        byTool[name] = (byTool[name] || 0) + 1;
-      }
-      if (entry.timestamp) lastTs = entry.timestamp;
-    }
-    return { file: "agent-audit.jsonl", entries: lines.length, byTool, byStatus, lastTs };
-  } catch {
-    return null;
-  }
-}
-
-// ── 权威数字：纯函数实时计算（与测试同源）────────────────────────────────────
-const fmt = (value, digits = 4) => (value === null || value === undefined) ? "n/a" : Number(value).toFixed(digits);
-const pipelineOf = dataset => runPipeline({ dataVersion: dataset.dataVersion, series: dataset.series, caseId: "console" });
-
-function trialRows(dataset, trials) {
-  const sp = splitPoint(dataset.series.length);
-  const rows = trials.trials.map(trial => {
-    const backtest = strategyReturns(dataset.series, trial);
-    const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
-    const oos = backtest.returns.slice(sp.firstOosReturnIndex);
-    return {
-      trialId: trial.trialId, ruleId: trial.ruleId ?? null,
-      weights: trial.weights ?? null, entryThresholdPct: trial.entryThresholdPct ?? null,
-      nReturns: backtest.returns.length,
-      sharpeAnnualized: sharpeRatio(backtest.returns),
-      sharpePerPeriod: sharpeRatio(backtest.returns, { annualize: false }),
-      isSharpePerPeriod: sharpeRatio(is, { annualize: false }),
-      oosSharpePerPeriod: sharpeRatio(oos, { annualize: false }),
-      turnover: turnover(backtest.positions),
-      maxDrawdownPct: maxDrawdownPct(backtest.returns)
-    };
-  });
-  const perPeriod = rows.map(row => row.sharpePerPeriod);
-  const bestIndex = perPeriod.reduce((best, value, index) => (value > perPeriod[best] ? index : best), 0);
-  const bestTrial = trials.trials[bestIndex];
-  const dsr = deflatedSharpe(strategyReturns(dataset.series, bestTrial).returns, perPeriod);
-  return { rows, best: { trialId: bestTrial.trialId, ruleId: bestTrial.ruleId ?? null }, dsr, sp, net: trials.trials.some(trial => trial.ruleId !== undefined) };
-}
-
-const pipeV001 = pipelineOf(datasetV001);
-const pipeV002 = pipelineOf(datasetV002);
-const gatesV002 = runQualityGates(datasetV002.series);
-const t1 = trialRows(datasetV001, trialsV001);
-const t2 = trialRows(datasetV002, trialsV002);
-const rules = listRules();
-const audit = readAuditSummary();
-
-const payload = {
-  generatedAtUtc: new Date().toISOString(),
-  meta: {
-    metricsVersion: METRICS_VERSION, metricsBasis: METRICS_BASIS,
-    costModel: COST_MODEL_V002, rulesVersion: (await import(join(QUANT, "strategy", "rules-v002.js"))).RULES_VERSION,
-    agentVersion: "quant-agent/v0.0.2", gatesVersion: (await import(join(QUANT, "data", "quality-gates.js"))).GATES_VERSION
-  },
-  datasets: {
-    v001: {
-      dataVersion: datasetV001.dataVersion, nature: datasetV001.nature, rows: datasetV001.series.length,
-      span: [datasetV001.series[0].date, datasetV001.series.at(-1).date],
-      pipeline: pipeV001.authoritative, ok: pipeV001.ok
-    },
-    v002: {
-      dataVersion: datasetV002.dataVersion, nature: datasetV002.nature, source: datasetV002.source,
-      fetchedAtUtc: datasetV002.fetchedAtUtc, rows: datasetV002.series.length,
-      span: [datasetV002.series[0].date, datasetV002.series.at(-1).date],
-      pipeline: pipeV002.authoritative, ok: pipeV002.ok,
-      quality: { passed: gatesV002.passed, criticalCount: gatesV002.criticalCount, findings: gatesV002.findings, stats: gatesV002.stats }
-    }
-  },
-  rules,
-  trials: {
-    v001: { trialsVersion: trialsV001.trialsVersion, net: t1.net, rows: t1.rows, best: t1.best, dsr: t1.dsr },
-    v002: { trialsVersion: trialsV002.trialsVersion, net: t2.net, rows: t2.rows, best: t2.best, dsr: t2.dsr }
-  },
-  eval: evalArtifact ? {
-    runDate: evalArtifact.runDate, gitCommit: evalArtifact.gitCommit, MODEL: evalArtifact.MODEL,
-    checksPassed: evalArtifact.checks.filter(item => item.passed).length,
-    checksTotal: evalArtifact.checks.length,
-    failedChecks: evalArtifact.checks.filter(item => !item.passed).map(item => item.name)
-  } : null,
-  audit
-};
+const payload = computeConsolePayload({ generatedAtUtc: new Date().toISOString() });
 
 // ── HTML 生成（ChatGPT-Web 风：深灰底/浅灰卡片/圆角/系统字体/蓝紫 accent）──────
 const esc = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const fmt = (value, digits = 4) => (value === null || value === undefined) ? "n/a" : Number(value).toFixed(digits);
 const badge = (text, kind) => `<span class="badge badge-${kind}">${esc(text)}</span>`;
 const metricCard = (label, value, sub, kind = "") => `<div class="metric ${kind}"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div>${sub ? `<div class="metric-sub">${esc(sub)}</div>` : ""}</div>`;
 
-function pipelineCard(datasetKey, ds) {
+function pipelineCard(ds) {
   const p = ds.pipeline;
   const guardKind = p.guardStatus === "halt" ? "bad" : "good";
   const decisionKind = p.decisionStatus === "blocked" ? "bad" : "good";
@@ -157,7 +47,7 @@ function pipelineCard(datasetKey, ds) {
   </div>`;
 }
 
-function rulesTable(result, netLabel) {
+function rulesTable(result) {
   const head = `<tr><th>Trial</th><th>Rule</th><th>pp-Sharpe</th><th>年化</th><th>IS</th><th>OOS</th><th>换手</th><th>MaxDD</th></tr>`;
   const rows = result.rows.map(row => {
     const selected = row.trialId === result.best.trialId ? " selected" : "";
@@ -190,7 +80,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
 .nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
 .nav-btn.active{background:var(--accent-soft);color:var(--text)}
-.sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
 main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .topbar{margin-bottom:22px}
 .topbar h1{font-size:22px;font-weight:650}
@@ -228,6 +117,19 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 .footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
 .kv .k{color:var(--muted)}
+.chat-thread{height:400px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:6px 2px}
+.msg{max-width:82%;border-radius:14px;padding:10px 14px;white-space:pre-wrap}
+.msg.user{align-self:flex-end;background:var(--accent-soft);border:1px solid rgba(139,92,246,.35)}
+.msg.assistant{align-self:flex-start;background:var(--card2);border:1px solid var(--border)}
+.msg .meta{font-size:10px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chat-inputrow{display:flex;gap:12px;align-items:flex-end;margin-top:14px}
+.chat-inputrow textarea{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:52px}
+.chat-side{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.chat-consent{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.sendbtn{background:var(--accent);border:none;color:#fff;border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer}
+.sendbtn:disabled{opacity:.45;cursor:not-allowed}
+.chat-hint{font-size:11.5px;color:var(--faint);margin-top:10px}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:190px}}
 </style>
 </head>
@@ -239,11 +141,12 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
   <button class="nav-btn" data-view="dsr">DSR &amp; Promotion</button>
   <button class="nav-btn" data-view="quality">Data Quality</button>
   <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
+  <button class="nav-btn" data-view="chat">Chat</button>
   <div class="sidebar-footer">
     <div>metrics ${esc(payload.meta.metricsVersion)}</div>
     <div>rules ${esc(payload.meta.rulesVersion)}</div>
     <div>agent ${esc(payload.meta.agentVersion)}</div>
-    <div>built ${esc(payload.generatedAtUtc.slice(0, 10))}</div>
+    <div>built ${esc((payload.generatedAtUtc || "").slice(0, 10))}</div>
   </div>
 </aside>
 <main>
@@ -251,8 +154,8 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 
   <section class="view active" data-view="overview">
     <div class="grid2">
-      ${pipelineCard("v001", payload.datasets.v001)}
-      ${pipelineCard("v002", payload.datasets.v002)}
+      ${pipelineCard(payload.datasets.v001)}
+      ${pipelineCard(payload.datasets.v002)}
     </div>
     <div class="callout good">真实数据上的权威判定：BTC 快照回撤 ${fmt(payload.datasets.v002.pipeline.signals.maxDrawdownPct, 2)}% 超过 25% 冻结限额 → 守卫 <b>halt</b>，decisionStatus = <b>blocked</b>（breach: DRAWDOWN_LIMIT_EXCEEDED）。机器先于人说不。</div>
     <div class="card">
@@ -268,12 +171,12 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
   <section class="view" data-view="rules">
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">quant-trials/${esc(payload.trials.v002.trialsVersion.split("/").pop())} · 真实 BTC · 净口径（成本 ${payload.meta.costModel.commissionBps}+${payload.meta.costModel.slippageBps} bps）</div><h2>规则网格 · 6 条注册规则</h2></div>${badge("basis " + payload.meta.metricsBasis, "mono")}</div>
-      ${rulesTable(t2)}
-      <div class="chips">${badge("selected " + payload.trials.v002.best.trialId + " (" + payload.trials.v002.best.ruleId + ")", "accent")}</div>
+      ${rulesTable(payload.trials.v002)}
+      <div class="chips">${badge("selected " + payload.trials.v002.best.trialId + " (" + (payload.trials.v002.best.ruleId || "") + ")", "accent")}</div>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">LEGACY · 合成夹具 · 毛口径（superseded）</div><h2>v001 占位规则对照</h2></div>${badge("legacy", "muted")}</div>
-      ${rulesTable(t1)}
+      ${rulesTable(payload.trials.v001)}
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">REGISTERED RULES</div><h2>规则定义（quant-rules/v0.0.2）</h2></div></div>
@@ -337,42 +240,118 @@ node quant/agent/cli.js repl --consent                            # 交互模式
       <div class="callout">封闭注册表 = 权威白名单：模型只能调用以上 5 个确定性工具，不能自供数据、不能下单交易。citations 只来自成功工具返回的 evalRunId/signalFingerprint；模型文本中的数字不构成引用。</div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>${audit ? "问答审计统计" : "本机暂无审计记录"}</h2></div>${audit ? badge(audit.entries + " entries", "mono") : ""}</div>
-      ${audit ? `<div class="kv">
-        <div class="k">total asks</div><div>${audit.entries}</div>
-        <div class="k">harness</div><div>${esc(Object.entries(audit.byStatus).map(([key, count]) => key + " ×" + count).join(" · "))}</div>
-        <div class="k">tool calls</div><div>${esc(Object.entries(audit.byTool).map(([key, count]) => key + " ×" + count).join(" · ") || "none")}</div>
-        <div class="k">last activity</div><div class="mono">${esc(audit.lastTs || "n/a")}</div>
-        <div class="k">log file</div><div class="mono">${esc(audit.file)}（哈希存储，无明文）</div>
+      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>${payload.audit ? "问答审计统计" : "本机暂无审计记录"}</h2></div>${payload.audit ? badge(payload.audit.entries + " entries", "mono") : ""}</div>
+      ${payload.audit ? `<div class="kv">
+        <div class="k">total asks</div><div>${payload.audit.entries}</div>
+        <div class="k">harness</div><div>${esc(Object.entries(payload.audit.byStatus).map(([key, count]) => key + " ×" + count).join(" · "))}</div>
+        <div class="k">tool calls</div><div>${esc(Object.entries(payload.audit.byTool).map(([key, count]) => key + " ×" + count).join(" · ") || "none")}</div>
+        <div class="k">last activity</div><div class="mono">${esc(payload.audit.lastTs || "n/a")}</div>
+        <div class="k">log file</div><div class="mono">agent-audit.jsonl（哈希存储，无明文）</div>
       </div>` : `<div class="kv"><div class="k">位置</div><div class="mono">系统临时目录 fc-quant-audit/agent-audit.jsonl（QUANT_AUDIT_DIR 可覆盖）</div><div class="k">说明</div><div>每次 agent 问答落一条仅元数据记录：问题/回答只存 SHA-256 前缀哈希，永不存明文。</div></div>`}
+    </div>
+  </section>
+
+  <section class="view" data-view="chat">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
+      <div id="chat-thread" class="chat-thread"></div>
+      <div class="chat-inputrow">
+        <textarea id="chat-input" rows="2" placeholder="问点什么…（例如：为什么守卫是 halt？）"></textarea>
+        <div class="chat-side">
+          <label class="chat-consent"><input type="checkbox" id="chat-consent" checked> modelConsent（允许发送到模型）</label>
+          <button id="chat-send" class="sendbtn" disabled>发送</button>
+        </div>
+      </div>
+      <div id="chat-hint" class="chat-hint">检测服务中…</div>
     </div>
   </section>
 
   <div class="footer">
     <div>Evidence-based demo · ${payload.datasets.v002.nature === "real_market_data" ? "real market snapshot + synthetic baseline" : "synthetic data"} · Not investment advice · 不构成任何策略结论</div>
-    <div>All numbers computed by deterministic pure functions · ${esc(payload.generatedAtUtc)}</div>
+    <div>All numbers computed by deterministic pure functions · ${esc((payload.generatedAtUtc || "").slice(0, 19).replace("T", " "))} UTC</div>
   </div>
 </main>
 <script>
 var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
 (function(){
-  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"] };
+  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"] };
   var buttons = document.querySelectorAll(".nav-btn");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {
       var name = this.getAttribute("data-view");
-      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === this); }.bind(this));
+      var self = this;
+      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === self); });
       document.querySelectorAll(".view").forEach(function(v){ v.classList.toggle("active", v.getAttribute("data-view") === name); });
       document.getElementById("view-title").textContent = titles[name][0];
       document.getElementById("view-sub").textContent = titles[name][1];
     });
   }
+
+  // ── Chat（仅 HTTP serve 模式可用；file:// 下自动禁用并提示）──────────────
+  var thread = document.getElementById("chat-thread");
+  var input = document.getElementById("chat-input");
+  var sendBtn = document.getElementById("chat-send");
+  var consent = document.getElementById("chat-consent");
+  var statusBadge = document.getElementById("chat-status");
+  var hint = document.getElementById("chat-hint");
+  var chatSession = null;
+  try { chatSession = sessionStorage.getItem("quant-chat-session") || ("web-" + Math.random().toString(16).slice(2, 10)); sessionStorage.setItem("quant-chat-session", chatSession); } catch (e) { chatSession = "web-anon"; }
+
+  function bubble(cls, text, meta, cites) {
+    var div = document.createElement("div");
+    div.className = "msg " + cls;
+    div.textContent = text;
+    if (meta) { var m = document.createElement("div"); m.className = "meta"; m.textContent = meta; div.appendChild(m); }
+    if (cites && cites.length) {
+      var box = document.createElement("div"); box.className = "cites";
+      cites.forEach(function(c) {
+        var b = document.createElement("span"); b.className = "badge badge-mono";
+        b.textContent = c.tool + " · " + String(c.evalRunId || "").slice(0, 12);
+        box.appendChild(b);
+      });
+      div.appendChild(box);
+    }
+    thread.appendChild(div);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  fetch("/api/health").then(function(r){ return r.json(); }).then(function(h) {
+    if (!h || !h.ok) throw new Error("bad health");
+    statusBadge.textContent = "llm " + (h.llm && h.llm.configured ? "configured" : "unconfigured") + " · " + (h.llm ? h.llm.model : "");
+    statusBadge.className = "badge badge-accent";
+    hint.textContent = "已连接 quant console 服务（" + h.serverVersion + "）。回答为模型对权威工具输出的解释，非权威。";
+    sendBtn.disabled = false;
+  }).catch(function() {
+    statusBadge.textContent = "chat unavailable";
+    statusBadge.className = "badge badge-bad";
+    hint.textContent = "聊天不可用：当前为 file:// 打开或服务未启动。请运行 npm run serve 后访问 http://127.0.0.1:8788/。";
+  });
+
+  function send() {
+    var question = input.value.trim();
+    if (!question || sendBtn.disabled) return;
+    bubble("user", question);
+    input.value = "";
+    sendBtn.disabled = true;
+    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: chatSession }) })
+      .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }); })
+      .then(function(resp) {
+        var body = resp.body;
+        bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
+          (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
+          body.citations || []);
+        if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
+      })
+      .catch(function(err) { bubble("assistant", "请求失败：" + err.message); })
+      .finally(function() { sendBtn.disabled = false; input.focus(); });
+  }
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
 })();
 </script>
 </body>
 </html>`;
 
-mkdirSync(HERE, { recursive: true });
 writeFileSync(join(HERE, "index.html"), html);
 process.stdout.write(`console built: quant/console/index.html (${(html.length / 1024).toFixed(1)} KB)\n`);
 process.stdout.write(`datasets: v001=${payload.datasets.v001.pipeline.signalScore} / v002=${payload.datasets.v002.pipeline.signalScore} · DSR(v002)=${fmt(payload.trials.v002.dsr?.dsr)} · checks ${checksRows}\n`);

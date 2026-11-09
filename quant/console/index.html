@@ -20,7 +20,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
 .nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
 .nav-btn.active{background:var(--accent-soft);color:var(--text)}
-.sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
 main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .topbar{margin-bottom:22px}
 .topbar h1{font-size:22px;font-weight:650}
@@ -58,6 +57,19 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 .footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
 .kv .k{color:var(--muted)}
+.chat-thread{height:400px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:6px 2px}
+.msg{max-width:82%;border-radius:14px;padding:10px 14px;white-space:pre-wrap}
+.msg.user{align-self:flex-end;background:var(--accent-soft);border:1px solid rgba(139,92,246,.35)}
+.msg.assistant{align-self:flex-start;background:var(--card2);border:1px solid var(--border)}
+.msg .meta{font-size:10px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chat-inputrow{display:flex;gap:12px;align-items:flex-end;margin-top:14px}
+.chat-inputrow textarea{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:52px}
+.chat-side{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.chat-consent{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.sendbtn{background:var(--accent);border:none;color:#fff;border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer}
+.sendbtn:disabled{opacity:.45;cursor:not-allowed}
+.chat-hint{font-size:11.5px;color:var(--faint);margin-top:10px}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:190px}}
 </style>
 </head>
@@ -69,6 +81,7 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
   <button class="nav-btn" data-view="dsr">DSR &amp; Promotion</button>
   <button class="nav-btn" data-view="quality">Data Quality</button>
   <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
+  <button class="nav-btn" data-view="chat">Chat</button>
   <div class="sidebar-footer">
     <div>metrics eval-metrics/v0.0.2</div>
     <div>rules quant-rules/v0.0.2</div>
@@ -187,30 +200,113 @@ node quant/agent/cli.js repl --consent                            # 交互模式
       <div class="callout">封闭注册表 = 权威白名单：模型只能调用以上 5 个确定性工具，不能自供数据、不能下单交易。citations 只来自成功工具返回的 evalRunId/signalFingerprint；模型文本中的数字不构成引用。</div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>本机暂无审计记录</h2></div></div>
-      <div class="kv"><div class="k">位置</div><div class="mono">系统临时目录 fc-quant-audit/agent-audit.jsonl（QUANT_AUDIT_DIR 可覆盖）</div><div class="k">说明</div><div>每次 agent 问答落一条仅元数据记录：问题/回答只存 SHA-256 前缀哈希，永不存明文。</div></div>
+      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>问答审计统计</h2></div><span class="badge badge-mono">183 entries</span></div>
+      <div class="kv">
+        <div class="k">total asks</div><div>183</div>
+        <div class="k">harness</div><div>not-requested ×59 · unconfigured ×9 · ok ×88 · max-steps-reached ×7 · unavailable ×20</div>
+        <div class="k">tool calls</div><div>assess_frozen_dataset:ok ×53 · trial_metrics:ok ×74 · place_order:rejected ×7</div>
+        <div class="k">last activity</div><div class="mono">2026-11-09T17:00:34.095Z</div>
+        <div class="k">log file</div><div class="mono">agent-audit.jsonl（哈希存储，无明文）</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" data-view="chat">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
+      <div id="chat-thread" class="chat-thread"></div>
+      <div class="chat-inputrow">
+        <textarea id="chat-input" rows="2" placeholder="问点什么…（例如：为什么守卫是 halt？）"></textarea>
+        <div class="chat-side">
+          <label class="chat-consent"><input type="checkbox" id="chat-consent" checked> modelConsent（允许发送到模型）</label>
+          <button id="chat-send" class="sendbtn" disabled>发送</button>
+        </div>
+      </div>
+      <div id="chat-hint" class="chat-hint">检测服务中…</div>
     </div>
   </section>
 
   <div class="footer">
     <div>Evidence-based demo · real market snapshot + synthetic baseline · Not investment advice · 不构成任何策略结论</div>
-    <div>All numbers computed by deterministic pure functions · 2026-11-09T16:39:33.271Z</div>
+    <div>All numbers computed by deterministic pure functions · 2026-11-09 17:02:58 UTC</div>
   </div>
 </main>
 <script>
-var DATA = {"generatedAtUtc":"2026-11-09T16:39:33.271Z","meta":{"metricsVersion":"eval-metrics/v0.0.2","metricsBasis":"synthetic_fixture_placeholder_rules","costModel":{"commissionBps":2,"slippageBps":5},"rulesVersion":"quant-rules/v0.0.2","agentVersion":"quant-agent/v0.0.2","gatesVersion":"quality-gates/v0.0.2"},"datasets":{"v001":{"dataVersion":"quant-dataset/v0.0.1","nature":"synthetic_fixture","rows":130,"span":["2026-05-01","2026-10-29"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.1","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":130,"smaShort":81.1273,"smaLong":80.4618,"trendBps":82.7155,"momentum10Pct":1.1004,"volatility20Pct":1.4692,"maxDrawdownPct":24.8064,"componentScores":{"momentum":55.502,"trend":70.678875,"stability":92.6540137983263},"missingComponents":[],"signalScore":70.1019},"signalScore":70.1019,"guardStatus":"pass","breaches":[],"decisionStatus":"eligible","signalFingerprint":"sig-982d57f915e36caf","evalRunId":"qer-dd147a8ca0cb3163"},"ok":true},"v002":{"dataVersion":"quant-dataset/v0.0.2","nature":"real_market_data","source":"okx:BTC-USDT:1D","fetchedAtUtc":"2026-11-05T19:22:18.540Z","rows":260,"span":["2026-02-18","2026-11-04"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.2","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":260,"smaShort":80170.995,"smaLong":81341.21,"trendBps":-143.865,"momentum10Pct":-5.46,"volatility20Pct":2.195,"maxDrawdownPct":28.5426,"componentScores":{"momentum":22.7,"trend":14.033749999999998,"stability":89.0250556417331},"missingComponents":[],"signalScore":36.2481},"signalScore":36.2481,"guardStatus":"halt","breaches":[{"code":"DRAWDOWN_LIMIT_EXCEEDED","severity":"critical","observed":28.5426,"limit":25,"message":"Max drawdown 28.5426% exceeds the 25% limit."}],"decisionStatus":"blocked","signalFingerprint":"sig-b95d74f104b987e9","evalRunId":"qer-652332d330f2cdc6"},"ok":true,"quality":{"passed":true,"criticalCount":0,"findings":[],"stats":{"rows":260,"firstDate":"2026-02-18","lastDate":"2026-11-04","maxAbsMovePct":8.3677,"minClose":58384,"maxClose":86419}}}},"rules":[{"ruleId":"sma-cross-hysteresis-a","family":"sma-cross-hysteresis","description":"SMA20/60 交叉，入场带 +0.10%，退出带 −0.50%","params":{"smaShort":20,"smaLong":60,"entryBandPct":0.1,"exitBandPct":-0.5},"version":"quant-rules/v0.0.2"},{"ruleId":"sma-cross-hysteresis-b","family":"sma-cross-hysteresis","description":"SMA10/40 交叉，入场带 +0.05%，退出带 −0.30%","params":{"smaShort":10,"smaLong":40,"entryBandPct":0.05,"exitBandPct":-0.3},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-a","family":"momentum-cooldown","description":"10 日动量 ≥+1.0% 入场，≤−1.0% 退出，冷却 5 根","params":{"momentumLag":10,"entryPct":1,"exitPct":-1,"cooldownBars":5},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-b","family":"momentum-cooldown","description":"5 日动量 ≥+0.5% 入场，≤−0.5% 退出，冷却 8 根","params":{"momentumLag":5,"entryPct":0.5,"exitPct":-0.5,"cooldownBars":8},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-a","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 70 分位持仓","params":{"window":40,"percentile":70},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-b","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 60 分位持仓","params":{"window":40,"percentile":60},"version":"quant-rules/v0.0.2"}],"trials":{"v001":{"trialsVersion":"quant-trials/v0.0.1","net":false,"rows":[{"trialId":"T1-momentum-heavy","ruleId":null,"weights":{"momentum":0.7,"trend":0.2,"stability":0.1},"entryThresholdPct":55,"nReturns":69,"sharpeAnnualized":-0.9684431379310787,"sharpePerPeriod":-0.061006183377920416,"isSharpePerPeriod":-0.15397821830922692,"oosSharpePerPeriod":-0.030343505964607016,"turnover":0.10144927536231885,"maxDrawdownPct":5.689631449267672},{"trialId":"T2-trend-heavy","ruleId":null,"weights":{"momentum":0.1,"trend":0.7,"stability":0.2},"entryThresholdPct":50,"nReturns":69,"sharpeAnnualized":-3.9577764252557652,"sharpePerPeriod":-0.24931648014335642,"isSharpePerPeriod":-0.3245104080654032,"oosSharpePerPeriod":-0.25284148399894596,"turnover":0.043478260869565216,"maxDrawdownPct":11.722252175850123},{"trialId":"T3-balanced-loose","ruleId":null,"weights":{"momentum":0.4,"trend":0.35,"stability":0.25},"entryThresholdPct":45,"nReturns":69,"sharpeAnnualized":-1.3068522700156726,"sharpePerPeriod":-0.08232395492289767,"isSharpePerPeriod":-0.3090708920521455,"oosSharpePerPeriod":0.08704336811970442,"turnover":0.08695652173913043,"maxDrawdownPct":11.622458847360221},{"trialId":"T4-stability-strict","ruleId":null,"weights":{"momentum":0.2,"trend":0.2,"stability":0.6},"entryThresholdPct":62,"nReturns":69,"sharpeAnnualized":-1.1720420016228015,"sharpePerPeriod":-0.073831706248007,"isSharpePerPeriod":-0.2888555683549867,"oosSharpePerPeriod":0.07249486650964856,"turnover":0.057971014492753624,"maxDrawdownPct":16.043574049139185}],"best":{"trialId":"T1-momentum-heavy","ruleId":null},"dsr":{"dsr":0.09958479775211265,"sr":-0.061006183377920416,"sr0":0.09353111379623864,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"}},"v002":{"trialsVersion":"quant-trials/v0.0.2","net":true,"rows":[{"trialId":"T1-sma-cross-a","ruleId":"sma-cross-hysteresis-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.35660869975426307,"sharpePerPeriod":0.022464236545520964,"isSharpePerPeriod":-0.04601375150062451,"oosSharpePerPeriod":0.0905268606646923,"turnover":0.01507537688442211,"maxDrawdownPct":21.794033597134998},{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.6609705351542389,"sharpePerPeriod":0.04163722999903313,"isSharpePerPeriod":-0.011527082181515711,"oosSharpePerPeriod":0.09264473234597712,"turnover":0.02512562814070352,"maxDrawdownPct":9.939600598842},{"trialId":"T3-momentum-cd-a","ruleId":"momentum-cooldown-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.16960084440536438,"sharpePerPeriod":0.010683848962932249,"isSharpePerPeriod":-0.062196749101302705,"oosSharpePerPeriod":0.09855047271805069,"turnover":0.06532663316582915,"maxDrawdownPct":13.308210475557846},{"trialId":"T4-momentum-cd-b","ruleId":"momentum-cooldown-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":-0.445378678825312,"sharpePerPeriod":-0.028056219605292487,"isSharpePerPeriod":-0.03823924211518666,"oosSharpePerPeriod":-0.016111867167277565,"turnover":0.11557788944723618,"maxDrawdownPct":15.16041180508795},{"trialId":"T5-composite-pct-a","ruleId":"composite-percentile-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.5915332399141368,"sharpePerPeriod":0.03726309154859791,"isSharpePerPeriod":-0.0729316487642392,"oosSharpePerPeriod":0.12102972285619477,"turnover":0.07035175879396985,"maxDrawdownPct":8.617880937285},{"trialId":"T6-composite-pct-b","ruleId":"composite-percentile-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.19524128861703358,"sharpePerPeriod":0.012299045126963254,"isSharpePerPeriod":-0.07242755505323818,"oosSharpePerPeriod":0.07620095372548809,"turnover":0.10050251256281408,"maxDrawdownPct":8.374748245133636}],"best":{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b"},"dsr":{"dsr":0.5522314638222234,"sr":0.04163722999903313,"sr0":0.03255064350869444,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"}}},"eval":{"runDate":"2026-11-05T19:34:35.519Z","gitCommit":"45f5e270e46a694f4d974e7129b2e41804e8b73a","MODEL":"NOT_RUN","checksPassed":28,"checksTotal":28,"failedChecks":[]},"audit":null};
+var DATA = {"generatedAtUtc":"2026-11-09T17:02:58.446Z","meta":{"metricsVersion":"eval-metrics/v0.0.2","metricsBasis":"synthetic_fixture_placeholder_rules","costModel":{"commissionBps":2,"slippageBps":5},"rulesVersion":"quant-rules/v0.0.2","gatesVersion":"quality-gates/v0.0.2","agentVersion":"quant-agent/v0.0.2"},"datasets":{"v001":{"dataVersion":"quant-dataset/v0.0.1","nature":"synthetic_fixture","rows":130,"span":["2026-05-01","2026-10-29"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.1","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":130,"smaShort":81.1273,"smaLong":80.4618,"trendBps":82.7155,"momentum10Pct":1.1004,"volatility20Pct":1.4692,"maxDrawdownPct":24.8064,"componentScores":{"momentum":55.502,"trend":70.678875,"stability":92.6540137983263},"missingComponents":[],"signalScore":70.1019},"signalScore":70.1019,"guardStatus":"pass","breaches":[],"decisionStatus":"eligible","signalFingerprint":"sig-982d57f915e36caf","evalRunId":"qer-dd147a8ca0cb3163"}},"v002":{"dataVersion":"quant-dataset/v0.0.2","nature":"real_market_data","source":"okx:BTC-USDT:1D","fetchedAtUtc":"2026-11-05T19:22:18.540Z","rows":260,"span":["2026-02-18","2026-11-04"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.2","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":260,"smaShort":80170.995,"smaLong":81341.21,"trendBps":-143.865,"momentum10Pct":-5.46,"volatility20Pct":2.195,"maxDrawdownPct":28.5426,"componentScores":{"momentum":22.7,"trend":14.033749999999998,"stability":89.0250556417331},"missingComponents":[],"signalScore":36.2481},"signalScore":36.2481,"guardStatus":"halt","breaches":[{"code":"DRAWDOWN_LIMIT_EXCEEDED","severity":"critical","observed":28.5426,"limit":25,"message":"Max drawdown 28.5426% exceeds the 25% limit."}],"decisionStatus":"blocked","signalFingerprint":"sig-b95d74f104b987e9","evalRunId":"qer-652332d330f2cdc6"},"quality":{"passed":true,"criticalCount":0,"findings":[],"stats":{"rows":260,"firstDate":"2026-02-18","lastDate":"2026-11-04","maxAbsMovePct":8.3677,"minClose":58384,"maxClose":86419}}}},"rules":[{"ruleId":"sma-cross-hysteresis-a","family":"sma-cross-hysteresis","description":"SMA20/60 交叉，入场带 +0.10%，退出带 −0.50%","params":{"smaShort":20,"smaLong":60,"entryBandPct":0.1,"exitBandPct":-0.5},"version":"quant-rules/v0.0.2"},{"ruleId":"sma-cross-hysteresis-b","family":"sma-cross-hysteresis","description":"SMA10/40 交叉，入场带 +0.05%，退出带 −0.30%","params":{"smaShort":10,"smaLong":40,"entryBandPct":0.05,"exitBandPct":-0.3},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-a","family":"momentum-cooldown","description":"10 日动量 ≥+1.0% 入场，≤−1.0% 退出，冷却 5 根","params":{"momentumLag":10,"entryPct":1,"exitPct":-1,"cooldownBars":5},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-b","family":"momentum-cooldown","description":"5 日动量 ≥+0.5% 入场，≤−0.5% 退出，冷却 8 根","params":{"momentumLag":5,"entryPct":0.5,"exitPct":-0.5,"cooldownBars":8},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-a","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 70 分位持仓","params":{"window":40,"percentile":70},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-b","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 60 分位持仓","params":{"window":40,"percentile":60},"version":"quant-rules/v0.0.2"}],"trials":{"v001":{"trialsVersion":"quant-trials/v0.0.1","net":false,"rows":[{"trialId":"T1-momentum-heavy","ruleId":null,"weights":{"momentum":0.7,"trend":0.2,"stability":0.1},"entryThresholdPct":55,"nReturns":69,"sharpeAnnualized":-0.9684431379310787,"sharpePerPeriod":-0.061006183377920416,"isSharpePerPeriod":-0.15397821830922692,"oosSharpePerPeriod":-0.030343505964607016,"turnover":0.10144927536231885,"maxDrawdownPct":5.689631449267672},{"trialId":"T2-trend-heavy","ruleId":null,"weights":{"momentum":0.1,"trend":0.7,"stability":0.2},"entryThresholdPct":50,"nReturns":69,"sharpeAnnualized":-3.9577764252557652,"sharpePerPeriod":-0.24931648014335642,"isSharpePerPeriod":-0.3245104080654032,"oosSharpePerPeriod":-0.25284148399894596,"turnover":0.043478260869565216,"maxDrawdownPct":11.722252175850123},{"trialId":"T3-balanced-loose","ruleId":null,"weights":{"momentum":0.4,"trend":0.35,"stability":0.25},"entryThresholdPct":45,"nReturns":69,"sharpeAnnualized":-1.3068522700156726,"sharpePerPeriod":-0.08232395492289767,"isSharpePerPeriod":-0.3090708920521455,"oosSharpePerPeriod":0.08704336811970442,"turnover":0.08695652173913043,"maxDrawdownPct":11.622458847360221},{"trialId":"T4-stability-strict","ruleId":null,"weights":{"momentum":0.2,"trend":0.2,"stability":0.6},"entryThresholdPct":62,"nReturns":69,"sharpeAnnualized":-1.1720420016228015,"sharpePerPeriod":-0.073831706248007,"isSharpePerPeriod":-0.2888555683549867,"oosSharpePerPeriod":0.07249486650964856,"turnover":0.057971014492753624,"maxDrawdownPct":16.043574049139185}],"best":{"trialId":"T1-momentum-heavy","ruleId":null},"dsr":{"dsr":0.09958479775211265,"sr":-0.061006183377920416,"sr0":0.09353111379623864,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"}},"v002":{"trialsVersion":"quant-trials/v0.0.2","net":true,"rows":[{"trialId":"T1-sma-cross-a","ruleId":"sma-cross-hysteresis-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.35660869975426307,"sharpePerPeriod":0.022464236545520964,"isSharpePerPeriod":-0.04601375150062451,"oosSharpePerPeriod":0.0905268606646923,"turnover":0.01507537688442211,"maxDrawdownPct":21.794033597134998},{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.6609705351542389,"sharpePerPeriod":0.04163722999903313,"isSharpePerPeriod":-0.011527082181515711,"oosSharpePerPeriod":0.09264473234597712,"turnover":0.02512562814070352,"maxDrawdownPct":9.939600598842},{"trialId":"T3-momentum-cd-a","ruleId":"momentum-cooldown-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.16960084440536438,"sharpePerPeriod":0.010683848962932249,"isSharpePerPeriod":-0.062196749101302705,"oosSharpePerPeriod":0.09855047271805069,"turnover":0.06532663316582915,"maxDrawdownPct":13.308210475557846},{"trialId":"T4-momentum-cd-b","ruleId":"momentum-cooldown-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":-0.445378678825312,"sharpePerPeriod":-0.028056219605292487,"isSharpePerPeriod":-0.03823924211518666,"oosSharpePerPeriod":-0.016111867167277565,"turnover":0.11557788944723618,"maxDrawdownPct":15.16041180508795},{"trialId":"T5-composite-pct-a","ruleId":"composite-percentile-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.5915332399141368,"sharpePerPeriod":0.03726309154859791,"isSharpePerPeriod":-0.0729316487642392,"oosSharpePerPeriod":0.12102972285619477,"turnover":0.07035175879396985,"maxDrawdownPct":8.617880937285},{"trialId":"T6-composite-pct-b","ruleId":"composite-percentile-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.19524128861703358,"sharpePerPeriod":0.012299045126963254,"isSharpePerPeriod":-0.07242755505323818,"oosSharpePerPeriod":0.07620095372548809,"turnover":0.10050251256281408,"maxDrawdownPct":8.374748245133636}],"best":{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b"},"dsr":{"dsr":0.5522314638222234,"sr":0.04163722999903313,"sr0":0.03255064350869444,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"}}},"eval":{"runDate":"2026-11-05T19:34:35.519Z","gitCommit":"45f5e270e46a694f4d974e7129b2e41804e8b73a","MODEL":"NOT_RUN","checksPassed":28,"checksTotal":28,"failedChecks":[]},"audit":{"entries":183,"byTool":{"assess_frozen_dataset:ok":53,"trial_metrics:ok":74,"place_order:rejected":7},"byStatus":{"not-requested":59,"unconfigured":9,"ok":88,"max-steps-reached":7,"unavailable":20},"lastTs":"2026-11-09T17:00:34.095Z"}};
 (function(){
-  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"] };
+  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"] };
   var buttons = document.querySelectorAll(".nav-btn");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {
       var name = this.getAttribute("data-view");
-      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === this); }.bind(this));
+      var self = this;
+      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === self); });
       document.querySelectorAll(".view").forEach(function(v){ v.classList.toggle("active", v.getAttribute("data-view") === name); });
       document.getElementById("view-title").textContent = titles[name][0];
       document.getElementById("view-sub").textContent = titles[name][1];
     });
   }
+
+  // ── Chat（仅 HTTP serve 模式可用；file:// 下自动禁用并提示）──────────────
+  var thread = document.getElementById("chat-thread");
+  var input = document.getElementById("chat-input");
+  var sendBtn = document.getElementById("chat-send");
+  var consent = document.getElementById("chat-consent");
+  var statusBadge = document.getElementById("chat-status");
+  var hint = document.getElementById("chat-hint");
+  var chatSession = null;
+  try { chatSession = sessionStorage.getItem("quant-chat-session") || ("web-" + Math.random().toString(16).slice(2, 10)); sessionStorage.setItem("quant-chat-session", chatSession); } catch (e) { chatSession = "web-anon"; }
+
+  function bubble(cls, text, meta, cites) {
+    var div = document.createElement("div");
+    div.className = "msg " + cls;
+    div.textContent = text;
+    if (meta) { var m = document.createElement("div"); m.className = "meta"; m.textContent = meta; div.appendChild(m); }
+    if (cites && cites.length) {
+      var box = document.createElement("div"); box.className = "cites";
+      cites.forEach(function(c) {
+        var b = document.createElement("span"); b.className = "badge badge-mono";
+        b.textContent = c.tool + " · " + String(c.evalRunId || "").slice(0, 12);
+        box.appendChild(b);
+      });
+      div.appendChild(box);
+    }
+    thread.appendChild(div);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  fetch("/api/health").then(function(r){ return r.json(); }).then(function(h) {
+    if (!h || !h.ok) throw new Error("bad health");
+    statusBadge.textContent = "llm " + (h.llm && h.llm.configured ? "configured" : "unconfigured") + " · " + (h.llm ? h.llm.model : "");
+    statusBadge.className = "badge badge-accent";
+    hint.textContent = "已连接 quant console 服务（" + h.serverVersion + "）。回答为模型对权威工具输出的解释，非权威。";
+    sendBtn.disabled = false;
+  }).catch(function() {
+    statusBadge.textContent = "chat unavailable";
+    statusBadge.className = "badge badge-bad";
+    hint.textContent = "聊天不可用：当前为 file:// 打开或服务未启动。请运行 npm run serve 后访问 http://127.0.0.1:8788/。";
+  });
+
+  function send() {
+    var question = input.value.trim();
+    if (!question || sendBtn.disabled) return;
+    bubble("user", question);
+    input.value = "";
+    sendBtn.disabled = true;
+    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: chatSession }) })
+      .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }); })
+      .then(function(resp) {
+        var body = resp.body;
+        bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
+          (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
+          body.citations || []);
+        if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
+      })
+      .catch(function(err) { bubble("assistant", "请求失败：" + err.message); })
+      .finally(function() { sendBtn.disabled = false; input.focus(); });
+  }
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
 })();
 </script>
 </body>

@@ -13,13 +13,17 @@
  *     - 禁止网络/env 面（agent/ 豁免，见 Zone C）：node:http(s) / node:dns / node:net / fetch / WebSocket / process.env / Math.random
  *     - child_process 仅允许出现在 quant/eval/run-eval.js（git rev-parse）与 quant/test/**（子进程探针）
  *   Zone C — quant/agent/**（对话式 agent，唯一被授权的触网面）：
- *     - import 白名单：相对引用 + node:fs/node:readline/node:path/node:url + node:crypto/node:os（审计用）；其余一律违规（零新依赖）
- *     - 仍禁：Math.random / new Date / Date.now（可重放要求）——唯一豁免 audit.js
- *       （审计时间戳与耗时需要时钟，"时钟岛"；其余文件一律禁）
+ *     - import 白名单：相对引用 + node:fs/node:readline/node:path/node:url/node:crypto/node:os
+ *       + node:http（仅 server.js——F2 本地控制台服务）；其余一律违规（零新依赖）
+ *     - 仍禁：Math.random / new Date / Date.now（可重放要求）——时钟岛豁免仅限
+ *       audit.js（审计时间戳）与 server.js（限流窗口），其余文件一律禁
  *     - 仍受 Zone B 全域规则约束（禁 @deepseek-ai SDK 包与其他 agent 框架）
  *   Zone D — quant/data/fetch-*.js（一次性数据抓取脚本，手动运行，不进 CI/agent）：
  *     - 唯一另一处允许 fetch 的文件；允许 new Date（fetchedAtUtc 需要）
  *     - 仍禁：Math.random / child_process / LLM SDK（Zone B 全域继续适用）
+ *   Zone E — quant/console/**（浏览器 UI 展示层，非 Node 确定性运行时）：
+ *     - 允许：同源 fetch("/api/...")、Math.random（浏览器会话 id）
+ *     - 禁止：跨源 fetch、process.env、child_process、node:http(s)、LLM SDK、Zone B 残留禁令
  *   注释行不参与匹配（文件头"不做什么"禁令文本本身含被禁词，属于文档而非代码）。
  */
 
@@ -95,12 +99,13 @@ const ZONE_B_NET_ENV = [
 ];
 // Zone C：agent/ 是唯一被授权的触网面；import 白名单外一律违规；仍禁随机与时钟（可重放）。
 const QUANT_AGENT_DIR = join(QUANT, "agent");
-const ZONE_C_IMPORT_ALLOWED = new Set(["node:fs", "node:readline", "node:path", "node:url", "node:crypto", "node:os"]);
+const ZONE_C_IMPORT_ALLOWED = new Set(["node:fs", "node:readline", "node:path", "node:url", "node:crypto", "node:os", "node:http"]);
 const ZONE_C_RUNTIME = [/\bMath\.random\b/, /\bnew\s+Date\b/, /\bDate\.now\b/];
 
 function scanZoneCImports(path, rel) {
   const lines = readFileSync(path, "utf8").split("\n");
   let inBlockComment = false;
+  const isServer = rel.endsWith("server.js");
   lines.forEach((line, index) => {
     const trimmed = line.trim();
     if (inBlockComment) { if (trimmed.includes("*/")) inBlockComment = false; return; }
@@ -108,7 +113,9 @@ function scanZoneCImports(path, rel) {
     if (trimmed.startsWith("//") || trimmed.startsWith("*")) return;
     for (const match of line.matchAll(IMPORT_SPECIFIER)) {
       const specifier = match[1];
-      const allowed = specifier.startsWith("./") || specifier.startsWith("../") || ZONE_C_IMPORT_ALLOWED.has(specifier);
+      const allowed = specifier.startsWith("./") || specifier.startsWith("../")
+        || ZONE_C_IMPORT_ALLOWED.has(specifier)
+        || (specifier === "node:http" && isServer); // 仅 HTTP 宿主文件可监听端口
       if (!allowed) violations.push({ file: rel, line: index + 1, rule: "zoneC-import-whitelist", text: specifier });
     }
   });
@@ -122,9 +129,17 @@ for (const path of walk(QUANT)) {
   if (ZONE_A_PATHS.has(path)) scan(path, ZONE_A_RUNTIME, "zoneA-purity");
   if (inAgent) {
     scanZoneCImports(path, rel);
-    // audit.js 是 agent 层唯一时钟岛（审计时间戳/耗时）；其余文件仍全面禁时钟。
-    if (rel.endsWith("audit.js")) scan(path, [/\bMath\.random\b/], "zoneC-purity-audit");
+    // 时钟岛：audit.js（审计时间戳）与 server.js（限流窗口）；其余文件仍全面禁时钟。
+    if (rel.endsWith("audit.js") || rel.endsWith("server.js")) scan(path, [/\bMath\.random\b/], "zoneC-purity-infra");
     else scan(path, ZONE_C_RUNTIME, "zoneC-purity");
+  } else if (/^quant[/\\]console[/\\]/.test(rel)) {
+    // Zone E — 浏览器 UI 区（展示层，不属于 Node 确定性运行时）：
+    //   允许同源 fetch("/api/...") 与 Math.random（浏览器会话 id）；禁跨源 fetch、
+    //   process.env、child_process、LLM SDK 与 Zone B 残留禁令。
+    scan(path, [/\bprocess\.env\b/, /\bchild_process\b/, /\bfetch\s*\(\s*["'`](?:https?:)?\/\//, /\bnode:http\b/, /\bnode:https\b/], "zoneE-browser");
+  } else if (/^quant[/\\]test[/\\]/.test(rel)) {
+    // 测试区：允许 fetch/HTTP 客户端（测试 HTTP 面）；仍禁 env/random/LLM SDK。
+    scan(path, [/\bprocess\.env\b/, /\bMath\.random\b/], "zoneB-test");
   } else if (/^quant[/\\]data[/\\]fetch-/.test(rel)) {
     // Zone D：一次性抓取脚本是 agent 之外唯一的 fetch 豁免面。
     scan(path, [/\bMath\.random\b/], "zoneD-purity");

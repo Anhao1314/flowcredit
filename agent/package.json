@@ -16,6 +16,7 @@
     "eval:agent": "node eval/run-eval.js",
     "eval": "node ../quant/eval/run-eval.js",
     "console": "node ../quant/console/build.js",
+    "serve": "node ../quant/agent/server.js",
     "test:quant": "node --test ../quant/test/*.test.js",
     "check:quant": "node scripts/check-quant-isolation.js",
     "validate:public-api": "node scripts/validate-public-api.js",
