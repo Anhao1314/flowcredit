@@ -187,6 +187,8 @@ export function createQuantConsoleServer(options = {}) {
       orders: session.engine.orders.length, fills: session.engine.fills.length,
       rejected: session.engine.orders.filter(order => order.status === "rejected").length,
       approvedBy: [...new Set(session.engine.orders.map(order => order.approvedBy).filter(Boolean))],
+      orderLog: session.engine.orders.map(order => ({ orderId: order.orderId, status: order.status, side: order.side, deltaUnits: order.deltaUnits, price: order.price, date: order.date, approvedBy: order.approvedBy })),
+      fills: session.engine.getFills(),
       equityCurve: session.engine.equityCurve,
       report: session.report, createdAt: session.createdAt
     };

@@ -66,9 +66,9 @@ const html = `<!DOCTYPE html>
 <title>FlowCredit Quant · Console</title>
 <style>
 :root{
-  --bg:#212121; --sidebar:#171717; --card:#2f2f2f; --card2:#262626;
-  --border:rgba(255,255,255,.09); --text:#ececec; --muted:#a3a3a3; --faint:#6f6f6f;
-  --accent:#8b5cf6; --accent-soft:rgba(139,92,246,.14);
+  --bg:#000; --sidebar:#000; --card:#0d0d0d; --card2:#161616;
+  --border:rgba(255,255,255,.12); --text:#f2f2f2; --muted:#9b9b9b; --faint:#5f5f5f;
+  --accent:#8b5cf6; --accent-soft:rgba(139,92,246,.12);
   --good:#10a37f; --bad:#ef4444; --warn:#f59e0b;
   --radius:14px;
 }
@@ -80,6 +80,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
 .nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
 .nav-btn.active{background:var(--accent-soft);color:var(--text)}
+.sidebar-group{font-size:10px;color:var(--faint);letter-spacing:.8px;text-transform:uppercase;padding:14px 10px 4px}
+.sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
 main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .topbar{margin-bottom:22px}
 .topbar h1{font-size:22px;font-weight:650}
@@ -127,8 +129,15 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 .chat-inputrow textarea{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:52px}
 .chat-side{display:flex;flex-direction:column;gap:8px;align-items:stretch}
 .chat-consent{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
-.sendbtn{background:var(--accent);border:none;color:#fff;border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer}
+.sendbtn{background:#fff;border:none;color:#000;border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
 .sendbtn:disabled{opacity:.45;cursor:not-allowed}
+.sendbtn.btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--border);font-weight:400}
+.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:12px;background:var(--card2);padding:12px 14px;max-width:82%}
+.approval-card.resolved{border-left-color:var(--good);opacity:.85}
+.approval-card .risk{font-size:10.5px;color:var(--warn);margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:7px 12px;background:var(--card2);max-width:82%}
+.chat-note.fill{border-left:3px solid var(--good)}
+.chat-note.reject{border-left:3px solid var(--bad)}
 .chat-hint{font-size:11.5px;color:var(--faint);margin-top:10px}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:190px}}
 </style>
@@ -136,13 +145,14 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 <body>
 <aside class="sidebar">
   <div class="brand"><span class="dot"></span>FlowCredit Quant</div>
-  <button class="nav-btn active" data-view="overview">Overview</button>
+  <button class="nav-btn active" data-view="chat">Chat</button>
+  <button class="nav-btn" data-view="paper">Paper</button>
+  <div class="sidebar-group">Dashboards</div>
+  <button class="nav-btn" data-view="overview">Overview</button>
   <button class="nav-btn" data-view="rules">Rules &amp; Trials</button>
   <button class="nav-btn" data-view="dsr">DSR &amp; Promotion</button>
   <button class="nav-btn" data-view="quality">Data Quality</button>
   <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
-  <button class="nav-btn" data-view="chat">Chat</button>
-  <button class="nav-btn" data-view="paper">Paper</button>
   <div class="sidebar-footer">
     <div>metrics ${esc(payload.meta.metricsVersion)}</div>
     <div>rules ${esc(payload.meta.rulesVersion)}</div>
@@ -151,9 +161,9 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
   </div>
 </aside>
 <main>
-  <div class="topbar"><h1 id="view-title">Overview</h1><div class="sub" id="view-sub">双数据集权威快照 · 全部数字来自确定性纯函数</div></div>
+  <div class="topbar"><h1 id="view-title">Chat</h1><div class="sub" id="view-sub">与有界 agent 对话 · 数字来自工具，引用可反查</div></div>
 
-  <section class="view active" data-view="overview">
+  <section class="view" data-view="overview">
     <div class="grid2">
       ${pipelineCard(payload.datasets.v001)}
       ${pipelineCard(payload.datasets.v002)}
@@ -290,7 +300,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
     </div>
   </section>
 
-  <section class="view" data-view="chat">
+  <section class="view active" data-view="chat">
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
       <div id="chat-thread" class="chat-thread"></div>
@@ -387,6 +397,85 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
 
+  // ── 虚拟盘事件入聊天流（Grok Bot 模式：审批卡 + 事件通知主动找你）──────────
+  var paperSeen = { orders: {}, fills: {}, sessionDone: {} };
+  function chatCard(el) { thread.appendChild(el); thread.scrollTop = thread.scrollHeight; }
+  function chatNote(text, cls) {
+    var n = document.createElement("div");
+    n.className = "chat-note " + (cls || "");
+    n.textContent = text;
+    chatCard(n);
+  }
+  function markCardResolved(order) {
+    var card = thread.querySelector('.approval-card[data-order="' + order.orderId + '"]');
+    if (card && !card.classList.contains("resolved")) {
+      card.classList.add("resolved");
+      card.querySelectorAll("button").forEach(function(b){ b.remove(); });
+      var badge = document.createElement("div");
+      badge.style.marginTop = "8px";
+      badge.innerHTML = order.status === "filled"
+        ? '<span class="badge badge-good">✓ approved' + (order.approvedBy ? " · " + order.approvedBy : "") + '</span>'
+        : '<span class="badge badge-bad">✗ denied</span>';
+      card.appendChild(badge);
+    }
+  }
+  function approvalCardElement(sessionId, order) {
+    var card = document.createElement("div");
+    card.className = "approval-card";
+    card.setAttribute("data-order", order.orderId);
+    var title = document.createElement("div");
+    title.innerHTML = "<b>Approval required</b> · " + order.orderId;
+    var body = document.createElement("div");
+    body.style.marginTop = "6px";
+    body.textContent = order.side + " " + order.deltaUnits.toFixed(6) + " units @ " + order.price + "（" + order.date + "）";
+    var risk = document.createElement("div");
+    risk.className = "risk";
+    risk.textContent = "虚拟盘 · 模拟撮合 · 未批准永不成交";
+    var btns = document.createElement("div");
+    btns.style.marginTop = "10px";
+    var ok = document.createElement("button");
+    ok.className = "sendbtn"; ok.style.padding = "7px 14px"; ok.textContent = "Approve";
+    var no = document.createElement("button");
+    no.className = "sendbtn btn-ghost"; no.style.padding = "7px 14px"; no.style.marginLeft = "8px"; no.textContent = "Deny";
+    ok.addEventListener("click", function() {
+      fetch("/api/paper/session/" + sessionId + "/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, approvedBy: "chat-operator" }) });
+      markCardResolved({ orderId: order.orderId, status: "filled", approvedBy: "chat-operator" });
+    });
+    no.addEventListener("click", function() {
+      fetch("/api/paper/session/" + sessionId + "/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, reason: "chat-operator denied" }) });
+      markCardResolved({ orderId: order.orderId, status: "rejected" });
+    });
+    btns.appendChild(ok); btns.appendChild(no);
+    card.appendChild(title); card.appendChild(body); card.appendChild(risk); card.appendChild(btns);
+    return card;
+  }
+  function paperPoll() {
+    fetch("/api/paper/status").then(function(r){ return r.json(); }).then(function(body) {
+      if (!body || !body.ok) return;
+      var s = (body.sessions || []).at(-1);
+      if (!s) return;
+      (s.orderLog || []).forEach(function(order) {
+        if (!paperSeen.orders[order.orderId]) {
+          paperSeen.orders[order.orderId] = order.status;
+          if (order.status === "pending") chatCard(approvalCardElement(s.id, order));
+          else chatNote("虚拟盘意图 " + order.orderId + " " + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + " → " + order.status, order.status === "filled" ? "fill" : "reject");
+        } else if (paperSeen.orders[order.orderId] === "pending" && order.status !== "pending") {
+          paperSeen.orders[order.orderId] = order.status;
+          markCardResolved(order);
+          chatNote("成交 " + order.orderId + " " + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + (order.approvedBy ? " · by " + order.approvedBy : ""), order.status === "filled" ? "fill" : "reject");
+        }
+      });
+      if (s.done && !paperSeen.sessionDone[s.id]) {
+        paperSeen.sessionDone[s.id] = true;
+        chatNote("虚拟盘会话完成：fills " + s.report.fills + " · rejected " + s.report.rejected + " · totalReturn " + s.report.totalReturnPct.toFixed(2) + "% · finalEquity " + Math.round(s.report.finalEquity).toLocaleString(), "fill");
+      }
+    }).catch(function(){});
+  }
+  var paperPollStarted = false;
+  fetch("/api/paper/status").then(function(r){ return r.json(); }).then(function(body) {
+    if (body && body.ok && !paperPollStarted) { paperPollStarted = true; paperPoll(); setInterval(paperPoll, 2000); }
+  }).catch(function(){ /* file:// 模式：无卡片流，Chat 仍可用（无模型时为确定性摘要） */ });
+
   // ── Paper 视图：SVG 双曲线 + 交互审计会话 ────────────────────────────────
   function renderEquityChart() {
     var container = document.getElementById("paper-chart");
@@ -461,7 +550,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     pendingBox.innerHTML = pendingHtml;
     fillsBox.innerHTML = s.done && s.report
       ? '<div class="callout good">会话完成：fills ' + s.report.fills + ' · rejected ' + s.report.rejected + ' · totalReturn ' + s.report.totalReturnPct.toFixed(2) + '% · maxDD ' + s.report.maxDrawdownPct.toFixed(2) + '%</div>'
-      : (s.fills ? '<div class="chips">' + s.fills + ' fills</div>' : "");
+      : (Array.isArray(s.fills) && s.fills.length ? '<div class="chips">' + s.fills.length + ' fills</div>' : "");
   }
   function livePoll() {
     return fetch("/api/paper/status").then(function(r){ return r.json(); }).then(function(body) {
