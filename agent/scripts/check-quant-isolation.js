@@ -88,6 +88,24 @@ function scanZoneAImports(path) {
   });
 }
 
+// Zone P import 白名单：相对引用 + 标准库子集（readline 仅 runner 交互；无 node:http——虚拟盘不监听端口）。
+const ZONE_P_IMPORT_ALLOWED = new Set(["node:fs", "node:path", "node:url", "node:crypto", "node:os", "node:readline", "node:readline/promises"]);
+function scanPaperImports(path, rel) {
+  const lines = readFileSync(path, "utf8").split("\n");
+  let inBlockComment = false;
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (inBlockComment) { if (trimmed.includes("*/")) inBlockComment = false; return; }
+    if (trimmed.startsWith("/*")) { if (!trimmed.includes("*/")) inBlockComment = true; return; }
+    if (trimmed.startsWith("//") || trimmed.startsWith("*")) return;
+    for (const match of line.matchAll(IMPORT_SPECIFIER)) {
+      const specifier = match[1];
+      const allowed = specifier.startsWith("./") || specifier.startsWith("../") || ZONE_P_IMPORT_ALLOWED.has(specifier);
+      if (!allowed) violations.push({ file: relative(ROOT, path), line: index + 1, rule: "zoneP-import-whitelist", text: specifier });
+    }
+  });
+}
+
 const ZONE_A_PATHS = new Set([join(QUANT, "signal"), join(QUANT, "risk"), join(QUANT, "strategy"), join(QUANT, "pipeline.js")]);
 const ZONE_A_RUNTIME = [/\bprocess\.env\b/, /\bMath\.random\b/, /\bnew\s+Date\b/, /\bDate\.now\b/, /\bfetch\s*\(/, /\bWebSocket\b/];
 const ZONE_B_FORBIDDEN = [
@@ -135,9 +153,17 @@ for (const path of walk(QUANT)) {
     // 时钟岛：audit.js（审计时间戳）与 server.js（限流窗口）；其余文件仍全面禁时钟。
     if (rel.endsWith("audit.js") || rel.endsWith("server.js")) scan(path, [/\bMath\.random\b/], "zoneC-purity-infra");
     else scan(path, ZONE_C_RUNTIME, "zoneC-purity");
+  } else if (/^quant[/\\]paper[/\\]/.test(rel)) {
+    // Zone P — 虚拟盘（本地模拟撮合；无真实资金；人工批准门禁）：
+    //   import 白名单：相对引用 + node:fs/path/url/crypto/os/readline（readline 仅 runner CLI 交互）
+    //   运行时禁：Math.random、process.env、时钟（时间 = 数据棒日期；审计文件名时间戳仅 runner 用 Date.now，
+    //   经由下方 zoneP 例外放行 runner）
+    scanPaperImports(path, rel);
+    if (rel.endsWith("runner.js")) scan(path, [/\bMath\.random\b/], "zoneP-purity");
+    else scan(path, [/\bMath\.random\b/, /\bprocess\.env\b/, /\bDate\.now\b/, /\bnew\s+Date\b/], "zoneP-purity");
   } else if (/^quant[/\\]lab-(?:langgraph|vercel-ai-sdk)[/\\]/.test(rel)) {
-    // Zone LX — 隔离实验区（用户 2026-11-10 授权的 LangGraph 对照实验，非主线）：
-    //   允许 langchain/openai 框架依赖；仍禁 @deepseek-ai SDK、agent/src、harness.js、
+    // Zone LX — 隔离实验区（用户 2026-11-10 授权的框架对照实验，非主线）：
+    //   允许 langchain/openai/ai-sdk 框架依赖；仍禁 @deepseek-ai SDK、agent/src、harness.js、
     //   child_process、Math.random；产物仅注记层，不得回写权威路径。
     scan(path, [/@deepseek-ai/, /agent[/\\]src/, /harness\.js/, /\bchild_process\b/, /\bMath\.random\b/], "zoneLX-lab");
   } else if (/^quant[/\\]console[/\\]/.test(rel)) {
