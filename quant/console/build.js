@@ -21,7 +21,7 @@ import { computeConsolePayload } from "./payload.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const payload = computeConsolePayload({ generatedAtUtc: new Date().toISOString() });
+const payload = await computeConsolePayload({ generatedAtUtc: new Date().toISOString() });
 
 // ── HTML 生成（ChatGPT-Web 风：深灰底/浅灰卡片/圆角/系统字体/蓝紫 accent）──────
 const esc = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -142,6 +142,7 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
   <button class="nav-btn" data-view="quality">Data Quality</button>
   <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
   <button class="nav-btn" data-view="chat">Chat</button>
+  <button class="nav-btn" data-view="paper">Paper</button>
   <div class="sidebar-footer">
     <div>metrics ${esc(payload.meta.metricsVersion)}</div>
     <div>rules ${esc(payload.meta.rulesVersion)}</div>
@@ -253,6 +254,31 @@ node quant/agent/cli.js repl --consent                            # 交互模式
     </div>
   </section>
 
+  <section class="view" data-view="paper">
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">PAPER ENGINE · 真实快照 · 净口径含成本</div><h2>虚拟盘权益曲线 vs 回测（参考会话：全批准）</h2></div>${badge("paper-engine/v0.1.0", "mono")}</div>
+      <div class="metrics">
+        ${metricCard("Final Equity", fmt(payload.paper.reference.report.finalEquity, 0), "起始 " + fmt(payload.paper.reference.capital, 0))}
+        ${metricCard("Total Return", fmt(payload.paper.reference.report.totalReturnPct, 2) + "%", "6 笔成交全批准")}
+        ${metricCard("Max DD", fmt(payload.paper.reference.report.maxDrawdownPct, 2) + "%", "权益曲线峰谷")}
+        ${metricCard("Orders / Fills", payload.paper.reference.report.orders + " / " + payload.paper.reference.report.fills, "MOC：决策棒收盘成交")}
+      </div>
+      <div id="paper-chart" style="margin-top:14px"></div>
+      <div class="chips">${badge("—— 紫线 = 虚拟盘账本", "accent")}${badge("—— 灰线 = 回测口径", "mono")}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">REFERENCE FILLS · 全批准会话</div><h2>成交记录</h2></div></div>
+      <table class="tbl"><thead><tr><th>bar</th><th>date</th><th>side</th><th>units</th><th>price</th><th>cost</th></tr></thead><tbody>
+        ${payload.paper.reference.fills.map(fill => `<tr><td class="mono">${fill.barIndex}</td><td class="mono">${esc(fill.date)}</td><td>${fill.side}</td><td class="mono">${fmt(fill.units, 6)}</td><td class="mono">${fmt(fill.price, 1)}</td><td class="mono">${fmt(fill.cost, 2)}</td></tr>`).join("")}
+      </tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">INTERACTIVE SESSIONS · 人工批准审计链</div><h2>本机虚拟盘会话</h2></div><span id="paper-sessions-status" class="badge">…</span></div>
+      <div id="paper-sessions"><div class="kv"><div class="k">说明</div><div>审计会话由 runner CLI 写在仓库外（系统临时目录 fc-quant-paper-audit）。HTTP 模式下此处自动加载最新会话事件链；file:// 模式仅显示构建时快照。</div></div></div>
+      <div id="paper-sessions-body"></div>
+    </div>
+  </section>
+
   <section class="view" data-view="chat">
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
@@ -276,7 +302,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
 <script>
 var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
 (function(){
-  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"] };
+  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
   var buttons = document.querySelectorAll(".nav-btn");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {
@@ -349,6 +375,60 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   }
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
+
+  // ── Paper 视图：SVG 双曲线 + 交互审计会话 ────────────────────────────────
+  function renderEquityChart() {
+    var container = document.getElementById("paper-chart");
+    if (!container || !DATA.paper || !DATA.paper.reference) return;
+    var a = DATA.paper.reference.curve, b = DATA.paper.reference.backtestCurve;
+    var w = 960, h = 300, pad = 40;
+    var all = a.concat(b).map(function(p){ return p.equity; });
+    var min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+    var span = (max - min) || 1;
+    var x = function(i, n){ return pad + i * (w - pad * 2) / (n - 1); };
+    var y = function(v){ return h - pad - (v - min) / span * (h - pad * 2); };
+    var path = function(curve){ var d = ""; for (var i = 0; i < curve.length; i++) d += (i ? "L" : "M") + x(i, curve.length).toFixed(1) + " " + y(curve[i].equity).toFixed(1) + " "; return d; };
+    var grid = "";
+    for (var g = 0; g <= 4; g++) {
+      var gy = pad + g * (h - pad * 2) / 4;
+      var gv = (max - span * g / 4);
+      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(255,255,255,.06)"/>' +
+              '<text x="'+(pad-6)+'" y="'+(gy+4).toFixed(1)+'" fill="#6f6f6f" font-size="10" text-anchor="end">'+Math.round(gv).toLocaleString()+'</text>';
+    }
+    container.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">' + grid +
+      '<path d="'+path(b)+'" fill="none" stroke="#6f6f6f" stroke-width="1.5"/>' +
+      '<path d="'+path(a)+'" fill="none" stroke="#8b5cf6" stroke-width="2"/>' +
+      '<text x="'+pad+'" y="'+(pad-12)+'" fill="#8b5cf6" font-size="11">paper (all-approved) '+Math.round(a[a.length-1].equity).toLocaleString()+'</text>' +
+      '<text x="'+(pad+230)+'" y="'+(pad-12)+'" fill="#6f6f6f" font-size="11">backtest '+Math.round(b[b.length-1].equity).toLocaleString()+'</text>' +
+      '<text x="'+pad+'" y="'+(h-8)+'" fill="#6f6f6f" font-size="10">'+a[0].date+'</text>' +
+      '<text x="'+(w-pad)+'" y="'+(h-8)+'" fill="#6f6f6f" font-size="10" text-anchor="end">'+a[a.length-1].date+'</text>' +
+      '</svg>';
+  }
+  renderEquityChart();
+
+  function renderSessions(sessions) {
+    var body = document.getElementById("paper-sessions-body");
+    var status = document.getElementById("paper-sessions-status");
+    if (!body) return;
+    if (!sessions || !sessions.length) {
+      status.textContent = "no sessions";
+      status.className = "badge";
+      body.innerHTML = '<div class="kv"><div class="k">说明</div><div>尚未有交互会话。运行 npm run paper -- run --rule T2-sma-cross-b 逐单批准后，此处显示事件链。</div></div>';
+      return;
+    }
+    status.textContent = sessions.length + " session(s)";
+    status.className = "badge badge-accent";
+    body.innerHTML = sessions.map(function(s, idx) {
+      var rows = (s.chain || []).map(function(e) {
+        return '<tr><td class="mono">' + e.seq + '</td><td>' + e.type + '</td><td class="mono">' + (e.orderId || "") + '</td><td class="mono">' + (e.date || "") + '</td><td>' + (e.side || "") + '</td></tr>';
+      }).join("");
+      return '<div class="card" style="background:var(--card2)"><div class="card-head"><div><div class="eyebrow">' + s.file + '</div><h2>' + (s.ruleId || "?") + ' · orders ' + s.orders + ' · fills ' + s.fills + ' · rejected ' + s.rejected + '</h2></div><span class="badge badge-mono">' + s.events + ' events</span></div><table class="tbl"><thead><tr><th>seq</th><th>event</th><th>orderId</th><th>date</th><th>side</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }).join("");
+  }
+  renderSessions(DATA.paper && DATA.paper.sessions);
+  fetch("/api/paper").then(function(r){ return r.json(); }).then(function(body) {
+    if (body && body.ok && body.paper) renderSessions(body.paper.sessions);
+  }).catch(function() { /* file:// 模式：保留构建时快照 */ });
 })();
 </script>
 </body>

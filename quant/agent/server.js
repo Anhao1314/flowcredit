@@ -176,7 +176,13 @@ export function createQuantConsoleServer(options = {}) {
 
       // 数据端点：只读。
       if (req.method === "GET" && url.pathname === "/api/data") {
-        return send(200, { ok: true, data: computeConsolePayload({ auditDir: env.QUANT_AUDIT_DIR || undefined, generatedAtUtc: new Date(startedAt).toISOString() }) });
+        return send(200, { ok: true, data: await computeConsolePayload({ auditDir: env.QUANT_AUDIT_DIR || undefined, paperAuditDir: env.QUANT_PAPER_AUDIT_DIR || undefined, generatedAtUtc: new Date(startedAt).toISOString() }) });
+      }
+
+      // 虚拟盘端点：只读——参考会话（确定性重算）+ 本机交互审计会话（paper-*.jsonl）。
+      if (req.method === "GET" && url.pathname === "/api/paper") {
+        const payload = await computeConsolePayload({ paperAuditDir: env.QUANT_PAPER_AUDIT_DIR || undefined, generatedAtUtc: new Date(startedAt).toISOString() });
+        return send(200, { ok: true, paper: payload.paper });
       }
 
       // 问答端点：鉴权 → 限流 → body → askQuant。

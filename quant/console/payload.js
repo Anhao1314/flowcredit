@@ -16,6 +16,7 @@ const { runPipeline } = await import(join(urlDir(), "pipeline.js"));
 const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, effectiveTrials, splitPoint, COST_MODEL_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(urlDir(), "eval", "metrics.js"));
 const { listRules, RULES_VERSION } = await import(join(urlDir(), "strategy", "rules-v002.js"));
 const { runQualityGates, GATES_VERSION } = await import(join(urlDir(), "data", "quality-gates.js"));
+const { runPaperSession, PAPER_ENGINE_VERSION } = await import(join(urlDir(), "paper", "engine-adapter.js"));
 
 function urlDir() {
   return new URL("..", import.meta.url).pathname;
@@ -86,13 +87,69 @@ function trialRows(dataset, trials) {
 
 const formatNumber = (value, digits = 4) => (value === null || value === undefined) ? "n/a" : Number(value).toFixed(digits);
 
+/**
+ * 读取虚拟盘审计会话（runner 写的 paper-*.jsonl，仅元事件链，无明文敏感）。
+ * 输入：审计目录（默认系统临时目录 fc-quant-paper-audit）。
+ * 输出：[{ file, ruleId, events, orders, fills, rejected, span }]（按文件修改时间倒序）。
+ */
+export function readPaperSessions(auditDir) {
+  try {
+    const dir = auditDir || join(tmpdir(), "fc-quant-paper-audit");
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir)
+      .filter(name => name.startsWith("paper-") && name.endsWith(".jsonl"))
+      .map(name => {
+        try {
+          const events = readFileSync(join(dir, name), "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+          const dates = events.map(event => event.date).filter(Boolean);
+          const ruleMatch = /^paper-(.+)-\d+\.jsonl$/.exec(name);
+          return {
+            file: name,
+            ruleId: ruleMatch ? ruleMatch[1] : null,
+            events: events.length,
+            orders: events.filter(event => event.type === "intent").length,
+            fills: events.filter(event => event.type === "fill").length,
+            rejected: events.filter(event => event.type === "rejected").length,
+            span: dates.length ? [dates[0], dates[dates.length - 1]] : null,
+            chain: events
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
 export { formatNumber };
 
+/** 参考虚拟盘会话：全批准确定性运行 + 回测权益曲线（同口径对齐，供 Paper 视图双线图）。 */
+async function buildPaperReference(dataset, ruleId, capital = 100000) {
+  const { engine, report } = await runPaperSession({ dataset, ruleId, capital, approve: async () => true });
+  const backtest = strategyReturns(dataset.series, { ruleId });
+  let eq = capital;
+  const backtestCurve = [{ barIndex: 60, equity: capital }];
+  backtest.returns.forEach((r, i) => {
+    eq *= 1 + r;
+    backtestCurve.push({ barIndex: 61 + i, equity: eq });
+  });
+  return {
+    engineVersion: PAPER_ENGINE_VERSION, ruleId, capital,
+    curve: engine.equityCurve.map(point => ({ barIndex: point.barIndex, date: point.date, equity: point.equity })),
+    fills: engine.getFills(),
+    report,
+    backtestCurve
+  };
+}
+
 /**
- * 计算控制台数据载荷。输入：{ quantDir?, auditDir?, generatedAtUtc? }。
- * 输出：{ generatedAtUtc, meta, datasets, rules, trials, eval, audit }。
+ * 计算控制台数据载荷。输入：{ quantDir?, auditDir?, paperAuditDir?, generatedAtUtc? }。
+ * 输出：{ generatedAtUtc, meta, datasets, rules, trials, paper, eval, audit }。
  */
-export function computeConsolePayload({ quantDir = urlDir(), auditDir, generatedAtUtc } = {}) {
+export async function computeConsolePayload({ quantDir = urlDir(), auditDir, paperAuditDir, generatedAtUtc } = {}) {
   const datasetV001 = readJson(join(quantDir, "data", "dataset-v001.json"));
   const datasetV002 = readJson(join(quantDir, "data", "dataset-v002.json"));
   const trialsV001 = readJson(join(quantDir, "eval", "trials-v001.json"));
@@ -130,6 +187,10 @@ export function computeConsolePayload({ quantDir = urlDir(), auditDir, generated
       checksTotal: evalArtifact.checks.length,
       failedChecks: evalArtifact.checks.filter(item => !item.passed).map(item => item.name)
     } : null,
+    paper: {
+      reference: await buildPaperReference(datasetV002, t2.best.ruleId),
+      sessions: readPaperSessions(paperAuditDir)
+    },
     audit: readAuditSummary(auditDir)
   };
 }

@@ -115,6 +115,29 @@ test("rate limit and body limit enforce fail-safe defaults", async () => {
   assert.equal([413, 400].includes(tooLarge.status), true, "oversized body must be rejected");
 });
 
+test("paper endpoint: reference session (200-point curves, fills) + audit sessions", async () => {
+  const server = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]) });
+  const base = addressOf(server);
+  const response = await fetch(`${base}/api/paper`);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  const { reference, sessions } = body.paper;
+  assert.equal(reference.curve.length, 200);
+  assert.equal(reference.backtestCurve.length, 200);
+  assert.equal(reference.fills.length >= 1, true, "T2 on v002 must trade");
+  // 双曲线末端对等（二阶会计差异 < 1e-4 相对）。
+  const paperEnd = reference.curve.at(-1).equity;
+  const backtestEnd = reference.backtestCurve.at(-1).equity;
+  assert.ok(Math.abs(paperEnd - backtestEnd) / backtestEnd < 1e-4, `paper ${paperEnd} vs backtest ${backtestEnd}`);
+  assert.ok(Array.isArray(sessions), "sessions must be an array");
+  for (const session of sessions) {
+    assert.equal(session.chain.length, session.events, "chain length must equal event count");
+    assert.equal(session.orders, session.chain.filter(e => e.type === "intent").length, "orders must count intent events");
+    for (const event of session.chain) assert.ok(event.seq >= 1 && typeof event.type === "string");
+  }
+});
+
 test("loadDotEnv fills only missing env vars and never overrides", () => {
   const dir = mkdtempSyncSafe();
   const envPath = join(dir, ".env");
