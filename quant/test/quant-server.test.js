@@ -138,6 +138,92 @@ test("paper endpoint: reference session (200-point curves, fills) + audit sessio
   }
 });
 
+async function waitFor(predicate, timeoutMs = 8000, label = "condition") {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise(resolve => setTimeout(resolve, 60));
+  }
+  throw new Error(`timeout waiting for ${label}`);
+}
+
+test("paper session lifecycle: auto policy approves via config-policy end to end", async () => {
+  const server = await startServer({
+    apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]),
+    paperConfig: { paperConfigVersion: "test", approvePolicy: "auto", autoApproveRuleIds: ["sma-cross-hysteresis-b"], capital: 100000 }
+  });
+  const base = addressOf(server);
+  const started = await fetch(`${base}/api/paper/session`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId: "T2-sma-cross-b" }) });
+  assert.equal(started.status, 200);
+  const { sessionId } = await started.json();
+  await waitFor(() => {
+    return fetch(`${base}/api/paper/session/${sessionId}`).then(r => r.json()).then(body => body.session.done);
+  }, 8000, "auto session completion");
+  const finalBody = await fetch(`${base}/api/paper/session/${sessionId}`).then(r => r.json());
+  assert.equal(finalBody.session.report.fills, 6);
+  assert.ok(finalBody.session.approvedBy.includes("config-policy"), "auto approvals must be tagged config-policy");
+  assert.equal(finalBody.session.awaitingApproval, false);
+});
+
+test("paper session lifecycle: manual policy parks intents until approve/reject commands", async () => {
+  const server = await startServer({
+    apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]),
+    paperConfig: { paperConfigVersion: "test", approvePolicy: "manual", autoApproveRuleIds: [], capital: 100000 }
+  });
+  const base = addressOf(server);
+  const started = await fetch(`${base}/api/paper/session`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId: "T2-sma-cross-b" }) });
+  const { sessionId } = await started.json();
+  await waitFor(async () => {
+    const body = await fetch(`${base}/api/paper/session/${sessionId}`).then(r => r.json());
+    return body.session.awaitingApproval === true;
+  }, 8000, "first manual intent parked");
+  const parkedBody = await fetch(`${base}/api/paper/session/${sessionId}`).then(r => r.json());
+  const pendingOrder = parkedBody.session.pending[0];
+  assert.equal(pendingOrder.side, "BUY");
+  // 拒绝全部后续意图：循环至会话完成。
+  for (let guard = 0; guard < 30; guard += 1) {
+    const body = await fetch(`${base}/api/paper/session/${sessionId}`).then(r => r.json());
+    if (body.session.done) break;
+    const pending = body.session.pending[0];
+    if (!pending) { await new Promise(resolve => setTimeout(resolve, 60)); continue; }
+    await fetch(`${base}/api/paper/session/${sessionId}/reject`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: pending.orderId, reason: "test reject" }) });
+  }
+  const finalBody = await fetch(`${base}/api/paper/session/${sessionId}`).then(r => r.json());
+  assert.equal(finalBody.session.done, true);
+  assert.equal(finalBody.session.report.fills, 0);
+  assert.equal(finalBody.session.report.finalEquity, 100000);
+  // 再来一个会话：全部批准。
+  const started2 = await fetch(`${base}/api/paper/session`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId: "T2-sma-cross-b" }) });
+  const { sessionId: id2 } = await started2.json();
+  for (let guard = 0; guard < 40; guard += 1) {
+    const body = await fetch(`${base}/api/paper/session/${id2}`).then(r => r.json());
+    if (body.session.done) break;
+    const pending = body.session.pending[0];
+    if (!pending) { await new Promise(resolve => setTimeout(resolve, 60)); continue; }
+    await fetch(`${base}/api/paper/session/${id2}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: pending.orderId, approvedBy: "browser-operator" }) });
+  }
+  const final2 = await fetch(`${base}/api/paper/session/${id2}`).then(r => r.json());
+  assert.equal(final2.session.report.fills, 6);
+  assert.ok(final2.session.approvedBy.includes("browser-operator"));
+});
+
+test("paper command surface: auth required when enabled, 404 outside whitelist", async () => {
+  const server = await startServer({
+    env: { CONSOLE_AUTH_ENABLED: "true", CONSOLE_API_KEY: "console-secret-key-1234567890", DEEPSEEK_API_KEY: "sk-test" },
+    transport: createScriptedTransport(scripts.scenarios["direct-answer"])
+  });
+  const base = addressOf(server);
+  const denied = await fetch(`${base}/api/paper/session`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(denied.status, 401);
+  const allowed = await fetch(`${base}/api/paper/session`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer console-secret-key-1234567890" }, body: JSON.stringify({ ruleId: "T2-sma-cross-b" }) });
+  assert.equal(allowed.status, 200);
+  const { sessionId } = await allowed.json();
+  const unknown = await fetch(`${base}/api/paper/session/${sessionId}/approve`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer console-secret-key-1234567890" }, body: JSON.stringify({ orderId: "ORD-9999" }) });
+  assert.equal(unknown.status, 404);
+  const missing = await fetch(`${base}/api/paper/session/ps-999/approve`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer console-secret-key-1234567890" }, body: "{}" });
+  assert.equal(missing.status, 404);
+});
+
 test("loadDotEnv fills only missing env vars and never overrides", () => {
   const dir = mkdtempSyncSafe();
   const envPath = join(dir, ".env");

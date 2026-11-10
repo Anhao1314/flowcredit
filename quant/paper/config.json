@@ -1,0 +1,7 @@
+{
+  "paperConfigVersion": "paper-config/v0.1.0",
+  "approvePolicy": "manual",
+  "autoApproveRuleIds": [],
+  "capital": 100000,
+  "note": "approvePolicy: manual=每笔意图挂起等待人工批准（命令端点/CLI）; auto=autoApproveRuleIds 内规则的意图自动批准（审计记 approvedBy=config-policy），其余仍人工。freqtrade 式配置即规则；任何变更走 promotion 门禁（人工 review）。"
+}

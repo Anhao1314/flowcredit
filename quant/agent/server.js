@@ -21,11 +21,12 @@ import { createToolRegistry } from "./tools.js";
 import { createQuantAssistant } from "./sidecar.js";
 import { createAuditLogger, defaultAuditDir } from "./audit.js";
 import { computeConsolePayload } from "../console/payload.js";
+import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/engine-adapter.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
 
-export const SERVER_VERSION = "quant-console/v0.0.3";
+export const SERVER_VERSION = "quant-console/v0.0.4";
 
 const bool = value => /^(1|true|yes|on)$/i.test(String(value ?? ""));
 const intBetween = (value, fallback, min, max) => {
@@ -142,6 +143,55 @@ export function createQuantConsoleServer(options = {}) {
   const audit = options.audit || createAuditLogger({ dir: env.QUANT_AUDIT_DIR || defaultAuditDir() });
   const assistant = createQuantAssistant({ client, registry, dataset, trials, audit });
 
+  // ── 虚拟盘会话管理（freqtrade 式：配置即策略 + 命令控制面；会话在内存，重启即清）──
+  const paperConfig = options.paperConfig || (() => {
+    try { return JSON.parse(readFileSync(join(QUANT, "paper", "config.json"), "utf8")); }
+    catch { return { paperConfigVersion: "paper-config/v0.1.0", approvePolicy: "manual", autoApproveRuleIds: [], capital: 100000 }; }
+  })();
+  const paperSessions = new Map();
+  let paperSessionSeq = 0;
+
+  function resolvePaperRuleId(input) {
+    for (const trial of trials.trials) {
+      if (trial.trialId === input || trial.ruleId === input) return trial.ruleId;
+    }
+    return input; // 交给 PaperEngine 报未知
+  }
+
+  function startPaperSession({ ruleId, capital } = {}) {
+    const resolvedRuleId = resolvePaperRuleId(ruleId || "T2-sma-cross-b");
+    const startCapital = Number(capital) > 0 ? Number(capital) : paperConfig.capital;
+    const id = `ps-${String(++paperSessionSeq).padStart(3, "0")}`;
+    const session = { id, ruleId: resolvedRuleId, engine: null, pending: new Map(), done: false, error: null, report: null, createdAt: nowMs() };
+    const approve = async order => {
+      if (paperConfig.approvePolicy === "auto" && Array.isArray(paperConfig.autoApproveRuleIds) && paperConfig.autoApproveRuleIds.includes(resolvedRuleId)) {
+        return { approved: true, approvedBy: "config-policy" };
+      }
+      return new Promise(resolve => { session.pending.set(order.orderId, resolve); });
+    };
+    session.engine = new PaperEngine({ dataset, ruleId: resolvedRuleId, capital: startCapital });
+    paperSessions.set(id, session);
+    session.promise = runPaperSession({ engine: session.engine, ruleId: resolvedRuleId, approve })
+      .then(({ report }) => { session.report = report; session.done = true; session.pending.clear(); })
+      .catch(error => { session.error = String(error?.message || error); session.done = true; session.pending.clear(); });
+    return session;
+  }
+
+  function paperSessionSummary(session) {
+    const account = session.engine.getAccount();
+    const pending = session.engine.orders.filter(order => order.status === "pending");
+    return {
+      id: session.id, ruleId: session.ruleId, done: session.done, error: session.error,
+      awaitingApproval: pending.length > 0,
+      account, pending,
+      orders: session.engine.orders.length, fills: session.engine.fills.length,
+      rejected: session.engine.orders.filter(order => order.status === "rejected").length,
+      approvedBy: [...new Set(session.engine.orders.map(order => order.approvedBy).filter(Boolean))],
+      equityCurve: session.engine.equityCurve,
+      report: session.report, createdAt: session.createdAt
+    };
+  }
+
   const consolePath = join(QUANT, "console", "index.html");
 
   const server = createServer(async (req, res) => {
@@ -183,6 +233,56 @@ export function createQuantConsoleServer(options = {}) {
       if (req.method === "GET" && url.pathname === "/api/paper") {
         const payload = await computeConsolePayload({ paperAuditDir: env.QUANT_PAPER_AUDIT_DIR || undefined, generatedAtUtc: new Date(startedAt).toISOString() });
         return send(200, { ok: true, paper: payload.paper });
+      }
+
+      // 虚拟盘控制面（freqtrade 式命令端点；变动命令须鉴权）：
+      if (req.method === "GET" && url.pathname === "/api/paper/status") {
+        return send(200, {
+          ok: true, paperEngineVersion: PAPER_ENGINE_VERSION, config: paperConfig,
+          sessions: [...paperSessions.values()].map(paperSessionSummary)
+        });
+      }
+      if (req.method === "POST" && url.pathname === "/api/paper/session") {
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
+        const raw = await readBody(req, security.bodyLimit);
+        let body = {};
+        try { body = JSON.parse(raw || "{}"); } catch { return send(400, { ok: false, code: "INVALID_JSON", error: "request body must be valid JSON" }); }
+        try {
+          const session = startPaperSession({ ruleId: body.ruleId, capital: body.capital });
+          return send(200, { ok: true, sessionId: session.id, ruleId: session.ruleId });
+        } catch (error) {
+          return send(400, { ok: false, code: "SESSION_START_FAILED", error: String(error?.message || error) });
+        }
+      }
+      const paperSessionMatch = /^\/api\/paper\/session\/(ps-\d+)\/(approve|reject)$/.exec(url.pathname);
+      if (req.method === "POST" && paperSessionMatch) {
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
+        const [, sessionId, action] = paperSessionMatch;
+        const session = paperSessions.get(sessionId);
+        if (!session) return send(404, { ok: false, code: "NO_SUCH_SESSION", error: sessionId });
+        const raw = await readBody(req, security.bodyLimit);
+        let body = {};
+        try { body = JSON.parse(raw || "{}"); } catch { body = {}; }
+        const resolver = session.pending.get(body.orderId);
+        if (!resolver) return send(404, { ok: false, code: "NO_SUCH_PENDING_ORDER", error: body.orderId || "(missing orderId)" });
+        session.pending.delete(body.orderId);
+        if (action === "approve") resolver({ approved: true, approvedBy: typeof body.approvedBy === "string" && body.approvedBy ? body.approvedBy : "operator" });
+        else resolver({ approved: false, reason: typeof body.reason === "string" && body.reason ? body.reason : "operator rejected" });
+        return send(200, { ok: true, sessionId, orderId: body.orderId, action });
+      }
+      const paperSessionGet = /^\/api\/paper\/session\/(ps-\d+)$/.exec(url.pathname);
+      if (req.method === "GET" && paperSessionGet) {
+        const session = paperSessions.get(paperSessionGet[1]);
+        if (!session) return send(404, { ok: false, code: "NO_SUCH_SESSION", error: paperSessionGet[1] });
+        return send(200, { ok: true, session: paperSessionSummary(session) });
       }
 
       // 问答端点：鉴权 → 限流 → body → askQuant。

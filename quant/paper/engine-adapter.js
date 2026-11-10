@@ -198,11 +198,13 @@ assertBrokerAdapter(PaperEngine.prototype);
 
 /**
  * 确定性会话编排：逐棒 决策 →（变动时）下单 → approve 回调 → 撮合 → 记账。
- * approve 是唯一的非确定性输入（人工门禁）；测试传确定性回调。
+ * approve 是唯一的非确定性输入（人工门禁/策略策略）；返回 boolean 或
+ * { approved, approvedBy?, reason? }（approvedBy 进审计事件，freqtrade 式策略批准
+ * 记 "config-policy"）。可传既有 engine（服务端会话需要运行中状态可见）。
  * 返回 { engine, report, account }；engine.events 即完整审计事件链。
  */
-export async function runPaperSession({ dataset, ruleId, capital = 100000, warmupBars = DEFAULT_WARMUP_BARS, approve = async () => true } = {}) {
-  const engine = new PaperEngine({ dataset, ruleId, capital, warmupBars });
+export async function runPaperSession({ dataset, ruleId, capital = 100000, warmupBars = DEFAULT_WARMUP_BARS, approve = async () => true, engine: existingEngine } = {}) {
+  const engine = existingEngine ?? new PaperEngine({ dataset, ruleId, capital, warmupBars });
   // 拒绝冷却：人工拒绝针对"仓位转换"而非单棒——规则目标不变则不重问；目标变化才重置。
   let suppressedKey = null;
   let lastDecisionTarget = null;
@@ -220,12 +222,15 @@ export async function runPaperSession({ dataset, ruleId, capital = 100000, warmu
       // 离场 = 卖出全部 units（按权益等值卖会留灰尘仓位并错位成本基数——对等测试锁定此点）。
       const deltaUnits = decision.action === "BUY" ? equity / decision.price : engine.units;
       const order = engine.submitOrder({ barIndex, side: decision.action, deltaUnits, reason: `rule ${ruleId} target=${decision.target}` });
-      const approved = await approve(order, decision);
+      const verdict = await approve(order, decision);
+      const approved = typeof verdict === "object" && verdict !== null ? verdict.approved : verdict;
       if (approved) {
-        engine.approveOrder(order.orderId, { approvedBy: "session" });
+        const approvedBy = (typeof verdict === "object" && verdict.approvedBy) || "session";
+        engine.approveOrder(order.orderId, { approvedBy });
         suppressedKey = null;
       } else {
-        engine.rejectOrder(order.orderId, { reason: "session rejected" });
+        const reason = (typeof verdict === "object" && verdict?.reason) || "session rejected";
+        engine.rejectOrder(order.orderId, { reason });
         suppressedKey = transitionKey;
       }
       engine.fillApproved(barIndex);
@@ -234,7 +239,7 @@ export async function runPaperSession({ dataset, ruleId, capital = 100000, warmu
   }
   const account = engine.getAccount();
   const report = {
-    engineVersion: PAPER_ENGINE_VERSION, ruleId, capital,
+    engineVersion: PAPER_ENGINE_VERSION, ruleId, capital: engine.capital,
     warmupBars: engine.warmupBars,
     barsTraded: engine.closes.length - engine.warmupBars,
     orders: engine.orders.length,

@@ -273,6 +273,17 @@ node quant/agent/cli.js repl --consent                            # 交互模式
       </tbody></table>
     </div>
     <div class="card">
+      <div class="card-head"><div><div class="eyebrow">LIVE SESSION · 命令控制面（freqtrade 式）</div><h2>虚拟盘会话控制</h2></div><span id="live-status" class="badge">idle</span></div>
+      <div class="chips" style="margin-top:0;align-items:center">
+        <select id="live-rule" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px">${payload.rules.map(rule => `<option value="${esc(rule.ruleId)}"${rule.ruleId === payload.paper.reference.ruleId ? " selected" : ""}>${esc(rule.ruleId)}</option>`).join("")}</select>
+        <button id="live-start" class="sendbtn" style="padding:8px 14px">Start session</button>
+        <span id="live-account" class="badge badge-mono"></span>
+      </div>
+      <div id="live-pending" style="margin-top:12px"></div>
+      <div id="live-fills"></div>
+      <div class="chat-hint">批准策略来自 quant/paper/config.json（manual=逐单人工批准；auto=白名单规则自动批准，审计记 config-policy）。变动命令需 Bearer（鉴权开启时浏览器不可用，属预期）。</div>
+    </div>
+    <div class="card">
       <div class="card-head"><div><div class="eyebrow">INTERACTIVE SESSIONS · 人工批准审计链</div><h2>本机虚拟盘会话</h2></div><span id="paper-sessions-status" class="badge">…</span></div>
       <div id="paper-sessions"><div class="kv"><div class="k">说明</div><div>审计会话由 runner CLI 写在仓库外（系统临时目录 fc-quant-paper-audit）。HTTP 模式下此处自动加载最新会话事件链；file:// 模式仅显示构建时快照。</div></div></div>
       <div id="paper-sessions-body"></div>
@@ -429,6 +440,69 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   fetch("/api/paper").then(function(r){ return r.json(); }).then(function(body) {
     if (body && body.ok && body.paper) renderSessions(body.paper.sessions);
   }).catch(function() { /* file:// 模式：保留构建时快照 */ });
+
+  // ── Live session 控制面（命令 = 端点；freqtrade 式白名单命令）────────────────
+  var liveTimer = null;
+  function liveRender(s) {
+    var status = document.getElementById("live-status");
+    var account = document.getElementById("live-account");
+    var pendingBox = document.getElementById("live-pending");
+    var fillsBox = document.getElementById("live-fills");
+    status.textContent = s.error ? ("error: " + s.error) : s.done ? "completed" : (s.awaitingApproval ? "awaiting approval" : "running");
+    status.className = "badge " + (s.error ? "badge-bad" : s.done ? "badge-good" : "badge-accent");
+    account.textContent = "equity " + Math.round(s.account.equity).toLocaleString() + " · cash " + Math.round(s.account.cash).toLocaleString() + " · units " + s.account.units.toFixed(4);
+    var pendingHtml = s.pending.length
+      ? s.pending.map(function(o) {
+          return '<div class="callout" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>' + o.orderId + ' ' + o.side + ' ' + o.deltaUnits.toFixed(6) + ' units @ ' + o.price + ' <span class="badge badge-warn">人工批准待决</span></span>' +
+            '<span><button class="sendbtn" data-act="approve" data-order="' + o.orderId + '" style="padding:6px 12px;margin-right:8px">Approve</button>' +
+            '<button class="sendbtn" data-act="reject" data-order="' + o.orderId + '" style="padding:6px 12px;background:var(--card2);color:var(--text)">Deny</button></span></div>';
+        }).join("")
+      : "";
+    pendingBox.innerHTML = pendingHtml;
+    fillsBox.innerHTML = s.done && s.report
+      ? '<div class="callout good">会话完成：fills ' + s.report.fills + ' · rejected ' + s.report.rejected + ' · totalReturn ' + s.report.totalReturnPct.toFixed(2) + '% · maxDD ' + s.report.maxDrawdownPct.toFixed(2) + '%</div>'
+      : (s.fills ? '<div class="chips">' + s.fills + ' fills</div>' : "");
+  }
+  function livePoll() {
+    return fetch("/api/paper/status").then(function(r){ return r.json(); }).then(function(body) {
+      if (!body || !body.ok) return;
+      var sessions = body.sessions || [];
+      if (sessions.length) liveRender(sessions[sessions.length - 1]);
+      var active = sessions.some(function(s){ return !s.done; });
+      if (!active && liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+    }).catch(function(){});
+  }
+  document.getElementById("live-start").addEventListener("click", function() {
+    var ruleId = document.getElementById("live-rule").value;
+    fetch("/api/paper/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId: ruleId }) })
+      .then(function(r){ return r.json(); })
+      .then(function(body) {
+        if (!body.ok) { document.getElementById("live-status").textContent = body.error || "failed"; return; }
+        if (!liveTimer) liveTimer = setInterval(livePoll, 1500);
+        livePoll();
+      }).catch(function(err){ document.getElementById("live-status").textContent = "failed: " + err.message; });
+  });
+  document.getElementById("live-pending").addEventListener("click", function(e) {
+    var btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    fetch("/api/paper/session/" + (window.__liveSessionId || latestSessionId()) + "/" + btn.getAttribute("data-act"), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: btn.getAttribute("data-order"), approvedBy: "browser-operator", reason: "browser-operator denied" })
+    }).then(function(){ livePoll(); });
+  });
+  var latestSessionId = function() {
+    var sessions = (window.__paperSessions || []);
+    return sessions.length ? sessions[sessions.length - 1].id : "";
+  };
+  // 包装 livePoll 记录最新会话 id 供按钮使用
+  var origLivePoll = livePoll;
+  livePoll = function() {
+    return fetch("/api/paper/status").then(function(r){ return r.json(); }).then(function(body) {
+      if (body && body.ok) { window.__paperSessions = body.sessions || []; }
+      return origLivePoll();
+    });
+  };
+  livePoll();
 })();
 </script>
 </body>
