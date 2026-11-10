@@ -80,6 +80,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
 .nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
 .nav-btn.active{background:var(--accent-soft);color:var(--text)}
+/* ── Bot 头像（参考：蓝色圆脸+白椭圆眼；实时动态状态机）──────────────────*/
+.bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 4px 10px rgba(61,125,255,.35))}
+.bot-avatar svg{display:block}
+.bot-avatar .eye{transform-box:fill-box;transform-origin:center;animation:avatar-blink 4.6s infinite}
+.bot-avatar.idle{animation:avatar-float 3.6s ease-in-out infinite}
+.bot-avatar.think .eye{animation:avatar-look 1.5s ease-in-out infinite}
+.bot-avatar.think{animation:avatar-float 1.1s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(90,140,255,.65))}
+.bot-avatar.alert .eye{transform:scale(1.15,1.3);animation:none}
+.bot-avatar.alert{filter:drop-shadow(0 0 12px rgba(90,140,255,.7))}
+.bot-avatar.happy .eye{transform:scaleY(.42) translateY(3.5px);animation:none}
+.bot-avatar.happy{animation:avatar-bounce .5s ease-in-out 2;filter:drop-shadow(0 0 12px rgba(90,140,255,.6))}
+@keyframes avatar-blink{0%,91%,100%{transform:scaleY(1)}94%,97%{transform:scaleY(.1)}}
+@keyframes avatar-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes avatar-look{0%,100%{transform:translate(0,0)}50%{transform:translate(1.5px,-2.5px)}}
+@keyframes avatar-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .sidebar-group{font-size:10px;color:var(--faint);letter-spacing:.8px;text-transform:uppercase;padding:14px 10px 4px}
 .sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
 main{flex:1;padding:28px 34px 60px;max-width:1060px}
@@ -144,7 +159,7 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 </head>
 <body>
 <aside class="sidebar">
-  <div class="brand"><span class="dot"></span>FlowCredit Quant</div>
+  <div class="brand"><span id="brand-avatar"></span>FlowCredit Quant</div>
   <button class="nav-btn active" data-view="chat">Chat</button>
   <button class="nav-btn" data-view="paper">Paper</button>
   <div class="sidebar-group">Dashboards</div>
@@ -302,7 +317,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
 
   <section class="view active" data-view="chat">
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
+      <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2 style="display:flex;align-items:center;gap:10px"><span id="bot-avatar-header"></span>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
       <div id="chat-thread" class="chat-thread"></div>
       <div class="chat-inputrow">
         <textarea id="chat-input" rows="2" placeholder="问点什么…（例如：为什么守卫是 halt？）"></textarea>
@@ -346,6 +361,37 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   var chatSession = null;
   try { chatSession = sessionStorage.getItem("quant-chat-session") || ("web-" + Math.random().toString(16).slice(2, 10)); sessionStorage.setItem("quant-chat-session", chatSession); } catch (e) { chatSession = "web-anon"; }
 
+  // ── Bot 头像（蓝色圆脸；状态机：idle 眨眼漂浮 / think 眼球上瞟+辉光 / alert 瞪眼 / happy 眯眼弹跳）──
+  var avatarSeq = 0;
+  var currentMood = "idle";
+  var moodTimer = null;
+  function botAvatarSVG(size, state, live) {
+    avatarSeq += 1;
+    var id = "bav" + avatarSeq;
+    var cls = "bot-avatar " + (state || "idle") + (live ? " live" : "");
+    return '<span class="' + cls + '" style="width:' + size + 'px;height:' + size + 'px">' +
+      '<svg width="' + size + '" height="' + size + '" viewBox="0 0 64 64" aria-hidden="true">' +
+      '<defs><radialGradient id="' + id + '" cx="35%" cy="28%" r="80%">' +
+      '<stop offset="0%" stop-color="#6fb1ff"/><stop offset="55%" stop-color="#3d7dff"/><stop offset="100%" stop-color="#2456e6"/>' +
+      '</radialGradient></defs>' +
+      '<circle cx="32" cy="32" r="29" fill="url(#' + id + ')"/>' +
+      '<ellipse class="eye" cx="23.5" cy="30" rx="5.2" ry="8.6" fill="#fff"/>' +
+      '<ellipse class="eye" cx="40.5" cy="30" rx="5.2" ry="8.6" fill="#fff"/>' +
+      '</svg></span>';
+  }
+  function setBotMood(mood, holdMs) {
+    if (mood !== "idle" && mood !== "think" && currentMood === "think") return; // 模型调用中不被低优先级状态打断
+    currentMood = mood;
+    document.querySelectorAll(".bot-avatar.live").forEach(function(a) {
+      a.classList.remove("think", "happy", "alert");
+      if (mood !== "idle") a.classList.add(mood);
+    });
+    if (moodTimer) { clearTimeout(moodTimer); moodTimer = null; }
+    if (holdMs) moodTimer = setTimeout(function() { setBotMood("idle"); }, holdMs);
+  }
+  document.getElementById("brand-avatar").innerHTML = botAvatarSVG(20, "idle", true);
+  document.getElementById("bot-avatar-header").innerHTML = botAvatarSVG(30, "idle", true);
+
   function bubble(cls, text, meta, cites) {
     var div = document.createElement("div");
     div.className = "msg " + cls;
@@ -360,7 +406,15 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       });
       div.appendChild(box);
     }
-    thread.appendChild(div);
+    if (cls === "assistant") {
+      var wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;gap:9px;align-items:flex-start;width:100%";
+      wrap.innerHTML = botAvatarSVG(26, "idle");
+      wrap.appendChild(div);
+      thread.appendChild(wrap);
+    } else {
+      thread.appendChild(div);
+    }
     thread.scrollTop = thread.scrollHeight;
   }
 
@@ -382,6 +436,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     bubble("user", question);
     input.value = "";
     sendBtn.disabled = true;
+    setBotMood("think");
     fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: chatSession }) })
       .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }); })
       .then(function(resp) {
@@ -389,10 +444,11 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
           (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
           body.citations || []);
+        setBotMood(body.ok ? "happy" : "idle", 1600);
         if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
       })
-      .catch(function(err) { bubble("assistant", "请求失败：" + err.message); })
-      .finally(function() { sendBtn.disabled = false; input.focus(); });
+      .catch(function(err) { bubble("assistant", "请求失败：" + err.message); setBotMood("idle"); })
+      .finally(function() { sendBtn.disabled=false; input.focus(); });
   }
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
@@ -406,8 +462,8 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     n.textContent = text;
     chatCard(n);
   }
-  function markCardResolved(order) {
-    var card = thread.querySelector('.approval-card[data-order="' + order.orderId + '"]');
+  function markCardResolved(key, order) {
+    var card = thread.querySelector('.approval-card[data-order="' + key + '"]');
     if (card && !card.classList.contains("resolved")) {
       card.classList.add("resolved");
       card.querySelectorAll("button").forEach(function(b){ b.remove(); });
@@ -419,12 +475,13 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       card.appendChild(badge);
     }
   }
-  function approvalCardElement(sessionId, order) {
+  function approvalCardElement(sessionId, key, order) {
     var card = document.createElement("div");
     card.className = "approval-card";
-    card.setAttribute("data-order", order.orderId);
+    card.setAttribute("data-order", key);
     var title = document.createElement("div");
-    title.innerHTML = "<b>Approval required</b> · " + order.orderId;
+    title.style.cssText = "display:flex;align-items:center;gap:8px";
+    title.innerHTML = botAvatarSVG(22, "alert") + "<span><b>Approval required</b> · " + order.orderId + "</span>";
     var body = document.createElement("div");
     body.style.marginTop = "6px";
     body.textContent = order.side + " " + order.deltaUnits.toFixed(6) + " units @ " + order.price + "（" + order.date + "）";
@@ -439,11 +496,11 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     no.className = "sendbtn btn-ghost"; no.style.padding = "7px 14px"; no.style.marginLeft = "8px"; no.textContent = "Deny";
     ok.addEventListener("click", function() {
       fetch("/api/paper/session/" + sessionId + "/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, approvedBy: "chat-operator" }) });
-      markCardResolved({ orderId: order.orderId, status: "filled", approvedBy: "chat-operator" });
+      markCardResolved(key, { orderId: order.orderId, status: "filled", approvedBy: "chat-operator" });
     });
     no.addEventListener("click", function() {
       fetch("/api/paper/session/" + sessionId + "/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, reason: "chat-operator denied" }) });
-      markCardResolved({ orderId: order.orderId, status: "rejected" });
+      markCardResolved(key, { orderId: order.orderId, status: "rejected" });
     });
     btns.appendChild(ok); btns.appendChild(no);
     card.appendChild(title); card.appendChild(body); card.appendChild(risk); card.appendChild(btns);
@@ -455,19 +512,24 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       var s = (body.sessions || []).at(-1);
       if (!s) return;
       (s.orderLog || []).forEach(function(order) {
-        if (!paperSeen.orders[order.orderId]) {
-          paperSeen.orders[order.orderId] = order.status;
-          if (order.status === "pending") chatCard(approvalCardElement(s.id, order));
-          else chatNote("虚拟盘意图 " + order.orderId + " " + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + " → " + order.status, order.status === "filled" ? "fill" : "reject");
-        } else if (paperSeen.orders[order.orderId] === "pending" && order.status !== "pending") {
-          paperSeen.orders[order.orderId] = order.status;
-          markCardResolved(order);
-          chatNote("成交 " + order.orderId + " " + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + (order.approvedBy ? " · by " + order.approvedBy : ""), order.status === "filled" ? "fill" : "reject");
+        // 去重键 = 会话:订单——orderId 每会话从 ORD-0001 计数，跨会话必碰撞
+        var key = s.id + "/" + order.orderId;
+        if (!paperSeen.orders[key]) {
+          paperSeen.orders[key] = order.status;
+          if (order.status === "pending") chatCard(approvalCardElement(s.id, key, order));
+          else chatNote("虚拟盘意图 " + order.orderId + "（" + s.id + "）" + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + " → " + order.status, order.status === "filled" ? "fill" : "reject");
+        } else if (paperSeen.orders[key] === "pending" && order.status !== "pending") {
+          paperSeen.orders[key] = order.status;
+          markCardResolved(key, order);
+          chatNote("成交 " + order.orderId + "（" + s.id + "）" + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + (order.approvedBy ? " · by " + order.approvedBy : ""), order.status === "filled" ? "fill" : "reject");
         }
       });
       if (s.done && !paperSeen.sessionDone[s.id]) {
         paperSeen.sessionDone[s.id] = true;
-        chatNote("虚拟盘会话完成：fills " + s.report.fills + " · rejected " + s.report.rejected + " · totalReturn " + s.report.totalReturnPct.toFixed(2) + "% · finalEquity " + Math.round(s.report.finalEquity).toLocaleString(), "fill");
+        chatNote("虚拟盘会话完成：" + s.id + " · fills " + s.report.fills + " · rejected " + s.report.rejected + " · totalReturn " + s.report.totalReturnPct.toFixed(2) + "% · finalEquity " + Math.round(s.report.finalEquity).toLocaleString(), "fill");
+        setBotMood("happy", 1800);
+      } else if (!s.done && s.awaitingApproval) {
+        setBotMood("alert");
       }
     }).catch(function(){});
   }
