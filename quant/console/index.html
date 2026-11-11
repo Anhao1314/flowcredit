@@ -6,22 +6,29 @@
 <title>FlowCredit Quant · Console</title>
 <style>
 :root{
-  --bg:#000; --sidebar:#000; --card:#0d0d0d; --card2:#161616;
-  --border:rgba(255,255,255,.12); --text:#f2f2f2; --muted:#9b9b9b; --faint:#5f5f5f;
-  --accent:#8b5cf6; --accent-soft:rgba(139,92,246,.12);
-  --good:#10a37f; --bad:#ef4444; --warn:#f59e0b;
-  --radius:14px;
+  --bg:#fafafa; --sidebar:#f5f5f6; --card:#fff; --card2:#f7f7f8;
+  --border:#e8e8ec; --text:#1d1d1f; --muted:#8e8e93; --faint:#b0b0b5;
+  --accent:#3b82f6; --accent-soft:#eef3ff;
+  --good:#34a853; --bad:#e5484d; --warn:#f5a623;
+  --radius:16px;
+  --shadow:0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 14px 44px rgba(0,0,0,.10);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.55;display:flex;min-height:100vh}
-.sidebar{width:232px;background:var(--sidebar);border-right:1px solid var(--border);padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
-.brand{font-weight:700;font-size:15px;letter-spacing:.2px;padding:6px 10px 16px;display:flex;align-items:center;gap:8px}
-.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
-.nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
-.nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
-.nav-btn.active{background:var(--accent-soft);color:var(--text)}
+.sidebar{width:252px;background:var(--sidebar);border-right:1px solid var(--border);padding:14px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:3px}
+.brand{font-weight:650;font-size:15px;letter-spacing:.1px;padding:4px 10px 14px;display:flex;align-items:center;gap:9px}
+.brand .dot{display:none}
+.segmented{display:flex;background:#e9e9ec;border-radius:12px;padding:3px;gap:3px;margin:0 4px 8px}
+.seg-btn{flex:1;border:none;background:transparent;color:#6e6e73;font-size:12.5px;font-weight:500;padding:7px 10px;border-radius:9px;cursor:pointer}
+.seg-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.09);font-weight:600}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:#3c3c43;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13.5px}
+.nav-btn:hover{background:rgba(0,0,0,.045)}
+.nav-btn.active{background:#e9e9ec;font-weight:550}
+.nav-btn svg{width:17px;height:17px;stroke:#6e6e73;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.nav-btn .kbd{margin-left:auto;color:var(--faint);font-size:11px;font-weight:400}
 /* ── Bot 头像（参考：蓝色圆脸+白椭圆眼；实时动态状态机）──────────────────*/
-.bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 4px 10px rgba(61,125,255,.35))}
+.bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 3px 8px rgba(61,125,255,.28))}
 .bot-avatar svg{display:block}
 .bot-avatar .eye{transform-box:fill-box;transform-origin:center;animation:avatar-blink 4.6s infinite}
 .bot-avatar.idle{animation:avatar-float 3.6s ease-in-out infinite}
@@ -35,14 +42,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 @keyframes avatar-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
 @keyframes avatar-look{0%,100%{transform:translate(0,0)}50%{transform:translate(1.5px,-2.5px)}}
 @keyframes avatar-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-.sidebar-group{font-size:10px;color:var(--faint);letter-spacing:.8px;text-transform:uppercase;padding:14px 10px 4px}
-.sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
-main{flex:1;padding:28px 34px 60px;max-width:1060px}
-.topbar{margin-bottom:22px}
+.sidebar-group{font-size:11px;color:var(--muted);padding:14px 10px 4px;font-weight:500}
+.sidebar-footer{margin-top:auto;padding:10px 8px 4px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px}
+.sidebar-footer .meta{font-size:10px;color:var(--faint);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:118px}
+.sidebar-footer .pill{margin-left:auto;font-size:10px;border:1px solid var(--border);border-radius:999px;padding:1px 8px;color:var(--muted);background:#fff}
+main{flex:1;padding:24px 32px 44px;display:flex;flex-direction:column;min-width:0;max-width:1120px;margin:0 auto}
+.topbar{margin-bottom:20px}
+body[data-view="chat"] .topbar{display:none}
 .topbar h1{font-size:22px;font-weight:650}
 .topbar .sub{color:var(--muted);margin-top:4px;font-size:13px}
 .view{display:none}.view.active{display:block}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow)}
 .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
 .card h2{font-size:16px;font-weight:600;margin-top:2px}
 .eyebrow{font-size:11px;color:var(--faint);letter-spacing:.6px;text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -53,11 +63,11 @@ main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .metric-sub{font-size:11px;color:var(--faint);margin-top:2px}
 .metric.good .metric-value{color:var(--good)}
 .metric.bad .metric-value{color:var(--bad)}
-.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
-.badge-accent{color:var(--accent);border-color:rgba(139,92,246,.4);background:var(--accent-soft)}
-.badge-good{color:var(--good);border-color:rgba(16,163,127,.4)}
-.badge-bad{color:var(--bad);border-color:rgba(239,68,68,.4)}
-.badge-warn{color:var(--warn);border-color:rgba(245,158,11,.4)}
+.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:#fff}
+.badge-accent{color:var(--accent);border-color:rgba(59,130,246,.35);background:var(--accent-soft)}
+.badge-good{color:var(--good);border-color:rgba(52,168,83,.35);background:rgba(52,168,83,.08)}
+.badge-bad{color:var(--bad);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.07)}
+.badge-warn{color:#b7791f;border-color:rgba(245,166,35,.4);background:rgba(245,166,35,.1)}
 .badge-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
@@ -67,52 +77,77 @@ main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .tbl tr.selected td{background:var(--accent-soft)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
 .callout{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;padding:12px 16px;margin:14px 0;font-size:13px}
-.callout.warn{border-left-color:var(--warn);background:rgba(245,158,11,.1)}
-.callout.good{border-left-color:var(--good);background:rgba(16,163,127,.1)}
-pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:#cfd3dc}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
+.callout.warn{border-left-color:var(--warn);background:rgba(245,166,35,.08)}
+.callout.good{border-left-color:var(--good);background:rgba(52,168,83,.07)}
+pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:#3c3c43}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
 .kv .k{color:var(--muted)}
-.chat-thread{height:400px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:6px 2px}
-.msg{max-width:82%;border-radius:14px;padding:10px 14px;white-space:pre-wrap}
-.msg.user{align-self:flex-end;background:var(--accent-soft);border:1px solid rgba(139,92,246,.35)}
-.msg.assistant{align-self:flex-start;background:var(--card2);border:1px solid var(--border)}
-.msg .meta{font-size:10px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+/* ── Chat（Kimi 式：居中空态 + 悬浮输入卡 + 快捷芯片）────────────────── */
+.chat-shell{flex:1;display:flex;flex-direction:column;height:calc(100vh - 32px)}
+body[data-view="chat"] main{padding:16px 24px}
+body[data-view="chat"] .footer{display:none}
+.chat-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding-bottom:60px}
+.wordmark{font-size:40px;font-weight:800;letter-spacing:-1.1px;display:flex;align-items:center;gap:7px;line-height:1}
+.wordmark .dot-blue{width:13px;height:13px;border-radius:50%;background:var(--accent);align-self:flex-start;margin-top:7px}
+.wordmark-sub{color:var(--muted);font-size:13px}
+.chat-thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:8px 4px 12px}
+.msg{max-width:78%;border-radius:18px;padding:10px 14px;white-space:pre-wrap;font-size:14px}
+.msg.user{align-self:flex-end;background:#f1f1f3;color:var(--text)}
+.msg.assistant{align-self:flex-start;background:transparent;padding:6px 0}
+.msg .meta{font-size:10.5px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.chat-inputrow{display:flex;gap:12px;align-items:flex-end;margin-top:14px}
-.chat-inputrow textarea{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:52px}
-.chat-side{display:flex;flex-direction:column;gap:8px;align-items:stretch}
-.chat-consent{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
-.sendbtn{background:#fff;border:none;color:#000;border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
+.msg b{font-weight:600}
+.msg code{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:1px 5px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg .li{display:flex;gap:7px;margin:2px 0}
+.msg .li::before{content:"•";color:var(--muted);flex-shrink:0}
+.composer{background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow-lg);padding:12px 14px 10px;margin:8px auto 0;width:100%;max-width:820px}
+.composer textarea{width:100%;border:none;outline:none;resize:none;background:transparent;color:var(--text);font:inherit;font-size:14px;min-height:46px}
+.composer textarea::placeholder{color:var(--faint)}
+.composer-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+.consent-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--card2);border:1px solid var(--border);border-radius:999px;padding:5px 11px;cursor:pointer}
+.consent-pill input{accent-color:var(--accent);margin:0}
+.model-label{margin-left:auto;font-size:12px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.send-circle{width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.send-circle:disabled{background:#e5e5e8;color:#b0b0b5;cursor:not-allowed}
+.quick-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px auto 0;max-width:820px;width:100%}
+.quick-chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:7px 14px;font-size:12.5px;color:#3c3c43;cursor:pointer;box-shadow:var(--shadow)}
+.quick-chip:hover{background:var(--card2)}
+.sendbtn{background:var(--text);border:none;color:#fff;border-radius:999px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
 .sendbtn:disabled{opacity:.45;cursor:not-allowed}
-.sendbtn.btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--border);font-weight:400}
-.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:12px;background:var(--card2);padding:12px 14px;max-width:82%}
-.approval-card.resolved{border-left-color:var(--good);opacity:.85}
-.approval-card .risk{font-size:10.5px;color:var(--warn);margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:7px 12px;background:var(--card2);max-width:82%}
+.sendbtn.btn-ghost{background:#fff;color:var(--text);border:1px solid var(--border);font-weight:400}
+.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:16px;background:#fff;padding:12px 14px;max-width:78%;box-shadow:var(--shadow)}
+.approval-card.resolved{border-left-color:var(--good);opacity:.92}
+.approval-card .risk{font-size:10.5px;color:#b7791f;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:12px;padding:7px 12px;background:#fff;max-width:78%}
 .chat-note.fill{border-left:3px solid var(--good)}
 .chat-note.reject{border-left:3px solid var(--bad)}
-.chat-hint{font-size:11.5px;color:var(--faint);margin-top:10px}
-@media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:190px}}
+.chat-hint{font-size:11.5px;color:var(--faint);margin:10px auto 0;max-width:820px;width:100%}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:200px}}
 </style>
 </head>
 <body>
 <aside class="sidebar">
   <div class="brand"><span id="brand-avatar"></span>FlowCredit Quant</div>
-  <button class="nav-btn active" data-view="chat">Chat</button>
-  <button class="nav-btn" data-view="paper">Paper</button>
-  <div class="sidebar-group">Dashboards</div>
-  <button class="nav-btn" data-view="overview">Overview</button>
-  <button class="nav-btn" data-view="rules">Rules &amp; Trials</button>
-  <button class="nav-btn" data-view="dsr">DSR &amp; Promotion</button>
-  <button class="nav-btn" data-view="quality">Data Quality</button>
-  <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
+  <div class="segmented">
+    <button class="seg-btn active" data-view="chat">Chat</button>
+    <button class="seg-btn" data-view="paper">Paper</button>
+  </div>
+  <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘K</span></button>
+  <div class="sidebar-group">仪表盘</div>
+  <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
+  <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
+  <button class="nav-btn" data-view="dsr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r=".5"/><circle cx="15" cy="15" r=".5"/></svg><span>DSR &amp; Promotion</span></button>
+  <button class="nav-btn" data-view="quality"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v12c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9v-12"/><path d="M4.5 11.5c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9"/></svg><span>Data Quality</span></button>
+  <button class="nav-btn" data-view="agent"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M9 12h7M9 16h7"/></svg><span>Agent &amp; Audit</span></button>
   <div class="sidebar-footer">
-    <div>metrics eval-metrics/v0.0.3</div>
-    <div>rules quant-rules/v0.0.2</div>
-    <div>agent quant-agent/v0.0.2</div>
-    <div>built 2026-11-10</div>
+    <span>👤</span>
+    <div style="display:flex;flex-direction:column;line-height:1.3">
+      <span style="font-size:12.5px;font-weight:500">Operator</span>
+      <span class="meta">metrics v0.0.3 · rules v0.0.2</span>
+    </div>
+    <span class="pill">ALPHA</span>
   </div>
 </aside>
 <main>
@@ -147,8 +182,8 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">LAST OFFLINE EVAL</div><h2>治理检查 34 / 34 passed</h2></div><span class="badge badge-muted">MODEL NOT_RUN</span></div>
       <div class="kv">
-        <div class="k">runDate</div><div class="mono">2026-11-10T16:45:47.517Z</div>
-        <div class="k">gitCommit</div><div class="mono">2b63917f431f</div>
+        <div class="k">runDate</div><div class="mono">2026-11-10T17:41:05.029Z</div>
+        <div class="k">gitCommit</div><div class="mono">37e27c268703</div>
         <div class="k">failed checks</div><div>none</div>
       </div>
     </div>
@@ -228,12 +263,12 @@ node quant/agent/cli.js repl --consent                            # 交互模式
       <div class="callout">封闭注册表 = 权威白名单：模型只能调用以上 5 个确定性工具，不能自供数据、不能下单交易。citations 只来自成功工具返回的 evalRunId/signalFingerprint；模型文本中的数字不构成引用。</div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>问答审计统计</h2></div><span class="badge badge-mono">202 entries</span></div>
+      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>问答审计统计</h2></div><span class="badge badge-mono">293 entries</span></div>
       <div class="kv">
-        <div class="k">total asks</div><div>202</div>
-        <div class="k">harness</div><div>not-requested ×65 · unconfigured ×7 · ok ×101 · max-steps-reached ×7 · unavailable ×22</div>
-        <div class="k">tool calls</div><div>assess_frozen_dataset:ok ×57 · trial_metrics:ok ×78 · place_order:rejected ×7</div>
-        <div class="k">last activity</div><div class="mono">2026-11-10T16:45:45.538Z</div>
+        <div class="k">total asks</div><div>293</div>
+        <div class="k">harness</div><div>not-requested ×92 · unconfigured ×10 · ok ×147 · max-steps-reached ×10 · unavailable ×34</div>
+        <div class="k">tool calls</div><div>assess_frozen_dataset:ok ×81 · trial_metrics:ok ×112 · place_order:rejected ×10 · guard_check:ok ×1 · data_quality:ok ×1</div>
+        <div class="k">last activity</div><div class="mono">2026-11-10T17:49:58.668Z</div>
         <div class="k">log file</div><div class="mono">agent-audit.jsonl（哈希存储，无明文）</div>
       </div>
     </div>
@@ -249,7 +284,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
         <div class="metric "><div class="metric-label">Orders / Fills</div><div class="metric-value">6 / 6</div><div class="metric-sub">MOC：决策棒收盘成交</div></div>
       </div>
       <div id="paper-chart" style="margin-top:14px"></div>
-      <div class="chips"><span class="badge badge-accent">—— 紫线 = 虚拟盘账本</span><span class="badge badge-mono">—— 灰线 = 回测口径</span></div>
+      <div class="chips"><span class="badge badge-accent">—— 蓝线 = 虚拟盘账本</span><span class="badge badge-mono">—— 虚线 = 回测口径（与账本逐点重合）</span></div>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">REFERENCE FILLS · 全批准会话</div><h2>成交记录</h2></div></div>
@@ -276,40 +311,54 @@ node quant/agent/cli.js repl --consent                            # 交互模式
   </section>
 
   <section class="view active" data-view="chat">
-    <div class="card">
-      <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2 style="display:flex;align-items:center;gap:10px"><span id="bot-avatar-header"></span>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
-      <div id="chat-thread" class="chat-thread"></div>
-      <div class="chat-inputrow">
-        <textarea id="chat-input" rows="2" placeholder="问点什么…（例如：为什么守卫是 halt？）"></textarea>
-        <div class="chat-side">
-          <label class="chat-consent"><input type="checkbox" id="chat-consent" checked> modelConsent（允许发送到模型）</label>
-          <button id="chat-send" class="sendbtn" disabled>发送</button>
+    <div class="chat-shell">
+      <div style="display:flex;justify-content:center;padding:6px 0 0">
+        <span id="chat-status" class="badge badge-accent">checking…</span>
+      </div>
+      <div class="chat-empty" id="chat-empty">
+        <div class="wordmark"><span id="bot-avatar-header"></span>FlowCredit<span class="dot-blue"></span></div>
+        <div class="wordmark-sub">Evidence-aware quant workflow · 数字来自工具，引用可反查</div>
+      </div>
+      <div id="chat-thread" class="chat-thread" style="display:none"></div>
+      <div class="composer">
+        <textarea id="chat-input" rows="2" placeholder="问点什么…  例如：为什么守卫是 halt？"></textarea>
+        <div class="composer-row">
+          <label class="consent-pill"><input type="checkbox" id="chat-consent" checked> modelConsent</label>
+          <span class="model-label" id="model-label">kimi-k2.6</span>
+          <button id="chat-send" class="send-circle" disabled title="发送">↑</button>
         </div>
       </div>
-      <div id="chat-hint" class="chat-hint">检测服务中…</div>
+      <div class="quick-chips" id="quick-chips">
+        <button class="quick-chip" data-q="为什么守卫是 halt？">为什么守卫是 halt？</button>
+        <button class="quick-chip" data-q="解释一下 DSR 和有效 N 的含义">解释 DSR</button>
+        <button class="quick-chip" data-q="当前数据集的质量如何？">数据质量如何？</button>
+      </div>
+      <div id="chat-hint" class="chat-hint" style="text-align:center">检测服务中…</div>
     </div>
   </section>
 
   <div class="footer">
     <div>Evidence-based demo · real market snapshot + synthetic baseline · Not investment advice · 不构成任何策略结论</div>
-    <div>All numbers computed by deterministic pure functions · 2026-11-10 16:56:50 UTC</div>
+    <div>All numbers computed by deterministic pure functions · 2026-11-10 17:50:28 UTC</div>
   </div>
 </main>
 <script>
-var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion":"eval-metrics/v0.0.3","metricsBasis":"synthetic_fixture_placeholder_rules","costModel":{"commissionBps":2,"slippageBps":5},"rulesVersion":"quant-rules/v0.0.2","gatesVersion":"quality-gates/v0.0.2","agentVersion":"quant-agent/v0.0.2"},"datasets":{"v001":{"dataVersion":"quant-dataset/v0.0.1","nature":"synthetic_fixture","rows":130,"span":["2026-05-01","2026-10-29"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.1","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":130,"smaShort":81.1273,"smaLong":80.4618,"trendBps":82.7155,"momentum10Pct":1.1004,"volatility20Pct":1.4692,"maxDrawdownPct":24.8064,"componentScores":{"momentum":55.502,"trend":70.678875,"stability":92.6540137983263},"missingComponents":[],"signalScore":70.1019},"signalScore":70.1019,"guardStatus":"pass","breaches":[],"decisionStatus":"eligible","signalFingerprint":"sig-982d57f915e36caf","evalRunId":"qer-dd147a8ca0cb3163"}},"v002":{"dataVersion":"quant-dataset/v0.0.2","nature":"real_market_data","source":"okx:BTC-USDT:1D","fetchedAtUtc":"2026-11-05T19:22:18.540Z","rows":260,"span":["2026-02-18","2026-11-04"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.2","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":260,"smaShort":80170.995,"smaLong":81341.21,"trendBps":-143.865,"momentum10Pct":-5.46,"volatility20Pct":2.195,"maxDrawdownPct":28.5426,"componentScores":{"momentum":22.7,"trend":14.033749999999998,"stability":89.0250556417331},"missingComponents":[],"signalScore":36.2481},"signalScore":36.2481,"guardStatus":"halt","breaches":[{"code":"DRAWDOWN_LIMIT_EXCEEDED","severity":"critical","observed":28.5426,"limit":25,"message":"Max drawdown 28.5426% exceeds the 25% limit."}],"decisionStatus":"blocked","signalFingerprint":"sig-b95d74f104b987e9","evalRunId":"qer-652332d330f2cdc6"},"quality":{"passed":true,"criticalCount":0,"findings":[],"stats":{"rows":260,"firstDate":"2026-02-18","lastDate":"2026-11-04","maxAbsMovePct":8.3677,"minClose":58384,"maxClose":86419}}}},"rules":[{"ruleId":"sma-cross-hysteresis-a","family":"sma-cross-hysteresis","description":"SMA20/60 交叉，入场带 +0.10%，退出带 −0.50%","params":{"smaShort":20,"smaLong":60,"entryBandPct":0.1,"exitBandPct":-0.5},"version":"quant-rules/v0.0.2"},{"ruleId":"sma-cross-hysteresis-b","family":"sma-cross-hysteresis","description":"SMA10/40 交叉，入场带 +0.05%，退出带 −0.30%","params":{"smaShort":10,"smaLong":40,"entryBandPct":0.05,"exitBandPct":-0.3},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-a","family":"momentum-cooldown","description":"10 日动量 ≥+1.0% 入场，≤−1.0% 退出，冷却 5 根","params":{"momentumLag":10,"entryPct":1,"exitPct":-1,"cooldownBars":5},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-b","family":"momentum-cooldown","description":"5 日动量 ≥+0.5% 入场，≤−0.5% 退出，冷却 8 根","params":{"momentumLag":5,"entryPct":0.5,"exitPct":-0.5,"cooldownBars":8},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-a","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 70 分位持仓","params":{"window":40,"percentile":70},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-b","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 60 分位持仓","params":{"window":40,"percentile":60},"version":"quant-rules/v0.0.2"}],"trials":{"v001":{"trialsVersion":"quant-trials/v0.0.1","net":false,"rows":[{"trialId":"T1-momentum-heavy","ruleId":null,"weights":{"momentum":0.7,"trend":0.2,"stability":0.1},"entryThresholdPct":55,"nReturns":69,"sharpeAnnualized":-0.9684431379310787,"sharpePerPeriod":-0.061006183377920416,"isSharpePerPeriod":-0.15397821830922692,"oosSharpePerPeriod":-0.030343505964607016,"turnover":0.10144927536231885,"maxDrawdownPct":5.689631449267672},{"trialId":"T2-trend-heavy","ruleId":null,"weights":{"momentum":0.1,"trend":0.7,"stability":0.2},"entryThresholdPct":50,"nReturns":69,"sharpeAnnualized":-3.9577764252557652,"sharpePerPeriod":-0.24931648014335642,"isSharpePerPeriod":-0.3245104080654032,"oosSharpePerPeriod":-0.25284148399894596,"turnover":0.043478260869565216,"maxDrawdownPct":11.722252175850123},{"trialId":"T3-balanced-loose","ruleId":null,"weights":{"momentum":0.4,"trend":0.35,"stability":0.25},"entryThresholdPct":45,"nReturns":69,"sharpeAnnualized":-1.3068522700156726,"sharpePerPeriod":-0.08232395492289767,"isSharpePerPeriod":-0.3090708920521455,"oosSharpePerPeriod":0.08704336811970442,"turnover":0.08695652173913043,"maxDrawdownPct":11.622458847360221},{"trialId":"T4-stability-strict","ruleId":null,"weights":{"momentum":0.2,"trend":0.2,"stability":0.6},"entryThresholdPct":62,"nReturns":69,"sharpeAnnualized":-1.1720420016228015,"sharpePerPeriod":-0.073831706248007,"isSharpePerPeriod":-0.2888555683549867,"oosSharpePerPeriod":0.07249486650964856,"turnover":0.057971014492753624,"maxDrawdownPct":16.043574049139185}],"best":{"trialId":"T1-momentum-heavy","ruleId":null},"dsr":{"dsr":0.20672565531899162,"sr":-0.061006183377920416,"sr0":0.03743131213502992,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"nTrials":{"nominal":4,"effective":1.8058937031585038,"method":"appendix-A.3"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"dsrNominal":{"dsr":0.09958479775211265,"sr":-0.061006183377920416,"sr0":0.09353111379623864,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"nTrials":{"nominal":4,"effective":4,"method":"nominal"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"effective":{"method":"average-correlation (DSR paper A.3, Eq. 8/9)","m":4,"averageCorrelation":0.5736435116302845,"nominalTrials":4,"effectiveTrials":1.8058937031585038,"basis":"synthetic_fixture_placeholder_rules"}},"v002":{"trialsVersion":"quant-trials/v0.0.2","net":true,"rows":[{"trialId":"T1-sma-cross-a","ruleId":"sma-cross-hysteresis-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.35660869975426307,"sharpePerPeriod":0.022464236545520964,"isSharpePerPeriod":-0.04601375150062451,"oosSharpePerPeriod":0.0905268606646923,"turnover":0.01507537688442211,"maxDrawdownPct":21.794033597134998},{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.6609705351542389,"sharpePerPeriod":0.04163722999903313,"isSharpePerPeriod":-0.011527082181515711,"oosSharpePerPeriod":0.09264473234597712,"turnover":0.02512562814070352,"maxDrawdownPct":9.939600598842},{"trialId":"T3-momentum-cd-a","ruleId":"momentum-cooldown-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.16960084440536438,"sharpePerPeriod":0.010683848962932249,"isSharpePerPeriod":-0.062196749101302705,"oosSharpePerPeriod":0.09855047271805069,"turnover":0.06532663316582915,"maxDrawdownPct":13.308210475557846},{"trialId":"T4-momentum-cd-b","ruleId":"momentum-cooldown-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":-0.445378678825312,"sharpePerPeriod":-0.028056219605292487,"isSharpePerPeriod":-0.03823924211518666,"oosSharpePerPeriod":-0.016111867167277565,"turnover":0.11557788944723618,"maxDrawdownPct":15.16041180508795},{"trialId":"T5-composite-pct-a","ruleId":"composite-percentile-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.5915332399141368,"sharpePerPeriod":0.03726309154859791,"isSharpePerPeriod":-0.0729316487642392,"oosSharpePerPeriod":0.12102972285619477,"turnover":0.07035175879396985,"maxDrawdownPct":8.617880937285},{"trialId":"T6-composite-pct-b","ruleId":"composite-percentile-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.19524128861703358,"sharpePerPeriod":0.012299045126963254,"isSharpePerPeriod":-0.07242755505323818,"oosSharpePerPeriod":0.07620095372548809,"turnover":0.10050251256281408,"maxDrawdownPct":8.374748245133636}],"best":{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b"},"dsr":{"dsr":0.665538146412131,"sr":0.04163722999903313,"sr0":0.012043732296020874,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"nTrials":{"nominal":6,"effective":1.9196144987397485,"method":"appendix-A.3"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"dsrNominal":{"dsr":0.5522314638222234,"sr":0.04163722999903313,"sr0":0.03255064350869444,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"nTrials":{"nominal":6,"effective":6,"method":"nominal"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"effective":{"method":"average-correlation (DSR paper A.3, Eq. 8/9)","m":6,"averageCorrelation":0.6360424514709673,"nominalTrials":6,"effectiveTrials":1.9196144987397485,"basis":"synthetic_fixture_placeholder_rules"}}},"eval":{"runDate":"2026-11-10T16:45:47.517Z","gitCommit":"2b63917f431f6a2379ead0bfa9dcfee3063d332a","MODEL":"NOT_RUN","checksPassed":34,"checksTotal":34,"failedChecks":[]},"paper":{"reference":{"engineVersion":"paper-engine/v0.1.0","ruleId":"sma-cross-hysteresis-b","capital":100000,"curve":[{"barIndex":60,"date":"2026-04-19","equity":99930},{"barIndex":61,"date":"2026-04-20","equity":100099.7245707025},{"barIndex":62,"date":"2026-04-21","equity":104631.56873052625},{"barIndex":63,"date":"2026-04-22","equity":103451.55369966544},{"barIndex":64,"date":"2026-04-23","equity":103011.19438548478},{"barIndex":65,"date":"2026-04-24","equity":102071.1712184111},{"barIndex":66,"date":"2026-04-25","equity":103012.91144339851},{"barIndex":67,"date":"2026-04-26","equity":101355.55431252303},{"barIndex":68,"date":"2026-04-27","equity":100400.60594973776},{"barIndex":69,"date":"2026-04-28","equity":100209.08795166879},{"barIndex":70,"date":"2026-04-29","equity":100926.95024098248},{"barIndex":71,"date":"2026-04-30","equity":103541.63319944685},{"barIndex":72,"date":"2026-05-01","equity":103601.46606367116},{"barIndex":73,"date":"2026-05-02","equity":103836.96716060699},{"barIndex":74,"date":"2026-05-03","equity":105639.34964450297},{"barIndex":75,"date":"2026-05-04","equity":107616.34371008667},{"barIndex":76,"date":"2026-05-05","equity":107846.56155190337},{"barIndex":77,"date":"2026-05-06","equity":105460.37937734197},{"barIndex":78,"date":"2026-05-07","equity":105793.62069398198},{"barIndex":79,"date":"2026-05-08","equity":106285.35966419631},{"barIndex":80,"date":"2026-05-09","equity":107461.94057922967},{"barIndex":81,"date":"2026-05-10","equity":107510.28236356984},{"barIndex":82,"date":"2026-05-11","equity":106032.2917439893},{"barIndex":83,"date":"2026-05-12","equity":104056.48641080744},{"barIndex":84,"date":"2026-05-13","equity":107301.59378636365},{"barIndex":85,"date":"2026-05-14","equity":104484.95840097},{"barIndex":86,"date":"2026-05-15","equity":103266.63977049541},{"barIndex":87,"date":"2026-05-16","equity":103008.6848393032},{"barIndex":88,"date":"2026-05-17","equity":100861.4378775051},{"barIndex":89,"date":"2026-05-18","equity":101009.89734635304},{"barIndex":90,"date":"2026-05-19","equity":102237.72583604211},{"barIndex":91,"date":"2026-05-20","equity":101979.77090484991},{"barIndex":92,"date":"2026-05-21","equity":101365.06417173748},{"barIndex":93,"date":"2026-05-22","equity":99610.14497252047},{"barIndex":94,"date":"2026-05-23","equity":99610.14497252047},{"barIndex":95,"date":"2026-05-24","equity":99610.14497252047},{"barIndex":96,"date":"2026-05-25","equity":99610.14497252047},{"barIndex":97,"date":"2026-05-26","equity":99610.14497252047},{"barIndex":98,"date":"2026-05-27","equity":99610.14497252047},{"barIndex":99,"date":"2026-05-28","equity":99610.14497252047},{"barIndex":100,"date":"2026-05-29","equity":99610.14497252047},{"barIndex":101,"date":"2026-05-30","equity":99610.14497252047},{"barIndex":102,"date":"2026-05-31","equity":99610.14497252047},{"barIndex":103,"date":"2026-06-01","equity":99610.14497252047},{"barIndex":104,"date":"2026-06-02","equity":99610.14497252047},{"barIndex":105,"date":"2026-06-03","equity":99610.14497252047},{"barIndex":106,"date":"2026-06-04","equity":99610.14497252047},{"barIndex":107,"date":"2026-06-05","equity":99610.14497252047},{"barIndex":108,"date":"2026-06-06","equity":99610.14497252047},{"barIndex":109,"date":"2026-06-07","equity":99610.14497252047},{"barIndex":110,"date":"2026-06-08","equity":99610.14497252047},{"barIndex":111,"date":"2026-06-09","equity":99610.14497252047},{"barIndex":112,"date":"2026-06-10","equity":99610.14497252047},{"barIndex":113,"date":"2026-06-11","equity":99610.14497252047},{"barIndex":114,"date":"2026-06-12","equity":99610.14497252047},{"barIndex":115,"date":"2026-06-13","equity":99610.14497252047},{"barIndex":116,"date":"2026-06-14","equity":99610.14497252047},{"barIndex":117,"date":"2026-06-15","equity":99610.14497252047},{"barIndex":118,"date":"2026-06-16","equity":99610.14497252047},{"barIndex":119,"date":"2026-06-17","equity":99610.14497252047},{"barIndex":120,"date":"2026-06-18","equity":99610.14497252047},{"barIndex":121,"date":"2026-06-19","equity":99610.14497252047},{"barIndex":122,"date":"2026-06-20","equity":99610.14497252047},{"barIndex":123,"date":"2026-06-21","equity":99610.14497252047},{"barIndex":124,"date":"2026-06-22","equity":99610.14497252047},{"barIndex":125,"date":"2026-06-23","equity":99610.14497252047},{"barIndex":126,"date":"2026-06-24","equity":99610.14497252047},{"barIndex":127,"date":"2026-06-25","equity":99610.14497252047},{"barIndex":128,"date":"2026-06-26","equity":99610.14497252047},{"barIndex":129,"date":"2026-06-27","equity":99610.14497252047},{"barIndex":130,"date":"2026-06-28","equity":99610.14497252047},{"barIndex":131,"date":"2026-06-29","equity":99610.14497252047},{"barIndex":132,"date":"2026-06-30","equity":99610.14497252047},{"barIndex":133,"date":"2026-07-01","equity":99610.14497252047},{"barIndex":134,"date":"2026-07-02","equity":99610.14497252047},{"barIndex":135,"date":"2026-07-03","equity":99610.14497252047},{"barIndex":136,"date":"2026-07-04","equity":99610.14497252047},{"barIndex":137,"date":"2026-07-05","equity":99610.14497252047},{"barIndex":138,"date":"2026-07-06","equity":99610.14497252047},{"barIndex":139,"date":"2026-07-07","equity":99610.14497252047},{"barIndex":140,"date":"2026-07-08","equity":99610.14497252047},{"barIndex":141,"date":"2026-07-09","equity":99610.14497252047},{"barIndex":142,"date":"2026-07-10","equity":99540.41787103971},{"barIndex":143,"date":"2026-07-11","equity":99548.02345248497},{"barIndex":144,"date":"2026-07-12","equity":97120.13559602303},{"barIndex":145,"date":"2026-07-13","equity":100445.01641518115},{"barIndex":146,"date":"2026-07-14","equity":101479.53070768331},{"barIndex":147,"date":"2026-07-15","equity":100360.57893954405},{"barIndex":148,"date":"2026-07-16","equity":98427.05387702351},{"barIndex":149,"date":"2026-07-17","equity":99455.35953161118},{"barIndex":150,"date":"2026-07-18","equity":100167.17986850764},{"barIndex":151,"date":"2026-07-19","equity":101749.76167291157},{"barIndex":152,"date":"2026-07-20","equity":103424.07610250208},{"barIndex":153,"date":"2026-07-21","equity":102439.54134521158},{"barIndex":154,"date":"2026-07-22","equity":100754.98266306212},{"barIndex":155,"date":"2026-07-23","equity":99422.45375066437},{"barIndex":156,"date":"2026-07-24","equity":99551.90385118152},{"barIndex":157,"date":"2026-07-25","equity":100468.76445520407},{"barIndex":158,"date":"2026-07-26","equity":100139.24099789243},{"barIndex":159,"date":"2026-07-27","equity":99149.58411432247},{"barIndex":160,"date":"2026-07-28","equity":99225.639928775},{"barIndex":161,"date":"2026-07-29","equity":100407.60937174634},{"barIndex":162,"date":"2026-07-30","equity":97289.47619514079},{"barIndex":163,"date":"2026-07-31","equity":97716.47526770995},{"barIndex":164,"date":"2026-08-01","equity":97890.00669741999},{"barIndex":165,"date":"2026-08-02","equity":98791.96657044775},{"barIndex":166,"date":"2026-08-03","equity":99455.98039540263},{"barIndex":167,"date":"2026-08-04","equity":99867.92352102914},{"barIndex":168,"date":"2026-08-05","equity":100247.73694544817},{"barIndex":169,"date":"2026-08-06","equity":100679.23728050535},{"barIndex":170,"date":"2026-08-07","equity":100942.17309618407},{"barIndex":171,"date":"2026-08-08","equity":101178.25655288261},{"barIndex":172,"date":"2026-08-09","equity":99731.02305501461},{"barIndex":173,"date":"2026-08-10","equity":98656.92869580755},{"barIndex":174,"date":"2026-08-11","equity":98408.42796328003},{"barIndex":175,"date":"2026-08-12","equity":98362.94969055637},{"barIndex":176,"date":"2026-08-13","equity":97692.57201173915},{"barIndex":177,"date":"2026-08-14","equity":97862.06782680478},{"barIndex":178,"date":"2026-08-15","equity":97875.25711571524},{"barIndex":179,"date":"2026-08-16","equity":97875.25711571524},{"barIndex":180,"date":"2026-08-17","equity":97875.25711571524},{"barIndex":181,"date":"2026-08-18","equity":97875.25711571524},{"barIndex":182,"date":"2026-08-19","equity":97806.74443573425},{"barIndex":183,"date":"2026-08-20","equity":104235.37511016183},{"barIndex":184,"date":"2026-08-21","equity":103914.0718816389},{"barIndex":185,"date":"2026-08-22","equity":104139.2137403811},{"barIndex":186,"date":"2026-08-23","equity":106743.94432688525},{"barIndex":187,"date":"2026-08-24","equity":107305.78603796361},{"barIndex":188,"date":"2026-08-25","equity":105293.01511964611},{"barIndex":189,"date":"2026-08-26","equity":108386.38592506407},{"barIndex":190,"date":"2026-08-27","equity":105722.36483106873},{"barIndex":191,"date":"2026-08-28","equity":105085.16069816785},{"barIndex":192,"date":"2026-08-29","equity":106389.82197918155},{"barIndex":193,"date":"2026-08-30","equity":106071.62508704196},{"barIndex":194,"date":"2026-08-31","equity":105161.1984105085},{"barIndex":195,"date":"2026-09-01","equity":104317.89561147646},{"barIndex":196,"date":"2026-09-02","equity":109813.00467365078},{"barIndex":197,"date":"2026-09-03","equity":107205.03269265965},{"barIndex":198,"date":"2026-09-04","equity":107708.52930297218},{"barIndex":199,"date":"2026-09-05","equity":107597.10636748189},{"barIndex":200,"date":"2026-09-06","equity":106403.327789544},{"barIndex":201,"date":"2026-09-07","equity":106499.62421742833},{"barIndex":202,"date":"2026-09-08","equity":106080.80903808844},{"barIndex":203,"date":"2026-09-09","equity":104264.54766054475},{"barIndex":204,"date":"2026-09-10","equity":104908.09952431599},{"barIndex":205,"date":"2026-09-11","equity":104446.47092612709},{"barIndex":206,"date":"2026-09-12","equity":104104.90898206047},{"barIndex":207,"date":"2026-09-13","equity":106054.33764977801},{"barIndex":208,"date":"2026-09-14","equity":103258.63490474869},{"barIndex":209,"date":"2026-09-15","equity":102291.21370848562},{"barIndex":210,"date":"2026-09-16","equity":103629.2343410946},{"barIndex":211,"date":"2026-09-17","equity":108962.13862081576},{"barIndex":212,"date":"2026-09-18","equity":110202.7823607114},{"barIndex":213,"date":"2026-09-19","equity":109217.12832045903},{"barIndex":214,"date":"2026-09-20","equity":115989.21175240398},{"barIndex":215,"date":"2026-09-21","equity":116647.34989136668},{"barIndex":216,"date":"2026-09-22","equity":113380.42942279112},{"barIndex":217,"date":"2026-09-23","equity":113946.99816749633},{"barIndex":218,"date":"2026-09-24","equity":113110.17815743828},{"barIndex":219,"date":"2026-09-25","equity":113591.25512254912},{"barIndex":220,"date":"2026-09-26","equity":114007.90937223102},{"barIndex":221,"date":"2026-09-27","equity":112530.91395099234},{"barIndex":222,"date":"2026-09-28","equity":112136.40923030487},{"barIndex":223,"date":"2026-09-29","equity":113561.81245595895},{"barIndex":224,"date":"2026-09-30","equity":113607.05692067319},{"barIndex":225,"date":"2026-10-01","equity":115176.70220099836},{"barIndex":226,"date":"2026-10-02","equity":114547.60155431496},{"barIndex":227,"date":"2026-10-03","equity":115082.02647035751},{"barIndex":228,"date":"2026-10-04","equity":115090.67018898948},{"barIndex":229,"date":"2026-10-05","equity":115707.07537393218},{"barIndex":230,"date":"2026-10-06","equity":112648.54955924937},{"barIndex":231,"date":"2026-10-07","equity":109370.82444238383},{"barIndex":232,"date":"2026-10-08","equity":111857.37918821642},{"barIndex":233,"date":"2026-10-09","equity":112107.50679612921},{"barIndex":234,"date":"2026-10-10","equity":113248.072481239},{"barIndex":235,"date":"2026-10-11","equity":111653.30639363966},{"barIndex":236,"date":"2026-10-12","equity":112611.27352264899},{"barIndex":237,"date":"2026-10-13","equity":110201.56683777877},{"barIndex":238,"date":"2026-10-14","equity":111241.9194099991},{"barIndex":239,"date":"2026-10-15","equity":109807.46729140218},{"barIndex":240,"date":"2026-10-16","equity":109800.71438622095},{"barIndex":241,"date":"2026-10-17","equity":109564.90293729238},{"barIndex":242,"date":"2026-10-18","equity":110599.7181272641},{"barIndex":243,"date":"2026-10-19","equity":111503.52695671996},{"barIndex":244,"date":"2026-10-20","equity":114108.93283374223},{"barIndex":245,"date":"2026-10-21","equity":110168.24094007576},{"barIndex":246,"date":"2026-10-22","equity":110168.24094007576},{"barIndex":247,"date":"2026-10-23","equity":110168.24094007576},{"barIndex":248,"date":"2026-10-24","equity":110168.24094007576},{"barIndex":249,"date":"2026-10-25","equity":110168.24094007576},{"barIndex":250,"date":"2026-10-26","equity":110168.24094007576},{"barIndex":251,"date":"2026-10-27","equity":110168.24094007576},{"barIndex":252,"date":"2026-10-28","equity":110168.24094007576},{"barIndex":253,"date":"2026-10-29","equity":110168.24094007576},{"barIndex":254,"date":"2026-10-30","equity":110168.24094007576},{"barIndex":255,"date":"2026-10-31","equity":110168.24094007576},{"barIndex":256,"date":"2026-11-01","equity":110168.24094007576},{"barIndex":257,"date":"2026-11-02","equity":110168.24094007576},{"barIndex":258,"date":"2026-11-03","equity":110168.24094007576},{"barIndex":259,"date":"2026-11-04","equity":110168.24094007576}],"fills":[{"orderId":"ORD-0001","barIndex":60,"date":"2026-04-19","side":"BUY","units":1.3208137797860018,"price":75710.9,"cost":70},{"orderId":"ORD-0002","barIndex":93,"date":"2026-05-22","side":"SELL","units":-1.3208137797860018,"price":75521.6,"cost":69.82497896604056},{"orderId":"ORD-0003","barIndex":142,"date":"2026-07-10","side":"BUY","units":1.5521594786229023,"price":64175.2,"cost":69.72710148076433},{"orderId":"ORD-0004","barIndex":178,"date":"2026-08-15","side":"SELL","units":-1.5521594786229023,"price":63146.6,"cost":68.60951561296628},{"orderId":"ORD-0005","barIndex":182,"date":"2026-08-19","side":"BUY","units":1.3505810362460533,"price":72469,"cost":68.51267998100067},{"orderId":"ORD-0006","barIndex":245,"date":"2026-10-21","side":"SELL","units":-1.3505810362460533,"price":81678.9,"cost":77.21978138100643}],"report":{"engineVersion":"paper-engine/v0.1.0","ruleId":"sma-cross-hysteresis-b","capital":100000,"warmupBars":60,"barsTraded":200,"orders":6,"fills":6,"rejected":0,"finalEquity":110168.24094007576,"totalReturnPct":10.168240940075757,"maxDrawdownPct":9.946006438710643,"auditEvents":18},"backtestCurve":[{"barIndex":60,"equity":100000},{"barIndex":61,"equity":100099.72457070251},{"barIndex":62,"equity":104628.40181464878},{"barIndex":63,"equity":103449.21139474217},{"barIndex":64,"equity":103009.15980978931},{"barIndex":65,"equity":102069.79354400968},{"barIndex":66,"equity":103010.87566779905},{"barIndex":67,"equity":101354.6767211919},{"barIndex":68,"equity":100400.39568963551},{"barIndex":69,"equity":100209.01152701354},{"barIndex":70,"equity":100926.37216415172},{"barIndex":71,"equity":103539.22794571333},{"barIndex":72,"equity":103599.01899789798},{"barIndex":73,"equity":103834.35552338413},{"barIndex":74,"equity":105635.47847727328},{"barIndex":75,"equity":107611.0909918426},{"barIndex":76,"equity":107841.14795422197},{"barIndex":77,"equity":105456.63327703002},{"barIndex":78,"equity":105789.64171999224},{"barIndex":79,"equity":106281.03705615884},{"barIndex":80,"equity":107456.79576004599},{"barIndex":81,"equity":107505.10376247334},{"barIndex":82,"equity":106028.1459833425},{"barIndex":83,"equity":104053.72137047224},{"barIndex":84,"equity":107296.56101975424},{"barIndex":85,"equity":104481.89393843473},{"barIndex":86,"equity":103264.42668600373},{"barIndex":87,"equity":103006.6520173136},{"barIndex":88,"equity":100860.90558162724},{"barIndex":89,"equity":101009.26130492867},{"barIndex":90,"equity":102236.23177095194},{"barIndex":91,"equity":101978.4571022618},{"barIndex":92,"equity":101364.17993478413},{"barIndex":93,"equity":99680.26328186624},{"barIndex":94,"equity":99610.48709756893},{"barIndex":95,"equity":99610.48709756893},{"barIndex":96,"equity":99610.48709756893},{"barIndex":97,"equity":99610.48709756893},{"barIndex":98,"equity":99610.48709756893},{"barIndex":99,"equity":99610.48709756893},{"barIndex":100,"equity":99610.48709756893},{"barIndex":101,"equity":99610.48709756893},{"barIndex":102,"equity":99610.48709756893},{"barIndex":103,"equity":99610.48709756893},{"barIndex":104,"equity":99610.48709756893},{"barIndex":105,"equity":99610.48709756893},{"barIndex":106,"equity":99610.48709756893},{"barIndex":107,"equity":99610.48709756893},{"barIndex":108,"equity":99610.48709756893},{"barIndex":109,"equity":99610.48709756893},{"barIndex":110,"equity":99610.48709756893},{"barIndex":111,"equity":99610.48709756893},{"barIndex":112,"equity":99610.48709756893},{"barIndex":113,"equity":99610.48709756893},{"barIndex":114,"equity":99610.48709756893},{"barIndex":115,"equity":99610.48709756893},{"barIndex":116,"equity":99610.48709756893},{"barIndex":117,"equity":99610.48709756893},{"barIndex":118,"equity":99610.48709756893},{"barIndex":119,"equity":99610.48709756893},{"barIndex":120,"equity":99610.48709756893},{"barIndex":121,"equity":99610.48709756893},{"barIndex":122,"equity":99610.48709756893},{"barIndex":123,"equity":99610.48709756893},{"barIndex":124,"equity":99610.48709756893},{"barIndex":125,"equity":99610.48709756893},{"barIndex":126,"equity":99610.48709756893},{"barIndex":127,"equity":99610.48709756893},{"barIndex":128,"equity":99610.48709756893},{"barIndex":129,"equity":99610.48709756893},{"barIndex":130,"equity":99610.48709756893},{"barIndex":131,"equity":99610.48709756893},{"barIndex":132,"equity":99610.48709756893},{"barIndex":133,"equity":99610.48709756893},{"barIndex":134,"equity":99610.48709756893},{"barIndex":135,"equity":99610.48709756893},{"barIndex":136,"equity":99610.48709756893},{"barIndex":137,"equity":99610.48709756893},{"barIndex":138,"equity":99610.48709756893},{"barIndex":139,"equity":99610.48709756893},{"barIndex":140,"equity":99610.48709756893},{"barIndex":141,"equity":99610.48709756893},{"barIndex":142,"equity":99610.48709756893},{"barIndex":143,"equity":99548.3653641683},{"barIndex":144,"equity":97122.168566366},{"barIndex":145,"equity":100444.73355842095},{"barIndex":146,"equity":101478.52729690404},{"barIndex":147,"equity":100360.3548946948},{"barIndex":148,"equity":98428.17656006858},{"barIndex":149,"equity":99455.7659850424},{"barIndex":150,"equity":100167.09052888086},{"barIndex":151,"equity":101748.57004239527},{"barIndex":152,"equity":103421.71828800922},{"barIndex":153,"equity":102437.86927327579},{"barIndex":154,"equity":100754.48391037152},{"barIndex":155,"equity":99422.8831234432},{"barIndex":156,"equity":99552.24306011159},{"barIndex":157,"equity":100468.4650575939},{"barIndex":158,"equity":100139.17111808909},{"barIndex":159,"equity":99150.20354471052},{"barIndex":160,"equity":99226.20638519914},{"barIndex":161,"equity":100407.35256952753},{"barIndex":162,"equity":97291.39121733149},{"barIndex":163,"equity":97718.09287893193},{"barIndex":164,"equity":97891.5034415162},{"barIndex":165,"equity":98792.83508657623},{"barIndex":166,"equity":99456.38641639327},{"barIndex":167,"equity":99868.04261773372},{"barIndex":168,"equity":100247.59149666368},{"barIndex":169,"equity":100678.79128555836},{"barIndex":170,"equity":100941.54396267618},{"barIndex":171,"equity":101177.46298386638},{"barIndex":172,"equity":99731.23750485419},{"barIndex":173,"equity":98657.89126774947},{"barIndex":174,"equity":98409.5636195407},{"barIndex":175,"equity":98364.11702308524},{"barIndex":176,"equity":97694.20627192118},{"barIndex":177,"equity":97863.58403072442},{"barIndex":178,"equity":97945.32586120912},{"barIndex":179,"equity":97876.76413310626},{"barIndex":180,"equity":97876.76413310626},{"barIndex":181,"equity":97876.76413310626},{"barIndex":182,"equity":97876.76413310626},{"barIndex":183,"equity":104236.98005637273},{"barIndex":184,"equity":103915.88293398188},{"barIndex":185,"equity":104140.88037115108},{"barIndex":186,"equity":106743.94010315195},{"barIndex":187,"equity":107305.42141006491},{"barIndex":188,"equity":105293.9416223428},{"barIndex":189,"equity":108385.32812559631},{"barIndex":190,"equity":105723.01591913999},{"barIndex":191,"equity":105086.22053307861},{"barIndex":192,"equity":106390.04491403517},{"barIndex":193,"equity":106072.05213540849},{"barIndex":194,"equity":105162.20946956705},{"barIndex":195,"equity":104319.44762332557},{"barIndex":196,"equity":109811.03174216404},{"barIndex":197,"equity":107204.732694931},{"barIndex":198,"equity":107707.90632766453},{"barIndex":199,"equity":107596.554866558},{"barIndex":200,"equity":106403.54206083596},{"barIndex":201,"equity":106499.7767175256},{"barIndex":202,"equity":106081.23019523303},{"barIndex":203,"equity":104266.13389346245},{"barIndex":204,"equity":104909.27293852021},{"barIndex":205,"equity":104447.94046086913},{"barIndex":206,"equity":104106.5976182771},{"barIndex":207,"equity":106054.77578750349},{"barIndex":208,"equity":103260.86639973943},{"barIndex":209,"equity":102294.06577439865},{"barIndex":210,"equity":103631.2281079532},{"barIndex":211,"equity":108960.71149371413},{"barIndex":212,"equity":110200.55939883496},{"barIndex":213,"equity":109215.53762531311},{"barIndex":214,"equity":115983.2769741665},{"barIndex":215,"equity":116640.99293776912},{"barIndex":216,"equity":113376.16809812542},{"barIndex":217,"equity":113942.37340641867},{"barIndex":218,"equity":113106.09019064157},{"barIndex":219,"equity":113586.85855968579},{"barIndex":220,"equity":114003.24553849024},{"barIndex":221,"equity":112527.19756435558},{"barIndex":222,"equity":112132.94590630442},{"barIndex":223,"equity":113557.43477966006},{"barIndex":224,"equity":113602.65022144273},{"barIndex":225,"equity":115171.28862263085},{"barIndex":226,"equity":114542.59152464992},{"barIndex":227,"equity":115076.67362355728},{"barIndex":228,"equity":115085.31179750976},{"barIndex":229,"equity":115701.32157749793},{"barIndex":230,"equity":112644.75771299044},{"barIndex":231,"equity":109369.1351559061},{"barIndex":232,"equity":111854.0948534},{"barIndex":233,"equity":112104.0620121507},{"barIndex":234,"equity":113243.89605947761},{"barIndex":235,"equity":111650.15296524002},{"barIndex":236,"equity":112607.50558782024},{"barIndex":237,"equity":110199.34465562282},{"barIndex":238,"equity":111239.02987368786},{"barIndex":239,"equity":109805.49791197569},{"barIndex":240,"equity":109798.74933857529},{"barIndex":241,"equity":109563.08915543345},{"barIndex":242,"equity":110597.24054331018},{"barIndex":243,"equity":111500.46960721922},{"barIndex":244,"equity":114104.20419656011},{"barIndex":245,"equity":110243.21038272539},{"barIndex":246,"equity":110166.04013545747},{"barIndex":247,"equity":110166.04013545747},{"barIndex":248,"equity":110166.04013545747},{"barIndex":249,"equity":110166.04013545747},{"barIndex":250,"equity":110166.04013545747},{"barIndex":251,"equity":110166.04013545747},{"barIndex":252,"equity":110166.04013545747},{"barIndex":253,"equity":110166.04013545747},{"barIndex":254,"equity":110166.04013545747},{"barIndex":255,"equity":110166.04013545747},{"barIndex":256,"equity":110166.04013545747},{"barIndex":257,"equity":110166.04013545747},{"barIndex":258,"equity":110166.04013545747},{"barIndex":259,"equity":110166.04013545747}]},"sessions":[{"file":"paper-T2-sma-cross-b-1794325590304.jsonl","ruleId":"T2-sma-cross-b","events":18,"orders":6,"fills":6,"rejected":0,"span":["2026-04-19","2026-10-21"],"chain":[{"seq":1,"type":"intent","orderId":"ORD-0001","barIndex":60,"date":"2026-04-19","side":"BUY","deltaUnits":1.3208137797860018,"price":75710.9},{"seq":2,"type":"approved","orderId":"ORD-0001","barIndex":60,"approvedBy":"session"},{"seq":3,"type":"fill","orderId":"ORD-0001","barIndex":60,"date":"2026-04-19","price":75710.9,"units":1.3208137797860018,"cost":70},{"seq":4,"type":"intent","orderId":"ORD-0002","barIndex":93,"date":"2026-05-22","side":"SELL","deltaUnits":1.3208137797860018,"price":75521.6},{"seq":5,"type":"approved","orderId":"ORD-0002","barIndex":93,"approvedBy":"session"},{"seq":6,"type":"fill","orderId":"ORD-0002","barIndex":93,"date":"2026-05-22","price":75521.6,"units":-1.3208137797860018,"cost":69.82497896604056},{"seq":7,"type":"intent","orderId":"ORD-0003","barIndex":142,"date":"2026-07-10","side":"BUY","deltaUnits":1.5521594786229023,"price":64175.2},{"seq":8,"type":"approved","orderId":"ORD-0003","barIndex":142,"approvedBy":"session"},{"seq":9,"type":"fill","orderId":"ORD-0003","barIndex":142,"date":"2026-07-10","price":64175.2,"units":1.5521594786229023,"cost":69.72710148076433},{"seq":10,"type":"intent","orderId":"ORD-0004","barIndex":178,"date":"2026-08-15","side":"SELL","deltaUnits":1.5521594786229023,"price":63146.6},{"seq":11,"type":"approved","orderId":"ORD-0004","barIndex":178,"approvedBy":"session"},{"seq":12,"type":"fill","orderId":"ORD-0004","barIndex":178,"date":"2026-08-15","price":63146.6,"units":-1.5521594786229023,"cost":68.60951561296628},{"seq":13,"type":"intent","orderId":"ORD-0005","barIndex":182,"date":"2026-08-19","side":"BUY","deltaUnits":1.3505810362460533,"price":72469},{"seq":14,"type":"approved","orderId":"ORD-0005","barIndex":182,"approvedBy":"session"},{"seq":15,"type":"fill","orderId":"ORD-0005","barIndex":182,"date":"2026-08-19","price":72469,"units":1.3505810362460533,"cost":68.51267998100067},{"seq":16,"type":"intent","orderId":"ORD-0006","barIndex":245,"date":"2026-10-21","side":"SELL","deltaUnits":1.3505810362460533,"price":81678.9},{"seq":17,"type":"approved","orderId":"ORD-0006","barIndex":245,"approvedBy":"session"},{"seq":18,"type":"fill","orderId":"ORD-0006","barIndex":245,"date":"2026-10-21","price":81678.9,"units":-1.3505810362460533,"cost":77.21978138100643}]}]},"audit":{"entries":202,"byTool":{"assess_frozen_dataset:ok":57,"trial_metrics:ok":78,"place_order:rejected":7},"byStatus":{"not-requested":65,"unconfigured":7,"ok":101,"max-steps-reached":7,"unavailable":22},"lastTs":"2026-11-10T16:45:45.538Z"}};
+var DATA = {"generatedAtUtc":"2026-11-10T17:50:28.570Z","meta":{"metricsVersion":"eval-metrics/v0.0.3","metricsBasis":"synthetic_fixture_placeholder_rules","costModel":{"commissionBps":2,"slippageBps":5},"rulesVersion":"quant-rules/v0.0.2","gatesVersion":"quality-gates/v0.0.2","agentVersion":"quant-agent/v0.0.2"},"datasets":{"v001":{"dataVersion":"quant-dataset/v0.0.1","nature":"synthetic_fixture","rows":130,"span":["2026-05-01","2026-10-29"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.1","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":130,"smaShort":81.1273,"smaLong":80.4618,"trendBps":82.7155,"momentum10Pct":1.1004,"volatility20Pct":1.4692,"maxDrawdownPct":24.8064,"componentScores":{"momentum":55.502,"trend":70.678875,"stability":92.6540137983263},"missingComponents":[],"signalScore":70.1019},"signalScore":70.1019,"guardStatus":"pass","breaches":[],"decisionStatus":"eligible","signalFingerprint":"sig-982d57f915e36caf","evalRunId":"qer-dd147a8ca0cb3163"}},"v002":{"dataVersion":"quant-dataset/v0.0.2","nature":"real_market_data","source":"okx:BTC-USDT:1D","fetchedAtUtc":"2026-11-05T19:22:18.540Z","rows":260,"span":["2026-02-18","2026-11-04"],"pipeline":{"caseId":"console","dataVersion":"quant-dataset/v0.0.2","engineVersion":"signal/engine-v001","guardVersion":"risk/guard-v001","signals":{"engineVersion":"signal/engine-v001","dataPoints":260,"smaShort":80170.995,"smaLong":81341.21,"trendBps":-143.865,"momentum10Pct":-5.46,"volatility20Pct":2.195,"maxDrawdownPct":28.5426,"componentScores":{"momentum":22.7,"trend":14.033749999999998,"stability":89.0250556417331},"missingComponents":[],"signalScore":36.2481},"signalScore":36.2481,"guardStatus":"halt","breaches":[{"code":"DRAWDOWN_LIMIT_EXCEEDED","severity":"critical","observed":28.5426,"limit":25,"message":"Max drawdown 28.5426% exceeds the 25% limit."}],"decisionStatus":"blocked","signalFingerprint":"sig-b95d74f104b987e9","evalRunId":"qer-652332d330f2cdc6"},"quality":{"passed":true,"criticalCount":0,"findings":[],"stats":{"rows":260,"firstDate":"2026-02-18","lastDate":"2026-11-04","maxAbsMovePct":8.3677,"minClose":58384,"maxClose":86419}}}},"rules":[{"ruleId":"sma-cross-hysteresis-a","family":"sma-cross-hysteresis","description":"SMA20/60 交叉，入场带 +0.10%，退出带 −0.50%","params":{"smaShort":20,"smaLong":60,"entryBandPct":0.1,"exitBandPct":-0.5},"version":"quant-rules/v0.0.2"},{"ruleId":"sma-cross-hysteresis-b","family":"sma-cross-hysteresis","description":"SMA10/40 交叉，入场带 +0.05%，退出带 −0.30%","params":{"smaShort":10,"smaLong":40,"entryBandPct":0.05,"exitBandPct":-0.3},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-a","family":"momentum-cooldown","description":"10 日动量 ≥+1.0% 入场，≤−1.0% 退出，冷却 5 根","params":{"momentumLag":10,"entryPct":1,"exitPct":-1,"cooldownBars":5},"version":"quant-rules/v0.0.2"},{"ruleId":"momentum-cooldown-b","family":"momentum-cooldown","description":"5 日动量 ≥+0.5% 入场，≤−0.5% 退出，冷却 8 根","params":{"momentumLag":5,"entryPct":0.5,"exitPct":-0.5,"cooldownBars":8},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-a","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 70 分位持仓","params":{"window":40,"percentile":70},"version":"quant-rules/v0.0.2"},{"ruleId":"composite-percentile-b","family":"composite-percentile","description":"合成分 ≥ 自身 40 棒 60 分位持仓","params":{"window":40,"percentile":60},"version":"quant-rules/v0.0.2"}],"trials":{"v001":{"trialsVersion":"quant-trials/v0.0.1","net":false,"rows":[{"trialId":"T1-momentum-heavy","ruleId":null,"weights":{"momentum":0.7,"trend":0.2,"stability":0.1},"entryThresholdPct":55,"nReturns":69,"sharpeAnnualized":-0.9684431379310787,"sharpePerPeriod":-0.061006183377920416,"isSharpePerPeriod":-0.15397821830922692,"oosSharpePerPeriod":-0.030343505964607016,"turnover":0.10144927536231885,"maxDrawdownPct":5.689631449267672},{"trialId":"T2-trend-heavy","ruleId":null,"weights":{"momentum":0.1,"trend":0.7,"stability":0.2},"entryThresholdPct":50,"nReturns":69,"sharpeAnnualized":-3.9577764252557652,"sharpePerPeriod":-0.24931648014335642,"isSharpePerPeriod":-0.3245104080654032,"oosSharpePerPeriod":-0.25284148399894596,"turnover":0.043478260869565216,"maxDrawdownPct":11.722252175850123},{"trialId":"T3-balanced-loose","ruleId":null,"weights":{"momentum":0.4,"trend":0.35,"stability":0.25},"entryThresholdPct":45,"nReturns":69,"sharpeAnnualized":-1.3068522700156726,"sharpePerPeriod":-0.08232395492289767,"isSharpePerPeriod":-0.3090708920521455,"oosSharpePerPeriod":0.08704336811970442,"turnover":0.08695652173913043,"maxDrawdownPct":11.622458847360221},{"trialId":"T4-stability-strict","ruleId":null,"weights":{"momentum":0.2,"trend":0.2,"stability":0.6},"entryThresholdPct":62,"nReturns":69,"sharpeAnnualized":-1.1720420016228015,"sharpePerPeriod":-0.073831706248007,"isSharpePerPeriod":-0.2888555683549867,"oosSharpePerPeriod":0.07249486650964856,"turnover":0.057971014492753624,"maxDrawdownPct":16.043574049139185}],"best":{"trialId":"T1-momentum-heavy","ruleId":null},"dsr":{"dsr":0.20672565531899162,"sr":-0.061006183377920416,"sr0":0.03743131213502992,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"nTrials":{"nominal":4,"effective":1.8058937031585038,"method":"appendix-A.3"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"dsrNominal":{"dsr":0.09958479775211265,"sr":-0.061006183377920416,"sr0":0.09353111379623864,"n":69,"gamma3":-0.3197172881023259,"gamma4":5.993707695569343,"trials":{"count":4,"mean":-0.11661958117304538,"variance":0.007902769743715432,"std":0.088897523833431},"nTrials":{"nominal":4,"effective":4,"method":"nominal"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"effective":{"method":"average-correlation (DSR paper A.3, Eq. 8/9)","m":4,"averageCorrelation":0.5736435116302845,"nominalTrials":4,"effectiveTrials":1.8058937031585038,"basis":"synthetic_fixture_placeholder_rules"}},"v002":{"trialsVersion":"quant-trials/v0.0.2","net":true,"rows":[{"trialId":"T1-sma-cross-a","ruleId":"sma-cross-hysteresis-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.35660869975426307,"sharpePerPeriod":0.022464236545520964,"isSharpePerPeriod":-0.04601375150062451,"oosSharpePerPeriod":0.0905268606646923,"turnover":0.01507537688442211,"maxDrawdownPct":21.794033597134998},{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.6609705351542389,"sharpePerPeriod":0.04163722999903313,"isSharpePerPeriod":-0.011527082181515711,"oosSharpePerPeriod":0.09264473234597712,"turnover":0.02512562814070352,"maxDrawdownPct":9.939600598842},{"trialId":"T3-momentum-cd-a","ruleId":"momentum-cooldown-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.16960084440536438,"sharpePerPeriod":0.010683848962932249,"isSharpePerPeriod":-0.062196749101302705,"oosSharpePerPeriod":0.09855047271805069,"turnover":0.06532663316582915,"maxDrawdownPct":13.308210475557846},{"trialId":"T4-momentum-cd-b","ruleId":"momentum-cooldown-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":-0.445378678825312,"sharpePerPeriod":-0.028056219605292487,"isSharpePerPeriod":-0.03823924211518666,"oosSharpePerPeriod":-0.016111867167277565,"turnover":0.11557788944723618,"maxDrawdownPct":15.16041180508795},{"trialId":"T5-composite-pct-a","ruleId":"composite-percentile-a","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.5915332399141368,"sharpePerPeriod":0.03726309154859791,"isSharpePerPeriod":-0.0729316487642392,"oosSharpePerPeriod":0.12102972285619477,"turnover":0.07035175879396985,"maxDrawdownPct":8.617880937285},{"trialId":"T6-composite-pct-b","ruleId":"composite-percentile-b","weights":null,"entryThresholdPct":null,"nReturns":199,"sharpeAnnualized":0.19524128861703358,"sharpePerPeriod":0.012299045126963254,"isSharpePerPeriod":-0.07242755505323818,"oosSharpePerPeriod":0.07620095372548809,"turnover":0.10050251256281408,"maxDrawdownPct":8.374748245133636}],"best":{"trialId":"T2-sma-cross-b","ruleId":"sma-cross-hysteresis-b"},"dsr":{"dsr":0.665538146412131,"sr":0.04163722999903313,"sr0":0.012043732296020874,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"nTrials":{"nominal":6,"effective":1.9196144987397485,"method":"appendix-A.3"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"dsrNominal":{"dsr":0.5522314638222234,"sr":0.04163722999903313,"sr0":0.03255064350869444,"n":199,"gamma3":1.3181702499397354,"gamma4":8.269875409174908,"trials":{"count":6,"mean":0.01604853876295917,"variance":0.0006268135714011401,"std":0.025036245153799323},"nTrials":{"nominal":6,"effective":6,"method":"nominal"},"basis":"synthetic_fixture_placeholder_rules","note":"PLACEHOLDER 报告层指标；trials 为冻结网格，非真实研究搜索记录"},"effective":{"method":"average-correlation (DSR paper A.3, Eq. 8/9)","m":6,"averageCorrelation":0.6360424514709673,"nominalTrials":6,"effectiveTrials":1.9196144987397485,"basis":"synthetic_fixture_placeholder_rules"}}},"eval":{"runDate":"2026-11-10T17:41:05.029Z","gitCommit":"37e27c2687039cbf3cb60ab56c8918b21877e10c","MODEL":"NOT_RUN","checksPassed":34,"checksTotal":34,"failedChecks":[]},"paper":{"reference":{"engineVersion":"paper-engine/v0.1.0","ruleId":"sma-cross-hysteresis-b","capital":100000,"curve":[{"barIndex":60,"date":"2026-04-19","equity":99930},{"barIndex":61,"date":"2026-04-20","equity":100099.7245707025},{"barIndex":62,"date":"2026-04-21","equity":104631.56873052625},{"barIndex":63,"date":"2026-04-22","equity":103451.55369966544},{"barIndex":64,"date":"2026-04-23","equity":103011.19438548478},{"barIndex":65,"date":"2026-04-24","equity":102071.1712184111},{"barIndex":66,"date":"2026-04-25","equity":103012.91144339851},{"barIndex":67,"date":"2026-04-26","equity":101355.55431252303},{"barIndex":68,"date":"2026-04-27","equity":100400.60594973776},{"barIndex":69,"date":"2026-04-28","equity":100209.08795166879},{"barIndex":70,"date":"2026-04-29","equity":100926.95024098248},{"barIndex":71,"date":"2026-04-30","equity":103541.63319944685},{"barIndex":72,"date":"2026-05-01","equity":103601.46606367116},{"barIndex":73,"date":"2026-05-02","equity":103836.96716060699},{"barIndex":74,"date":"2026-05-03","equity":105639.34964450297},{"barIndex":75,"date":"2026-05-04","equity":107616.34371008667},{"barIndex":76,"date":"2026-05-05","equity":107846.56155190337},{"barIndex":77,"date":"2026-05-06","equity":105460.37937734197},{"barIndex":78,"date":"2026-05-07","equity":105793.62069398198},{"barIndex":79,"date":"2026-05-08","equity":106285.35966419631},{"barIndex":80,"date":"2026-05-09","equity":107461.94057922967},{"barIndex":81,"date":"2026-05-10","equity":107510.28236356984},{"barIndex":82,"date":"2026-05-11","equity":106032.2917439893},{"barIndex":83,"date":"2026-05-12","equity":104056.48641080744},{"barIndex":84,"date":"2026-05-13","equity":107301.59378636365},{"barIndex":85,"date":"2026-05-14","equity":104484.95840097},{"barIndex":86,"date":"2026-05-15","equity":103266.63977049541},{"barIndex":87,"date":"2026-05-16","equity":103008.6848393032},{"barIndex":88,"date":"2026-05-17","equity":100861.4378775051},{"barIndex":89,"date":"2026-05-18","equity":101009.89734635304},{"barIndex":90,"date":"2026-05-19","equity":102237.72583604211},{"barIndex":91,"date":"2026-05-20","equity":101979.77090484991},{"barIndex":92,"date":"2026-05-21","equity":101365.06417173748},{"barIndex":93,"date":"2026-05-22","equity":99610.14497252047},{"barIndex":94,"date":"2026-05-23","equity":99610.14497252047},{"barIndex":95,"date":"2026-05-24","equity":99610.14497252047},{"barIndex":96,"date":"2026-05-25","equity":99610.14497252047},{"barIndex":97,"date":"2026-05-26","equity":99610.14497252047},{"barIndex":98,"date":"2026-05-27","equity":99610.14497252047},{"barIndex":99,"date":"2026-05-28","equity":99610.14497252047},{"barIndex":100,"date":"2026-05-29","equity":99610.14497252047},{"barIndex":101,"date":"2026-05-30","equity":99610.14497252047},{"barIndex":102,"date":"2026-05-31","equity":99610.14497252047},{"barIndex":103,"date":"2026-06-01","equity":99610.14497252047},{"barIndex":104,"date":"2026-06-02","equity":99610.14497252047},{"barIndex":105,"date":"2026-06-03","equity":99610.14497252047},{"barIndex":106,"date":"2026-06-04","equity":99610.14497252047},{"barIndex":107,"date":"2026-06-05","equity":99610.14497252047},{"barIndex":108,"date":"2026-06-06","equity":99610.14497252047},{"barIndex":109,"date":"2026-06-07","equity":99610.14497252047},{"barIndex":110,"date":"2026-06-08","equity":99610.14497252047},{"barIndex":111,"date":"2026-06-09","equity":99610.14497252047},{"barIndex":112,"date":"2026-06-10","equity":99610.14497252047},{"barIndex":113,"date":"2026-06-11","equity":99610.14497252047},{"barIndex":114,"date":"2026-06-12","equity":99610.14497252047},{"barIndex":115,"date":"2026-06-13","equity":99610.14497252047},{"barIndex":116,"date":"2026-06-14","equity":99610.14497252047},{"barIndex":117,"date":"2026-06-15","equity":99610.14497252047},{"barIndex":118,"date":"2026-06-16","equity":99610.14497252047},{"barIndex":119,"date":"2026-06-17","equity":99610.14497252047},{"barIndex":120,"date":"2026-06-18","equity":99610.14497252047},{"barIndex":121,"date":"2026-06-19","equity":99610.14497252047},{"barIndex":122,"date":"2026-06-20","equity":99610.14497252047},{"barIndex":123,"date":"2026-06-21","equity":99610.14497252047},{"barIndex":124,"date":"2026-06-22","equity":99610.14497252047},{"barIndex":125,"date":"2026-06-23","equity":99610.14497252047},{"barIndex":126,"date":"2026-06-24","equity":99610.14497252047},{"barIndex":127,"date":"2026-06-25","equity":99610.14497252047},{"barIndex":128,"date":"2026-06-26","equity":99610.14497252047},{"barIndex":129,"date":"2026-06-27","equity":99610.14497252047},{"barIndex":130,"date":"2026-06-28","equity":99610.14497252047},{"barIndex":131,"date":"2026-06-29","equity":99610.14497252047},{"barIndex":132,"date":"2026-06-30","equity":99610.14497252047},{"barIndex":133,"date":"2026-07-01","equity":99610.14497252047},{"barIndex":134,"date":"2026-07-02","equity":99610.14497252047},{"barIndex":135,"date":"2026-07-03","equity":99610.14497252047},{"barIndex":136,"date":"2026-07-04","equity":99610.14497252047},{"barIndex":137,"date":"2026-07-05","equity":99610.14497252047},{"barIndex":138,"date":"2026-07-06","equity":99610.14497252047},{"barIndex":139,"date":"2026-07-07","equity":99610.14497252047},{"barIndex":140,"date":"2026-07-08","equity":99610.14497252047},{"barIndex":141,"date":"2026-07-09","equity":99610.14497252047},{"barIndex":142,"date":"2026-07-10","equity":99540.41787103971},{"barIndex":143,"date":"2026-07-11","equity":99548.02345248497},{"barIndex":144,"date":"2026-07-12","equity":97120.13559602303},{"barIndex":145,"date":"2026-07-13","equity":100445.01641518115},{"barIndex":146,"date":"2026-07-14","equity":101479.53070768331},{"barIndex":147,"date":"2026-07-15","equity":100360.57893954405},{"barIndex":148,"date":"2026-07-16","equity":98427.05387702351},{"barIndex":149,"date":"2026-07-17","equity":99455.35953161118},{"barIndex":150,"date":"2026-07-18","equity":100167.17986850764},{"barIndex":151,"date":"2026-07-19","equity":101749.76167291157},{"barIndex":152,"date":"2026-07-20","equity":103424.07610250208},{"barIndex":153,"date":"2026-07-21","equity":102439.54134521158},{"barIndex":154,"date":"2026-07-22","equity":100754.98266306212},{"barIndex":155,"date":"2026-07-23","equity":99422.45375066437},{"barIndex":156,"date":"2026-07-24","equity":99551.90385118152},{"barIndex":157,"date":"2026-07-25","equity":100468.76445520407},{"barIndex":158,"date":"2026-07-26","equity":100139.24099789243},{"barIndex":159,"date":"2026-07-27","equity":99149.58411432247},{"barIndex":160,"date":"2026-07-28","equity":99225.639928775},{"barIndex":161,"date":"2026-07-29","equity":100407.60937174634},{"barIndex":162,"date":"2026-07-30","equity":97289.47619514079},{"barIndex":163,"date":"2026-07-31","equity":97716.47526770995},{"barIndex":164,"date":"2026-08-01","equity":97890.00669741999},{"barIndex":165,"date":"2026-08-02","equity":98791.96657044775},{"barIndex":166,"date":"2026-08-03","equity":99455.98039540263},{"barIndex":167,"date":"2026-08-04","equity":99867.92352102914},{"barIndex":168,"date":"2026-08-05","equity":100247.73694544817},{"barIndex":169,"date":"2026-08-06","equity":100679.23728050535},{"barIndex":170,"date":"2026-08-07","equity":100942.17309618407},{"barIndex":171,"date":"2026-08-08","equity":101178.25655288261},{"barIndex":172,"date":"2026-08-09","equity":99731.02305501461},{"barIndex":173,"date":"2026-08-10","equity":98656.92869580755},{"barIndex":174,"date":"2026-08-11","equity":98408.42796328003},{"barIndex":175,"date":"2026-08-12","equity":98362.94969055637},{"barIndex":176,"date":"2026-08-13","equity":97692.57201173915},{"barIndex":177,"date":"2026-08-14","equity":97862.06782680478},{"barIndex":178,"date":"2026-08-15","equity":97875.25711571524},{"barIndex":179,"date":"2026-08-16","equity":97875.25711571524},{"barIndex":180,"date":"2026-08-17","equity":97875.25711571524},{"barIndex":181,"date":"2026-08-18","equity":97875.25711571524},{"barIndex":182,"date":"2026-08-19","equity":97806.74443573425},{"barIndex":183,"date":"2026-08-20","equity":104235.37511016183},{"barIndex":184,"date":"2026-08-21","equity":103914.0718816389},{"barIndex":185,"date":"2026-08-22","equity":104139.2137403811},{"barIndex":186,"date":"2026-08-23","equity":106743.94432688525},{"barIndex":187,"date":"2026-08-24","equity":107305.78603796361},{"barIndex":188,"date":"2026-08-25","equity":105293.01511964611},{"barIndex":189,"date":"2026-08-26","equity":108386.38592506407},{"barIndex":190,"date":"2026-08-27","equity":105722.36483106873},{"barIndex":191,"date":"2026-08-28","equity":105085.16069816785},{"barIndex":192,"date":"2026-08-29","equity":106389.82197918155},{"barIndex":193,"date":"2026-08-30","equity":106071.62508704196},{"barIndex":194,"date":"2026-08-31","equity":105161.1984105085},{"barIndex":195,"date":"2026-09-01","equity":104317.89561147646},{"barIndex":196,"date":"2026-09-02","equity":109813.00467365078},{"barIndex":197,"date":"2026-09-03","equity":107205.03269265965},{"barIndex":198,"date":"2026-09-04","equity":107708.52930297218},{"barIndex":199,"date":"2026-09-05","equity":107597.10636748189},{"barIndex":200,"date":"2026-09-06","equity":106403.327789544},{"barIndex":201,"date":"2026-09-07","equity":106499.62421742833},{"barIndex":202,"date":"2026-09-08","equity":106080.80903808844},{"barIndex":203,"date":"2026-09-09","equity":104264.54766054475},{"barIndex":204,"date":"2026-09-10","equity":104908.09952431599},{"barIndex":205,"date":"2026-09-11","equity":104446.47092612709},{"barIndex":206,"date":"2026-09-12","equity":104104.90898206047},{"barIndex":207,"date":"2026-09-13","equity":106054.33764977801},{"barIndex":208,"date":"2026-09-14","equity":103258.63490474869},{"barIndex":209,"date":"2026-09-15","equity":102291.21370848562},{"barIndex":210,"date":"2026-09-16","equity":103629.2343410946},{"barIndex":211,"date":"2026-09-17","equity":108962.13862081576},{"barIndex":212,"date":"2026-09-18","equity":110202.7823607114},{"barIndex":213,"date":"2026-09-19","equity":109217.12832045903},{"barIndex":214,"date":"2026-09-20","equity":115989.21175240398},{"barIndex":215,"date":"2026-09-21","equity":116647.34989136668},{"barIndex":216,"date":"2026-09-22","equity":113380.42942279112},{"barIndex":217,"date":"2026-09-23","equity":113946.99816749633},{"barIndex":218,"date":"2026-09-24","equity":113110.17815743828},{"barIndex":219,"date":"2026-09-25","equity":113591.25512254912},{"barIndex":220,"date":"2026-09-26","equity":114007.90937223102},{"barIndex":221,"date":"2026-09-27","equity":112530.91395099234},{"barIndex":222,"date":"2026-09-28","equity":112136.40923030487},{"barIndex":223,"date":"2026-09-29","equity":113561.81245595895},{"barIndex":224,"date":"2026-09-30","equity":113607.05692067319},{"barIndex":225,"date":"2026-10-01","equity":115176.70220099836},{"barIndex":226,"date":"2026-10-02","equity":114547.60155431496},{"barIndex":227,"date":"2026-10-03","equity":115082.02647035751},{"barIndex":228,"date":"2026-10-04","equity":115090.67018898948},{"barIndex":229,"date":"2026-10-05","equity":115707.07537393218},{"barIndex":230,"date":"2026-10-06","equity":112648.54955924937},{"barIndex":231,"date":"2026-10-07","equity":109370.82444238383},{"barIndex":232,"date":"2026-10-08","equity":111857.37918821642},{"barIndex":233,"date":"2026-10-09","equity":112107.50679612921},{"barIndex":234,"date":"2026-10-10","equity":113248.072481239},{"barIndex":235,"date":"2026-10-11","equity":111653.30639363966},{"barIndex":236,"date":"2026-10-12","equity":112611.27352264899},{"barIndex":237,"date":"2026-10-13","equity":110201.56683777877},{"barIndex":238,"date":"2026-10-14","equity":111241.9194099991},{"barIndex":239,"date":"2026-10-15","equity":109807.46729140218},{"barIndex":240,"date":"2026-10-16","equity":109800.71438622095},{"barIndex":241,"date":"2026-10-17","equity":109564.90293729238},{"barIndex":242,"date":"2026-10-18","equity":110599.7181272641},{"barIndex":243,"date":"2026-10-19","equity":111503.52695671996},{"barIndex":244,"date":"2026-10-20","equity":114108.93283374223},{"barIndex":245,"date":"2026-10-21","equity":110168.24094007576},{"barIndex":246,"date":"2026-10-22","equity":110168.24094007576},{"barIndex":247,"date":"2026-10-23","equity":110168.24094007576},{"barIndex":248,"date":"2026-10-24","equity":110168.24094007576},{"barIndex":249,"date":"2026-10-25","equity":110168.24094007576},{"barIndex":250,"date":"2026-10-26","equity":110168.24094007576},{"barIndex":251,"date":"2026-10-27","equity":110168.24094007576},{"barIndex":252,"date":"2026-10-28","equity":110168.24094007576},{"barIndex":253,"date":"2026-10-29","equity":110168.24094007576},{"barIndex":254,"date":"2026-10-30","equity":110168.24094007576},{"barIndex":255,"date":"2026-10-31","equity":110168.24094007576},{"barIndex":256,"date":"2026-11-01","equity":110168.24094007576},{"barIndex":257,"date":"2026-11-02","equity":110168.24094007576},{"barIndex":258,"date":"2026-11-03","equity":110168.24094007576},{"barIndex":259,"date":"2026-11-04","equity":110168.24094007576}],"fills":[{"orderId":"ORD-0001","barIndex":60,"date":"2026-04-19","side":"BUY","units":1.3208137797860018,"price":75710.9,"cost":70},{"orderId":"ORD-0002","barIndex":93,"date":"2026-05-22","side":"SELL","units":-1.3208137797860018,"price":75521.6,"cost":69.82497896604056},{"orderId":"ORD-0003","barIndex":142,"date":"2026-07-10","side":"BUY","units":1.5521594786229023,"price":64175.2,"cost":69.72710148076433},{"orderId":"ORD-0004","barIndex":178,"date":"2026-08-15","side":"SELL","units":-1.5521594786229023,"price":63146.6,"cost":68.60951561296628},{"orderId":"ORD-0005","barIndex":182,"date":"2026-08-19","side":"BUY","units":1.3505810362460533,"price":72469,"cost":68.51267998100067},{"orderId":"ORD-0006","barIndex":245,"date":"2026-10-21","side":"SELL","units":-1.3505810362460533,"price":81678.9,"cost":77.21978138100643}],"report":{"engineVersion":"paper-engine/v0.1.0","ruleId":"sma-cross-hysteresis-b","capital":100000,"warmupBars":60,"barsTraded":200,"orders":6,"fills":6,"rejected":0,"finalEquity":110168.24094007576,"totalReturnPct":10.168240940075757,"maxDrawdownPct":9.946006438710643,"auditEvents":18},"backtestCurve":[{"barIndex":60,"equity":100000},{"barIndex":61,"equity":100099.72457070251},{"barIndex":62,"equity":104628.40181464878},{"barIndex":63,"equity":103449.21139474217},{"barIndex":64,"equity":103009.15980978931},{"barIndex":65,"equity":102069.79354400968},{"barIndex":66,"equity":103010.87566779905},{"barIndex":67,"equity":101354.6767211919},{"barIndex":68,"equity":100400.39568963551},{"barIndex":69,"equity":100209.01152701354},{"barIndex":70,"equity":100926.37216415172},{"barIndex":71,"equity":103539.22794571333},{"barIndex":72,"equity":103599.01899789798},{"barIndex":73,"equity":103834.35552338413},{"barIndex":74,"equity":105635.47847727328},{"barIndex":75,"equity":107611.0909918426},{"barIndex":76,"equity":107841.14795422197},{"barIndex":77,"equity":105456.63327703002},{"barIndex":78,"equity":105789.64171999224},{"barIndex":79,"equity":106281.03705615884},{"barIndex":80,"equity":107456.79576004599},{"barIndex":81,"equity":107505.10376247334},{"barIndex":82,"equity":106028.1459833425},{"barIndex":83,"equity":104053.72137047224},{"barIndex":84,"equity":107296.56101975424},{"barIndex":85,"equity":104481.89393843473},{"barIndex":86,"equity":103264.42668600373},{"barIndex":87,"equity":103006.6520173136},{"barIndex":88,"equity":100860.90558162724},{"barIndex":89,"equity":101009.26130492867},{"barIndex":90,"equity":102236.23177095194},{"barIndex":91,"equity":101978.4571022618},{"barIndex":92,"equity":101364.17993478413},{"barIndex":93,"equity":99680.26328186624},{"barIndex":94,"equity":99610.48709756893},{"barIndex":95,"equity":99610.48709756893},{"barIndex":96,"equity":99610.48709756893},{"barIndex":97,"equity":99610.48709756893},{"barIndex":98,"equity":99610.48709756893},{"barIndex":99,"equity":99610.48709756893},{"barIndex":100,"equity":99610.48709756893},{"barIndex":101,"equity":99610.48709756893},{"barIndex":102,"equity":99610.48709756893},{"barIndex":103,"equity":99610.48709756893},{"barIndex":104,"equity":99610.48709756893},{"barIndex":105,"equity":99610.48709756893},{"barIndex":106,"equity":99610.48709756893},{"barIndex":107,"equity":99610.48709756893},{"barIndex":108,"equity":99610.48709756893},{"barIndex":109,"equity":99610.48709756893},{"barIndex":110,"equity":99610.48709756893},{"barIndex":111,"equity":99610.48709756893},{"barIndex":112,"equity":99610.48709756893},{"barIndex":113,"equity":99610.48709756893},{"barIndex":114,"equity":99610.48709756893},{"barIndex":115,"equity":99610.48709756893},{"barIndex":116,"equity":99610.48709756893},{"barIndex":117,"equity":99610.48709756893},{"barIndex":118,"equity":99610.48709756893},{"barIndex":119,"equity":99610.48709756893},{"barIndex":120,"equity":99610.48709756893},{"barIndex":121,"equity":99610.48709756893},{"barIndex":122,"equity":99610.48709756893},{"barIndex":123,"equity":99610.48709756893},{"barIndex":124,"equity":99610.48709756893},{"barIndex":125,"equity":99610.48709756893},{"barIndex":126,"equity":99610.48709756893},{"barIndex":127,"equity":99610.48709756893},{"barIndex":128,"equity":99610.48709756893},{"barIndex":129,"equity":99610.48709756893},{"barIndex":130,"equity":99610.48709756893},{"barIndex":131,"equity":99610.48709756893},{"barIndex":132,"equity":99610.48709756893},{"barIndex":133,"equity":99610.48709756893},{"barIndex":134,"equity":99610.48709756893},{"barIndex":135,"equity":99610.48709756893},{"barIndex":136,"equity":99610.48709756893},{"barIndex":137,"equity":99610.48709756893},{"barIndex":138,"equity":99610.48709756893},{"barIndex":139,"equity":99610.48709756893},{"barIndex":140,"equity":99610.48709756893},{"barIndex":141,"equity":99610.48709756893},{"barIndex":142,"equity":99610.48709756893},{"barIndex":143,"equity":99548.3653641683},{"barIndex":144,"equity":97122.168566366},{"barIndex":145,"equity":100444.73355842095},{"barIndex":146,"equity":101478.52729690404},{"barIndex":147,"equity":100360.3548946948},{"barIndex":148,"equity":98428.17656006858},{"barIndex":149,"equity":99455.7659850424},{"barIndex":150,"equity":100167.09052888086},{"barIndex":151,"equity":101748.57004239527},{"barIndex":152,"equity":103421.71828800922},{"barIndex":153,"equity":102437.86927327579},{"barIndex":154,"equity":100754.48391037152},{"barIndex":155,"equity":99422.8831234432},{"barIndex":156,"equity":99552.24306011159},{"barIndex":157,"equity":100468.4650575939},{"barIndex":158,"equity":100139.17111808909},{"barIndex":159,"equity":99150.20354471052},{"barIndex":160,"equity":99226.20638519914},{"barIndex":161,"equity":100407.35256952753},{"barIndex":162,"equity":97291.39121733149},{"barIndex":163,"equity":97718.09287893193},{"barIndex":164,"equity":97891.5034415162},{"barIndex":165,"equity":98792.83508657623},{"barIndex":166,"equity":99456.38641639327},{"barIndex":167,"equity":99868.04261773372},{"barIndex":168,"equity":100247.59149666368},{"barIndex":169,"equity":100678.79128555836},{"barIndex":170,"equity":100941.54396267618},{"barIndex":171,"equity":101177.46298386638},{"barIndex":172,"equity":99731.23750485419},{"barIndex":173,"equity":98657.89126774947},{"barIndex":174,"equity":98409.5636195407},{"barIndex":175,"equity":98364.11702308524},{"barIndex":176,"equity":97694.20627192118},{"barIndex":177,"equity":97863.58403072442},{"barIndex":178,"equity":97945.32586120912},{"barIndex":179,"equity":97876.76413310626},{"barIndex":180,"equity":97876.76413310626},{"barIndex":181,"equity":97876.76413310626},{"barIndex":182,"equity":97876.76413310626},{"barIndex":183,"equity":104236.98005637273},{"barIndex":184,"equity":103915.88293398188},{"barIndex":185,"equity":104140.88037115108},{"barIndex":186,"equity":106743.94010315195},{"barIndex":187,"equity":107305.42141006491},{"barIndex":188,"equity":105293.9416223428},{"barIndex":189,"equity":108385.32812559631},{"barIndex":190,"equity":105723.01591913999},{"barIndex":191,"equity":105086.22053307861},{"barIndex":192,"equity":106390.04491403517},{"barIndex":193,"equity":106072.05213540849},{"barIndex":194,"equity":105162.20946956705},{"barIndex":195,"equity":104319.44762332557},{"barIndex":196,"equity":109811.03174216404},{"barIndex":197,"equity":107204.732694931},{"barIndex":198,"equity":107707.90632766453},{"barIndex":199,"equity":107596.554866558},{"barIndex":200,"equity":106403.54206083596},{"barIndex":201,"equity":106499.7767175256},{"barIndex":202,"equity":106081.23019523303},{"barIndex":203,"equity":104266.13389346245},{"barIndex":204,"equity":104909.27293852021},{"barIndex":205,"equity":104447.94046086913},{"barIndex":206,"equity":104106.5976182771},{"barIndex":207,"equity":106054.77578750349},{"barIndex":208,"equity":103260.86639973943},{"barIndex":209,"equity":102294.06577439865},{"barIndex":210,"equity":103631.2281079532},{"barIndex":211,"equity":108960.71149371413},{"barIndex":212,"equity":110200.55939883496},{"barIndex":213,"equity":109215.53762531311},{"barIndex":214,"equity":115983.2769741665},{"barIndex":215,"equity":116640.99293776912},{"barIndex":216,"equity":113376.16809812542},{"barIndex":217,"equity":113942.37340641867},{"barIndex":218,"equity":113106.09019064157},{"barIndex":219,"equity":113586.85855968579},{"barIndex":220,"equity":114003.24553849024},{"barIndex":221,"equity":112527.19756435558},{"barIndex":222,"equity":112132.94590630442},{"barIndex":223,"equity":113557.43477966006},{"barIndex":224,"equity":113602.65022144273},{"barIndex":225,"equity":115171.28862263085},{"barIndex":226,"equity":114542.59152464992},{"barIndex":227,"equity":115076.67362355728},{"barIndex":228,"equity":115085.31179750976},{"barIndex":229,"equity":115701.32157749793},{"barIndex":230,"equity":112644.75771299044},{"barIndex":231,"equity":109369.1351559061},{"barIndex":232,"equity":111854.0948534},{"barIndex":233,"equity":112104.0620121507},{"barIndex":234,"equity":113243.89605947761},{"barIndex":235,"equity":111650.15296524002},{"barIndex":236,"equity":112607.50558782024},{"barIndex":237,"equity":110199.34465562282},{"barIndex":238,"equity":111239.02987368786},{"barIndex":239,"equity":109805.49791197569},{"barIndex":240,"equity":109798.74933857529},{"barIndex":241,"equity":109563.08915543345},{"barIndex":242,"equity":110597.24054331018},{"barIndex":243,"equity":111500.46960721922},{"barIndex":244,"equity":114104.20419656011},{"barIndex":245,"equity":110243.21038272539},{"barIndex":246,"equity":110166.04013545747},{"barIndex":247,"equity":110166.04013545747},{"barIndex":248,"equity":110166.04013545747},{"barIndex":249,"equity":110166.04013545747},{"barIndex":250,"equity":110166.04013545747},{"barIndex":251,"equity":110166.04013545747},{"barIndex":252,"equity":110166.04013545747},{"barIndex":253,"equity":110166.04013545747},{"barIndex":254,"equity":110166.04013545747},{"barIndex":255,"equity":110166.04013545747},{"barIndex":256,"equity":110166.04013545747},{"barIndex":257,"equity":110166.04013545747},{"barIndex":258,"equity":110166.04013545747},{"barIndex":259,"equity":110166.04013545747}]},"sessions":[{"file":"paper-T2-sma-cross-b-1794325590304.jsonl","ruleId":"T2-sma-cross-b","events":18,"orders":6,"fills":6,"rejected":0,"span":["2026-04-19","2026-10-21"],"chain":[{"seq":1,"type":"intent","orderId":"ORD-0001","barIndex":60,"date":"2026-04-19","side":"BUY","deltaUnits":1.3208137797860018,"price":75710.9},{"seq":2,"type":"approved","orderId":"ORD-0001","barIndex":60,"approvedBy":"session"},{"seq":3,"type":"fill","orderId":"ORD-0001","barIndex":60,"date":"2026-04-19","price":75710.9,"units":1.3208137797860018,"cost":70},{"seq":4,"type":"intent","orderId":"ORD-0002","barIndex":93,"date":"2026-05-22","side":"SELL","deltaUnits":1.3208137797860018,"price":75521.6},{"seq":5,"type":"approved","orderId":"ORD-0002","barIndex":93,"approvedBy":"session"},{"seq":6,"type":"fill","orderId":"ORD-0002","barIndex":93,"date":"2026-05-22","price":75521.6,"units":-1.3208137797860018,"cost":69.82497896604056},{"seq":7,"type":"intent","orderId":"ORD-0003","barIndex":142,"date":"2026-07-10","side":"BUY","deltaUnits":1.5521594786229023,"price":64175.2},{"seq":8,"type":"approved","orderId":"ORD-0003","barIndex":142,"approvedBy":"session"},{"seq":9,"type":"fill","orderId":"ORD-0003","barIndex":142,"date":"2026-07-10","price":64175.2,"units":1.5521594786229023,"cost":69.72710148076433},{"seq":10,"type":"intent","orderId":"ORD-0004","barIndex":178,"date":"2026-08-15","side":"SELL","deltaUnits":1.5521594786229023,"price":63146.6},{"seq":11,"type":"approved","orderId":"ORD-0004","barIndex":178,"approvedBy":"session"},{"seq":12,"type":"fill","orderId":"ORD-0004","barIndex":178,"date":"2026-08-15","price":63146.6,"units":-1.5521594786229023,"cost":68.60951561296628},{"seq":13,"type":"intent","orderId":"ORD-0005","barIndex":182,"date":"2026-08-19","side":"BUY","deltaUnits":1.3505810362460533,"price":72469},{"seq":14,"type":"approved","orderId":"ORD-0005","barIndex":182,"approvedBy":"session"},{"seq":15,"type":"fill","orderId":"ORD-0005","barIndex":182,"date":"2026-08-19","price":72469,"units":1.3505810362460533,"cost":68.51267998100067},{"seq":16,"type":"intent","orderId":"ORD-0006","barIndex":245,"date":"2026-10-21","side":"SELL","deltaUnits":1.3505810362460533,"price":81678.9},{"seq":17,"type":"approved","orderId":"ORD-0006","barIndex":245,"approvedBy":"session"},{"seq":18,"type":"fill","orderId":"ORD-0006","barIndex":245,"date":"2026-10-21","price":81678.9,"units":-1.3505810362460533,"cost":77.21978138100643}]}]},"audit":{"entries":293,"byTool":{"assess_frozen_dataset:ok":81,"trial_metrics:ok":112,"place_order:rejected":10,"guard_check:ok":1,"data_quality:ok":1},"byStatus":{"not-requested":92,"unconfigured":10,"ok":147,"max-steps-reached":10,"unavailable":34},"lastTs":"2026-11-10T17:49:58.668Z"}};
 (function(){
   var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
-  var buttons = document.querySelectorAll(".nav-btn");
+  var buttons = document.querySelectorAll("button[data-view]");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {
       var name = this.getAttribute("data-view");
       var self = this;
-      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === self); });
+      document.querySelectorAll("button[data-view]").forEach(function(b){ b.classList.toggle("active", b === self); });
       document.querySelectorAll(".view").forEach(function(v){ v.classList.toggle("active", v.getAttribute("data-view") === name); });
+      document.body.setAttribute("data-view", name);
       document.getElementById("view-title").textContent = titles[name][0];
       document.getElementById("view-sub").textContent = titles[name][1];
     });
   }
+  document.body.setAttribute("data-view", "chat");
 
   // ── Chat（仅 HTTP serve 模式可用；file:// 下自动禁用并提示）──────────────
   var thread = document.getElementById("chat-thread");
@@ -352,10 +401,51 @@ var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion"
   document.getElementById("brand-avatar").innerHTML = botAvatarSVG(20, "idle", true);
   document.getElementById("bot-avatar-header").innerHTML = botAvatarSVG(30, "idle", true);
 
+  function ensureThread() {
+    var empty = document.getElementById("chat-empty");
+    if (empty && empty.style.display !== "none") empty.style.display = "none";
+    if (thread.style.display === "none") thread.style.display = "flex";
+  }
+  function formatInline(s) {
+    return s.replace(/^#{1,4}\s+(.*)$/, "<b>$1</b>")
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/\x60([^\x60]+)\x60/g, "<code>$1</code>");
+  }
+  function formatText(text) {
+    // 先整体转义，再套用最小 markdown（粗体/行内代码/列表）；不引入任何外部渲染库。
+    var esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    var out = [];
+    esc.split("\n").forEach(function(line) {
+      var item = line.match(/^\s*[-*]\s+(.*)$/);
+      if (item) { out.push('<div class="li"><span>' + formatInline(item[1]) + "</span></div>"); return; }
+      if (line.trim() === "") { out.push('<div style="height:6px"></div>'); return; }
+      out.push("<div>" + formatInline(line) + "</div>");
+    });
+    return out.join("");
+  }
+  // ── 可见历史（sessionStorage，按会话隔离；只存已渲染的问答，不存 paper 卡片）──
+  // 目的：刷新后界面与 sidecar 的会话记忆不再错位。关闭标签页即弃，不落盘。
+  var transcriptKey = "quant-chat-log:" + chatSession;
+  var transcript = [];
+  try {
+    var savedTranscript = JSON.parse(sessionStorage.getItem(transcriptKey) || "[]");
+    if (Array.isArray(savedTranscript)) transcript = savedTranscript.slice(-60);
+  } catch (e) { transcript = []; }
+  var restoring = false;
+  function persistTranscript() {
+    try {
+      var capped = transcript.slice(-60).map(function(entry) {
+        return { role: entry.role, text: String(entry.text || "").slice(0, 20000), meta: entry.meta || null, cites: entry.cites || null };
+      });
+      sessionStorage.setItem(transcriptKey, JSON.stringify(capped));
+    } catch (e) { /* 配额/隐私模式：静默降级，仅丢可见历史，不影响对话 */ }
+  }
   function bubble(cls, text, meta, cites) {
+    ensureThread();
     var div = document.createElement("div");
     div.className = "msg " + cls;
-    div.textContent = text;
+    if (cls === "assistant") div.innerHTML = formatText(text);
+    else div.textContent = text;
     if (meta) { var m = document.createElement("div"); m.className = "meta"; m.textContent = meta; div.appendChild(m); }
     if (cites && cites.length) {
       var box = document.createElement("div"); box.className = "cites";
@@ -375,31 +465,61 @@ var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion"
     } else {
       thread.appendChild(div);
     }
+    if (!restoring) {
+      transcript.push({ role: cls, text: text, meta: meta || null, cites: cites || null });
+      persistTranscript();
+    }
     thread.scrollTop = thread.scrollHeight;
   }
+  // 恢复本会话的可见记录（内容仍走同一转义/markdown 路径）。
+  if (transcript.length) {
+    restoring = true;
+    transcript.forEach(function(entry) { bubble(entry.role === "assistant" ? "assistant" : "user", entry.text, entry.meta, entry.cites); });
+    restoring = false;
+  }
 
-  fetch("/api/health").then(function(r){ return r.json(); }).then(function(h) {
-    if (!h || !h.ok) throw new Error("bad health");
-    statusBadge.textContent = "llm " + (h.llm && h.llm.configured ? "configured" : "unconfigured") + " · " + (h.llm ? h.llm.model : "");
-    statusBadge.className = "badge badge-accent";
-    hint.textContent = "已连接 quant console 服务（" + h.serverVersion + "）。回答为模型对权威工具输出的解释，非权威。";
-    sendBtn.disabled = false;
-  }).catch(function() {
-    statusBadge.textContent = "chat unavailable";
-    statusBadge.className = "badge badge-bad";
-    hint.textContent = "聊天不可用：当前为 file:// 打开或服务未启动。请运行 npm run serve 后访问 http://127.0.0.1:8788/。";
-  });
+  // ── 健康探测：首次 + 每 15s 复查；恢复/中断都更新状态，避免“服务挂了仍显示已连接”──
+  var healthOk = false;
+  function checkHealth() {
+    fetch("/api/health").then(function(r){ return r.json(); }).then(function(h) {
+      if (!h || !h.ok) throw new Error("bad health");
+      healthOk = true;
+      statusBadge.textContent = "llm " + (h.llm && h.llm.configured ? "configured" : "unconfigured") + " · " + (h.llm ? h.llm.model : "");
+      statusBadge.className = "badge badge-accent";
+      statusBadge.style.display = "none"; // Kimi 式空态不挂状态徽章；连接信息在底部 hint
+      var modelLabel = document.getElementById("model-label");
+      if (modelLabel && h.llm) modelLabel.textContent = h.llm.configured ? (h.llm.model || "model") : "no model · 确定性摘要";
+      hint.textContent = "已连接 quant console 服务（" + h.serverVersion + "）。回答为模型对权威工具输出的解释，非权威。";
+      setSendState();
+    }).catch(function() {
+      healthOk = false;
+      statusBadge.style.display = "inline-block";
+      statusBadge.textContent = "chat unavailable";
+      statusBadge.className = "badge badge-bad";
+      hint.textContent = "连接中断：服务未启动或已退出。请运行 npm run serve 后访问当前地址；已显示的记录保留在本地。";
+      setSendState();
+    });
+  }
+  checkHealth();
+  setInterval(checkHealth, 15000);
+  document.addEventListener("visibilitychange", function() { if (!document.hidden) checkHealth(); });
 
+  // 按会话跟踪在途请求：切换会话后旧请求不阻塞新会话，也不会把回答写进新会话。
+  var inflight = {};
+  function setSendState() { sendBtn.disabled = !healthOk || !!inflight[chatSession]; }
   function send() {
     var question = input.value.trim();
-    if (!question || sendBtn.disabled) return;
+    if (!question || inflight[chatSession]) return;
+    var requestSession = chatSession; // 捕获请求发出时的会话，响应回来时据此判定是否仍属当前会话
     bubble("user", question);
     input.value = "";
-    sendBtn.disabled = true;
+    inflight[requestSession] = true;
+    setSendState();
     setBotMood("think");
-    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: chatSession }) })
+    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: requestSession }) })
       .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }); })
       .then(function(resp) {
+        if (requestSession !== chatSession) return; // 会话已切换：丢弃旧回答，避免污染新会话
         var body = resp.body;
         bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
           (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
@@ -407,15 +527,49 @@ var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion"
         setBotMood(body.ok ? "happy" : "idle", 1600);
         if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
       })
-      .catch(function(err) { bubble("assistant", "请求失败：" + err.message); setBotMood("idle"); })
-      .finally(function() { sendBtn.disabled=false; input.focus(); });
+      .catch(function(err) { if (requestSession === chatSession) { bubble("assistant", "请求失败：" + err.message); setBotMood("idle"); } })
+      .finally(function() {
+        delete inflight[requestSession];
+        setSendState();
+        if (requestSession === chatSession) input.focus();
+      });
   }
   sendBtn.addEventListener("click", send);
-  input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
+  input.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  });
+  document.getElementById("quick-chips").addEventListener("click", function(e) {
+    var chip = e.target.closest("button[data-q]");
+    if (!chip) return;
+    input.value = chip.getAttribute("data-q");
+    input.focus();
+  });
+  function startNewChat() {
+    thread.innerHTML = "";
+    thread.style.display = "none";
+    var empty = document.getElementById("chat-empty");
+    if (empty) empty.style.display = "flex";
+    // 保留 paperSeen：新会话只收「新」事件；仍在挂起的审批卡由 paperPoll 补挂。
+    try { sessionStorage.removeItem(transcriptKey); } catch (e) {}
+    try { chatSession = "web-" + Math.random().toString(16).slice(2, 10); sessionStorage.setItem("quant-chat-session", chatSession); } catch (e) {}
+    transcriptKey = "quant-chat-log:" + chatSession;
+    transcript = [];
+    setBotMood("idle");
+    input.value = "";
+    setSendState();
+    input.focus();
+  }
+  document.getElementById("new-chat").addEventListener("click", startNewChat);
+  document.addEventListener("keydown", function(e) {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      startNewChat();
+    }
+  });
 
   // ── 虚拟盘事件入聊天流（Grok Bot 模式：审批卡 + 事件通知主动找你）──────────
   var paperSeen = { orders: {}, fills: {}, sessionDone: {} };
-  function chatCard(el) { thread.appendChild(el); thread.scrollTop = thread.scrollHeight; }
+  function chatCard(el) { ensureThread(); thread.appendChild(el); thread.scrollTop = thread.scrollHeight; }
   function chatNote(text, cls) {
     var n = document.createElement("div");
     n.className = "chat-note " + (cls || "");
@@ -454,14 +608,35 @@ var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion"
     ok.className = "sendbtn"; ok.style.padding = "7px 14px"; ok.textContent = "Approve";
     var no = document.createElement("button");
     no.className = "sendbtn btn-ghost"; no.style.padding = "7px 14px"; no.style.marginLeft = "8px"; no.textContent = "Deny";
-    ok.addEventListener("click", function() {
-      fetch("/api/paper/session/" + sessionId + "/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, approvedBy: "chat-operator" }) });
-      markCardResolved(key, { orderId: order.orderId, status: "filled", approvedBy: "chat-operator" });
-    });
-    no.addEventListener("click", function() {
-      fetch("/api/paper/session/" + sessionId + "/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, reason: "chat-operator denied" }) });
-      markCardResolved(key, { orderId: order.orderId, status: "rejected" });
-    });
+    function decide(decision) {
+      ok.disabled = true; no.disabled = true;
+      var endpoint = decision === "approve" ? "approve" : "reject";
+      var payload = decision === "approve"
+        ? { orderId: order.orderId, approvedBy: "chat-operator" }
+        : { orderId: order.orderId, reason: "chat-operator denied" };
+      fetch("/api/paper/session/" + sessionId + "/" + endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+        .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }).catch(function(){ return { status: r.status, body: {} }; }); })
+        .then(function(resp) {
+          if (resp.status === 200 && resp.body && resp.body.ok) {
+            markCardResolved(key, decision === "approve" ? { status: "filled", approvedBy: "chat-operator" } : { status: "rejected" });
+            return;
+          }
+          ok.disabled = false; no.disabled = false;
+          var note = document.createElement("div");
+          note.className = "chat-hint";
+          note.textContent = "操作未生效（" + ((resp.body && resp.body.code) || ("HTTP " + resp.status)) + "）：订单可能已被处理或会话已结束。";
+          card.appendChild(note);
+        })
+        .catch(function(err) {
+          ok.disabled = false; no.disabled = false;
+          var note = document.createElement("div");
+          note.className = "chat-hint";
+          note.textContent = "操作失败：" + err.message;
+          card.appendChild(note);
+        });
+    }
+    ok.addEventListener("click", function() { decide("approve"); });
+    no.addEventListener("click", function() { decide("reject"); });
     btns.appendChild(ok); btns.appendChild(no);
     card.appendChild(title); card.appendChild(body); card.appendChild(risk); card.appendChild(btns);
     return card;
@@ -478,6 +653,9 @@ var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion"
           paperSeen.orders[key] = order.status;
           if (order.status === "pending") chatCard(approvalCardElement(s.id, key, order));
           else chatNote("虚拟盘意图 " + order.orderId + "（" + s.id + "）" + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + " → " + order.status, order.status === "filled" ? "fill" : "reject");
+        } else if (order.status === "pending" && paperSeen.orders[key] === "pending" && !thread.querySelector('.approval-card[data-order="' + key + '"]')) {
+          // 新会话清空 DOM 后，仍挂起的审批卡补挂一次（已处理的历史不重放）。
+          chatCard(approvalCardElement(s.id, key, order));
         } else if (paperSeen.orders[key] === "pending" && order.status !== "pending") {
           paperSeen.orders[key] = order.status;
           markCardResolved(key, order);
@@ -514,16 +692,16 @@ var DATA = {"generatedAtUtc":"2026-11-10T16:56:50.810Z","meta":{"metricsVersion"
     for (var g = 0; g <= 4; g++) {
       var gy = pad + g * (h - pad * 2) / 4;
       var gv = (max - span * g / 4);
-      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(255,255,255,.06)"/>' +
-              '<text x="'+(pad-6)+'" y="'+(gy+4).toFixed(1)+'" fill="#6f6f6f" font-size="10" text-anchor="end">'+Math.round(gv).toLocaleString()+'</text>';
+      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(0,0,0,.07)"/>' +
+              '<text x="'+(pad-6)+'" y="'+(gy+4).toFixed(1)+'" fill="#8e8e93" font-size="10" text-anchor="end">'+Math.round(gv).toLocaleString()+'</text>';
     }
     container.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">' + grid +
-      '<path d="'+path(b)+'" fill="none" stroke="#6f6f6f" stroke-width="1.5"/>' +
-      '<path d="'+path(a)+'" fill="none" stroke="#8b5cf6" stroke-width="2"/>' +
-      '<text x="'+pad+'" y="'+(pad-12)+'" fill="#8b5cf6" font-size="11">paper (all-approved) '+Math.round(a[a.length-1].equity).toLocaleString()+'</text>' +
-      '<text x="'+(pad+230)+'" y="'+(pad-12)+'" fill="#6f6f6f" font-size="11">backtest '+Math.round(b[b.length-1].equity).toLocaleString()+'</text>' +
-      '<text x="'+pad+'" y="'+(h-8)+'" fill="#6f6f6f" font-size="10">'+a[0].date+'</text>' +
-      '<text x="'+(w-pad)+'" y="'+(h-8)+'" fill="#6f6f6f" font-size="10" text-anchor="end">'+a[a.length-1].date+'</text>' +
+      '<path d="'+path(b)+'" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="5 4"/>' +
+      '<path d="'+path(a)+'" fill="none" stroke="#3b82f6" stroke-width="2"/>' +
+      '<text x="'+pad+'" y="'+(pad-12)+'" fill="#3b82f6" font-size="11">paper (all-approved) '+Math.round(a[a.length-1].equity).toLocaleString()+'</text>' +
+      '<text x="'+(pad+230)+'" y="'+(pad-12)+'" fill="#8e8e93" font-size="11">backtest '+Math.round(b[b.length-1].equity).toLocaleString()+'</text>' +
+      '<text x="'+pad+'" y="'+(h-8)+'" fill="#8e8e93" font-size="10">'+a[0].date+'</text>' +
+      '<text x="'+(w-pad)+'" y="'+(h-8)+'" fill="#8e8e93" font-size="10" text-anchor="end">'+a[a.length-1].date+'</text>' +
       '</svg>';
   }
   renderEquityChart();

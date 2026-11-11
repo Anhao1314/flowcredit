@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * quant/console/build.js — Codex-Web 风控制台生成器（阶段 F1，静态零服务器）
+ * quant/console/build.js — Kimi 桌面风控制台生成器（阶段 F6，静态零服务器）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 不发起网络请求、不用随机数——全部输入是仓库内冻结产物 + quant/console/payload.js
@@ -23,7 +23,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 const payload = await computeConsolePayload({ generatedAtUtc: new Date().toISOString() });
 
-// ── HTML 生成（ChatGPT-Web 风：深灰底/浅灰卡片/圆角/系统字体/蓝紫 accent）──────
+// ── HTML 生成（Kimi 桌面风：浅色底/白卡片/分段切换/居中空态/悬浮输入卡）──────
 const esc = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmt = (value, digits = 4) => (value === null || value === undefined) ? "n/a" : Number(value).toFixed(digits);
 const badge = (text, kind) => `<span class="badge badge-${kind}">${esc(text)}</span>`;
@@ -66,22 +66,29 @@ const html = `<!DOCTYPE html>
 <title>FlowCredit Quant · Console</title>
 <style>
 :root{
-  --bg:#000; --sidebar:#000; --card:#0d0d0d; --card2:#161616;
-  --border:rgba(255,255,255,.12); --text:#f2f2f2; --muted:#9b9b9b; --faint:#5f5f5f;
-  --accent:#8b5cf6; --accent-soft:rgba(139,92,246,.12);
-  --good:#10a37f; --bad:#ef4444; --warn:#f59e0b;
-  --radius:14px;
+  --bg:#fafafa; --sidebar:#f5f5f6; --card:#fff; --card2:#f7f7f8;
+  --border:#e8e8ec; --text:#1d1d1f; --muted:#8e8e93; --faint:#b0b0b5;
+  --accent:#3b82f6; --accent-soft:#eef3ff;
+  --good:#34a853; --bad:#e5484d; --warn:#f5a623;
+  --radius:16px;
+  --shadow:0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 14px 44px rgba(0,0,0,.10);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.55;display:flex;min-height:100vh}
-.sidebar{width:232px;background:var(--sidebar);border-right:1px solid var(--border);padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
-.brand{font-weight:700;font-size:15px;letter-spacing:.2px;padding:6px 10px 16px;display:flex;align-items:center;gap:8px}
-.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
-.nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--muted);padding:9px 12px;border-radius:10px;cursor:pointer;font-size:13.5px}
-.nav-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
-.nav-btn.active{background:var(--accent-soft);color:var(--text)}
+.sidebar{width:252px;background:var(--sidebar);border-right:1px solid var(--border);padding:14px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:3px}
+.brand{font-weight:650;font-size:15px;letter-spacing:.1px;padding:4px 10px 14px;display:flex;align-items:center;gap:9px}
+.brand .dot{display:none}
+.segmented{display:flex;background:#e9e9ec;border-radius:12px;padding:3px;gap:3px;margin:0 4px 8px}
+.seg-btn{flex:1;border:none;background:transparent;color:#6e6e73;font-size:12.5px;font-weight:500;padding:7px 10px;border-radius:9px;cursor:pointer}
+.seg-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.09);font-weight:600}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:#3c3c43;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13.5px}
+.nav-btn:hover{background:rgba(0,0,0,.045)}
+.nav-btn.active{background:#e9e9ec;font-weight:550}
+.nav-btn svg{width:17px;height:17px;stroke:#6e6e73;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.nav-btn .kbd{margin-left:auto;color:var(--faint);font-size:11px;font-weight:400}
 /* ── Bot 头像（参考：蓝色圆脸+白椭圆眼；实时动态状态机）──────────────────*/
-.bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 4px 10px rgba(61,125,255,.35))}
+.bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 3px 8px rgba(61,125,255,.28))}
 .bot-avatar svg{display:block}
 .bot-avatar .eye{transform-box:fill-box;transform-origin:center;animation:avatar-blink 4.6s infinite}
 .bot-avatar.idle{animation:avatar-float 3.6s ease-in-out infinite}
@@ -95,14 +102,17 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 @keyframes avatar-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
 @keyframes avatar-look{0%,100%{transform:translate(0,0)}50%{transform:translate(1.5px,-2.5px)}}
 @keyframes avatar-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-.sidebar-group{font-size:10px;color:var(--faint);letter-spacing:.8px;text-transform:uppercase;padding:14px 10px 4px}
-.sidebar-footer{margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);border-top:1px solid var(--border)}
-main{flex:1;padding:28px 34px 60px;max-width:1060px}
-.topbar{margin-bottom:22px}
+.sidebar-group{font-size:11px;color:var(--muted);padding:14px 10px 4px;font-weight:500}
+.sidebar-footer{margin-top:auto;padding:10px 8px 4px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px}
+.sidebar-footer .meta{font-size:10px;color:var(--faint);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:118px}
+.sidebar-footer .pill{margin-left:auto;font-size:10px;border:1px solid var(--border);border-radius:999px;padding:1px 8px;color:var(--muted);background:#fff}
+main{flex:1;padding:24px 32px 44px;display:flex;flex-direction:column;min-width:0;max-width:1120px;margin:0 auto}
+.topbar{margin-bottom:20px}
+body[data-view="chat"] .topbar{display:none}
 .topbar h1{font-size:22px;font-weight:650}
 .topbar .sub{color:var(--muted);margin-top:4px;font-size:13px}
 .view{display:none}.view.active{display:block}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow)}
 .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
 .card h2{font-size:16px;font-weight:600;margin-top:2px}
 .eyebrow{font-size:11px;color:var(--faint);letter-spacing:.6px;text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -113,11 +123,11 @@ main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .metric-sub{font-size:11px;color:var(--faint);margin-top:2px}
 .metric.good .metric-value{color:var(--good)}
 .metric.bad .metric-value{color:var(--bad)}
-.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
-.badge-accent{color:var(--accent);border-color:rgba(139,92,246,.4);background:var(--accent-soft)}
-.badge-good{color:var(--good);border-color:rgba(16,163,127,.4)}
-.badge-bad{color:var(--bad);border-color:rgba(239,68,68,.4)}
-.badge-warn{color:var(--warn);border-color:rgba(245,158,11,.4)}
+.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:#fff}
+.badge-accent{color:var(--accent);border-color:rgba(59,130,246,.35);background:var(--accent-soft)}
+.badge-good{color:var(--good);border-color:rgba(52,168,83,.35);background:rgba(52,168,83,.08)}
+.badge-bad{color:var(--bad);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.07)}
+.badge-warn{color:#b7791f;border-color:rgba(245,166,35,.4);background:rgba(245,166,35,.1)}
 .badge-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
@@ -127,52 +137,77 @@ main{flex:1;padding:28px 34px 60px;max-width:1060px}
 .tbl tr.selected td{background:var(--accent-soft)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
 .callout{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;padding:12px 16px;margin:14px 0;font-size:13px}
-.callout.warn{border-left-color:var(--warn);background:rgba(245,158,11,.1)}
-.callout.good{border-left-color:var(--good);background:rgba(16,163,127,.1)}
-pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:#cfd3dc}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.footer{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
+.callout.warn{border-left-color:var(--warn);background:rgba(245,166,35,.08)}
+.callout.good{border-left-color:var(--good);background:rgba(52,168,83,.07)}
+pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:#3c3c43}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
 .kv .k{color:var(--muted)}
-.chat-thread{height:400px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:6px 2px}
-.msg{max-width:82%;border-radius:14px;padding:10px 14px;white-space:pre-wrap}
-.msg.user{align-self:flex-end;background:var(--accent-soft);border:1px solid rgba(139,92,246,.35)}
-.msg.assistant{align-self:flex-start;background:var(--card2);border:1px solid var(--border)}
-.msg .meta{font-size:10px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+/* ── Chat（Kimi 式：居中空态 + 悬浮输入卡 + 快捷芯片）────────────────── */
+.chat-shell{flex:1;display:flex;flex-direction:column;height:calc(100vh - 32px)}
+body[data-view="chat"] main{padding:16px 24px}
+body[data-view="chat"] .footer{display:none}
+.chat-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding-bottom:60px}
+.wordmark{font-size:40px;font-weight:800;letter-spacing:-1.1px;display:flex;align-items:center;gap:7px;line-height:1}
+.wordmark .dot-blue{width:13px;height:13px;border-radius:50%;background:var(--accent);align-self:flex-start;margin-top:7px}
+.wordmark-sub{color:var(--muted);font-size:13px}
+.chat-thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:8px 4px 12px}
+.msg{max-width:78%;border-radius:18px;padding:10px 14px;white-space:pre-wrap;font-size:14px}
+.msg.user{align-self:flex-end;background:#f1f1f3;color:var(--text)}
+.msg.assistant{align-self:flex-start;background:transparent;padding:6px 0}
+.msg .meta{font-size:10.5px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.chat-inputrow{display:flex;gap:12px;align-items:flex-end;margin-top:14px}
-.chat-inputrow textarea{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;min-height:52px}
-.chat-side{display:flex;flex-direction:column;gap:8px;align-items:stretch}
-.chat-consent{font-size:11.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
-.sendbtn{background:#fff;border:none;color:#000;border-radius:12px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
+.msg b{font-weight:600}
+.msg code{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:1px 5px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg .li{display:flex;gap:7px;margin:2px 0}
+.msg .li::before{content:"•";color:var(--muted);flex-shrink:0}
+.composer{background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow-lg);padding:12px 14px 10px;margin:8px auto 0;width:100%;max-width:820px}
+.composer textarea{width:100%;border:none;outline:none;resize:none;background:transparent;color:var(--text);font:inherit;font-size:14px;min-height:46px}
+.composer textarea::placeholder{color:var(--faint)}
+.composer-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+.consent-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--card2);border:1px solid var(--border);border-radius:999px;padding:5px 11px;cursor:pointer}
+.consent-pill input{accent-color:var(--accent);margin:0}
+.model-label{margin-left:auto;font-size:12px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.send-circle{width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.send-circle:disabled{background:#e5e5e8;color:#b0b0b5;cursor:not-allowed}
+.quick-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px auto 0;max-width:820px;width:100%}
+.quick-chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:7px 14px;font-size:12.5px;color:#3c3c43;cursor:pointer;box-shadow:var(--shadow)}
+.quick-chip:hover{background:var(--card2)}
+.sendbtn{background:var(--text);border:none;color:#fff;border-radius:999px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
 .sendbtn:disabled{opacity:.45;cursor:not-allowed}
-.sendbtn.btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--border);font-weight:400}
-.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:12px;background:var(--card2);padding:12px 14px;max-width:82%}
-.approval-card.resolved{border-left-color:var(--good);opacity:.85}
-.approval-card .risk{font-size:10.5px;color:var(--warn);margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:7px 12px;background:var(--card2);max-width:82%}
+.sendbtn.btn-ghost{background:#fff;color:var(--text);border:1px solid var(--border);font-weight:400}
+.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:16px;background:#fff;padding:12px 14px;max-width:78%;box-shadow:var(--shadow)}
+.approval-card.resolved{border-left-color:var(--good);opacity:.92}
+.approval-card .risk{font-size:10.5px;color:#b7791f;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:12px;padding:7px 12px;background:#fff;max-width:78%}
 .chat-note.fill{border-left:3px solid var(--good)}
 .chat-note.reject{border-left:3px solid var(--bad)}
-.chat-hint{font-size:11.5px;color:var(--faint);margin-top:10px}
-@media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:190px}}
+.chat-hint{font-size:11.5px;color:var(--faint);margin:10px auto 0;max-width:820px;width:100%}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:200px}}
 </style>
 </head>
 <body>
 <aside class="sidebar">
   <div class="brand"><span id="brand-avatar"></span>FlowCredit Quant</div>
-  <button class="nav-btn active" data-view="chat">Chat</button>
-  <button class="nav-btn" data-view="paper">Paper</button>
-  <div class="sidebar-group">Dashboards</div>
-  <button class="nav-btn" data-view="overview">Overview</button>
-  <button class="nav-btn" data-view="rules">Rules &amp; Trials</button>
-  <button class="nav-btn" data-view="dsr">DSR &amp; Promotion</button>
-  <button class="nav-btn" data-view="quality">Data Quality</button>
-  <button class="nav-btn" data-view="agent">Agent &amp; Audit</button>
+  <div class="segmented">
+    <button class="seg-btn active" data-view="chat">Chat</button>
+    <button class="seg-btn" data-view="paper">Paper</button>
+  </div>
+  <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘K</span></button>
+  <div class="sidebar-group">仪表盘</div>
+  <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
+  <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
+  <button class="nav-btn" data-view="dsr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r=".5"/><circle cx="15" cy="15" r=".5"/></svg><span>DSR &amp; Promotion</span></button>
+  <button class="nav-btn" data-view="quality"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v12c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9v-12"/><path d="M4.5 11.5c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9"/></svg><span>Data Quality</span></button>
+  <button class="nav-btn" data-view="agent"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M9 12h7M9 16h7"/></svg><span>Agent &amp; Audit</span></button>
   <div class="sidebar-footer">
-    <div>metrics ${esc(payload.meta.metricsVersion)}</div>
-    <div>rules ${esc(payload.meta.rulesVersion)}</div>
-    <div>agent ${esc(payload.meta.agentVersion)}</div>
-    <div>built ${esc((payload.generatedAtUtc || "").slice(0, 10))}</div>
+    <span>👤</span>
+    <div style="display:flex;flex-direction:column;line-height:1.3">
+      <span style="font-size:12.5px;font-weight:500">Operator</span>
+      <span class="meta">metrics v0.0.3 · rules v0.0.2</span>
+    </div>
+    <span class="pill">ALPHA</span>
   </div>
 </aside>
 <main>
@@ -289,7 +324,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
         ${metricCard("Orders / Fills", payload.paper.reference.report.orders + " / " + payload.paper.reference.report.fills, "MOC：决策棒收盘成交")}
       </div>
       <div id="paper-chart" style="margin-top:14px"></div>
-      <div class="chips">${badge("—— 紫线 = 虚拟盘账本", "accent")}${badge("—— 灰线 = 回测口径", "mono")}</div>
+      <div class="chips">${badge("—— 蓝线 = 虚拟盘账本", "accent")}${badge("—— 虚线 = 回测口径（与账本逐点重合）", "mono")}</div>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">REFERENCE FILLS · 全批准会话</div><h2>成交记录</h2></div></div>
@@ -316,17 +351,29 @@ node quant/agent/cli.js repl --consent                            # 交互模式
   </section>
 
   <section class="view active" data-view="chat">
-    <div class="card">
-      <div class="card-head"><div><div class="eyebrow">QUANT AGENT · 有界对话</div><h2 style="display:flex;align-items:center;gap:10px"><span id="bot-avatar-header"></span>Chat with the agent</h2></div><span id="chat-status" class="badge">checking…</span></div>
-      <div id="chat-thread" class="chat-thread"></div>
-      <div class="chat-inputrow">
-        <textarea id="chat-input" rows="2" placeholder="问点什么…（例如：为什么守卫是 halt？）"></textarea>
-        <div class="chat-side">
-          <label class="chat-consent"><input type="checkbox" id="chat-consent" checked> modelConsent（允许发送到模型）</label>
-          <button id="chat-send" class="sendbtn" disabled>发送</button>
+    <div class="chat-shell">
+      <div style="display:flex;justify-content:center;padding:6px 0 0">
+        <span id="chat-status" class="badge badge-accent">checking…</span>
+      </div>
+      <div class="chat-empty" id="chat-empty">
+        <div class="wordmark"><span id="bot-avatar-header"></span>FlowCredit<span class="dot-blue"></span></div>
+        <div class="wordmark-sub">Evidence-aware quant workflow · 数字来自工具，引用可反查</div>
+      </div>
+      <div id="chat-thread" class="chat-thread" style="display:none"></div>
+      <div class="composer">
+        <textarea id="chat-input" rows="2" placeholder="问点什么…  例如：为什么守卫是 halt？"></textarea>
+        <div class="composer-row">
+          <label class="consent-pill"><input type="checkbox" id="chat-consent" checked> modelConsent</label>
+          <span class="model-label" id="model-label">kimi-k2.6</span>
+          <button id="chat-send" class="send-circle" disabled title="发送">↑</button>
         </div>
       </div>
-      <div id="chat-hint" class="chat-hint">检测服务中…</div>
+      <div class="quick-chips" id="quick-chips">
+        <button class="quick-chip" data-q="为什么守卫是 halt？">为什么守卫是 halt？</button>
+        <button class="quick-chip" data-q="解释一下 DSR 和有效 N 的含义">解释 DSR</button>
+        <button class="quick-chip" data-q="当前数据集的质量如何？">数据质量如何？</button>
+      </div>
+      <div id="chat-hint" class="chat-hint" style="text-align:center">检测服务中…</div>
     </div>
   </section>
 
@@ -339,17 +386,19 @@ node quant/agent/cli.js repl --consent                            # 交互模式
 var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
 (function(){
   var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
-  var buttons = document.querySelectorAll(".nav-btn");
+  var buttons = document.querySelectorAll("button[data-view]");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {
       var name = this.getAttribute("data-view");
       var self = this;
-      document.querySelectorAll(".nav-btn").forEach(function(b){ b.classList.toggle("active", b === self); });
+      document.querySelectorAll("button[data-view]").forEach(function(b){ b.classList.toggle("active", b === self); });
       document.querySelectorAll(".view").forEach(function(v){ v.classList.toggle("active", v.getAttribute("data-view") === name); });
+      document.body.setAttribute("data-view", name);
       document.getElementById("view-title").textContent = titles[name][0];
       document.getElementById("view-sub").textContent = titles[name][1];
     });
   }
+  document.body.setAttribute("data-view", "chat");
 
   // ── Chat（仅 HTTP serve 模式可用；file:// 下自动禁用并提示）──────────────
   var thread = document.getElementById("chat-thread");
@@ -392,10 +441,51 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   document.getElementById("brand-avatar").innerHTML = botAvatarSVG(20, "idle", true);
   document.getElementById("bot-avatar-header").innerHTML = botAvatarSVG(30, "idle", true);
 
+  function ensureThread() {
+    var empty = document.getElementById("chat-empty");
+    if (empty && empty.style.display !== "none") empty.style.display = "none";
+    if (thread.style.display === "none") thread.style.display = "flex";
+  }
+  function formatInline(s) {
+    return s.replace(/^#{1,4}\\s+(.*)$/, "<b>$1</b>")
+      .replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>")
+      .replace(/\\x60([^\\x60]+)\\x60/g, "<code>$1</code>");
+  }
+  function formatText(text) {
+    // 先整体转义，再套用最小 markdown（粗体/行内代码/列表）；不引入任何外部渲染库。
+    var esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    var out = [];
+    esc.split("\\n").forEach(function(line) {
+      var item = line.match(/^\\s*[-*]\\s+(.*)$/);
+      if (item) { out.push('<div class="li"><span>' + formatInline(item[1]) + "</span></div>"); return; }
+      if (line.trim() === "") { out.push('<div style="height:6px"></div>'); return; }
+      out.push("<div>" + formatInline(line) + "</div>");
+    });
+    return out.join("");
+  }
+  // ── 可见历史（sessionStorage，按会话隔离；只存已渲染的问答，不存 paper 卡片）──
+  // 目的：刷新后界面与 sidecar 的会话记忆不再错位。关闭标签页即弃，不落盘。
+  var transcriptKey = "quant-chat-log:" + chatSession;
+  var transcript = [];
+  try {
+    var savedTranscript = JSON.parse(sessionStorage.getItem(transcriptKey) || "[]");
+    if (Array.isArray(savedTranscript)) transcript = savedTranscript.slice(-60);
+  } catch (e) { transcript = []; }
+  var restoring = false;
+  function persistTranscript() {
+    try {
+      var capped = transcript.slice(-60).map(function(entry) {
+        return { role: entry.role, text: String(entry.text || "").slice(0, 20000), meta: entry.meta || null, cites: entry.cites || null };
+      });
+      sessionStorage.setItem(transcriptKey, JSON.stringify(capped));
+    } catch (e) { /* 配额/隐私模式：静默降级，仅丢可见历史，不影响对话 */ }
+  }
   function bubble(cls, text, meta, cites) {
+    ensureThread();
     var div = document.createElement("div");
     div.className = "msg " + cls;
-    div.textContent = text;
+    if (cls === "assistant") div.innerHTML = formatText(text);
+    else div.textContent = text;
     if (meta) { var m = document.createElement("div"); m.className = "meta"; m.textContent = meta; div.appendChild(m); }
     if (cites && cites.length) {
       var box = document.createElement("div"); box.className = "cites";
@@ -415,31 +505,61 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     } else {
       thread.appendChild(div);
     }
+    if (!restoring) {
+      transcript.push({ role: cls, text: text, meta: meta || null, cites: cites || null });
+      persistTranscript();
+    }
     thread.scrollTop = thread.scrollHeight;
   }
+  // 恢复本会话的可见记录（内容仍走同一转义/markdown 路径）。
+  if (transcript.length) {
+    restoring = true;
+    transcript.forEach(function(entry) { bubble(entry.role === "assistant" ? "assistant" : "user", entry.text, entry.meta, entry.cites); });
+    restoring = false;
+  }
 
-  fetch("/api/health").then(function(r){ return r.json(); }).then(function(h) {
-    if (!h || !h.ok) throw new Error("bad health");
-    statusBadge.textContent = "llm " + (h.llm && h.llm.configured ? "configured" : "unconfigured") + " · " + (h.llm ? h.llm.model : "");
-    statusBadge.className = "badge badge-accent";
-    hint.textContent = "已连接 quant console 服务（" + h.serverVersion + "）。回答为模型对权威工具输出的解释，非权威。";
-    sendBtn.disabled = false;
-  }).catch(function() {
-    statusBadge.textContent = "chat unavailable";
-    statusBadge.className = "badge badge-bad";
-    hint.textContent = "聊天不可用：当前为 file:// 打开或服务未启动。请运行 npm run serve 后访问 http://127.0.0.1:8788/。";
-  });
+  // ── 健康探测：首次 + 每 15s 复查；恢复/中断都更新状态，避免“服务挂了仍显示已连接”──
+  var healthOk = false;
+  function checkHealth() {
+    fetch("/api/health").then(function(r){ return r.json(); }).then(function(h) {
+      if (!h || !h.ok) throw new Error("bad health");
+      healthOk = true;
+      statusBadge.textContent = "llm " + (h.llm && h.llm.configured ? "configured" : "unconfigured") + " · " + (h.llm ? h.llm.model : "");
+      statusBadge.className = "badge badge-accent";
+      statusBadge.style.display = "none"; // Kimi 式空态不挂状态徽章；连接信息在底部 hint
+      var modelLabel = document.getElementById("model-label");
+      if (modelLabel && h.llm) modelLabel.textContent = h.llm.configured ? (h.llm.model || "model") : "no model · 确定性摘要";
+      hint.textContent = "已连接 quant console 服务（" + h.serverVersion + "）。回答为模型对权威工具输出的解释，非权威。";
+      setSendState();
+    }).catch(function() {
+      healthOk = false;
+      statusBadge.style.display = "inline-block";
+      statusBadge.textContent = "chat unavailable";
+      statusBadge.className = "badge badge-bad";
+      hint.textContent = "连接中断：服务未启动或已退出。请运行 npm run serve 后访问当前地址；已显示的记录保留在本地。";
+      setSendState();
+    });
+  }
+  checkHealth();
+  setInterval(checkHealth, 15000);
+  document.addEventListener("visibilitychange", function() { if (!document.hidden) checkHealth(); });
 
+  // 按会话跟踪在途请求：切换会话后旧请求不阻塞新会话，也不会把回答写进新会话。
+  var inflight = {};
+  function setSendState() { sendBtn.disabled = !healthOk || !!inflight[chatSession]; }
   function send() {
     var question = input.value.trim();
-    if (!question || sendBtn.disabled) return;
+    if (!question || inflight[chatSession]) return;
+    var requestSession = chatSession; // 捕获请求发出时的会话，响应回来时据此判定是否仍属当前会话
     bubble("user", question);
     input.value = "";
-    sendBtn.disabled = true;
+    inflight[requestSession] = true;
+    setSendState();
     setBotMood("think");
-    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: chatSession }) })
+    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: requestSession }) })
       .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }); })
       .then(function(resp) {
+        if (requestSession !== chatSession) return; // 会话已切换：丢弃旧回答，避免污染新会话
         var body = resp.body;
         bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
           (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
@@ -447,15 +567,49 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         setBotMood(body.ok ? "happy" : "idle", 1600);
         if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
       })
-      .catch(function(err) { bubble("assistant", "请求失败：" + err.message); setBotMood("idle"); })
-      .finally(function() { sendBtn.disabled=false; input.focus(); });
+      .catch(function(err) { if (requestSession === chatSession) { bubble("assistant", "请求失败：" + err.message); setBotMood("idle"); } })
+      .finally(function() {
+        delete inflight[requestSession];
+        setSendState();
+        if (requestSession === chatSession) input.focus();
+      });
   }
   sendBtn.addEventListener("click", send);
-  input.addEventListener("keydown", function(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); });
+  input.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  });
+  document.getElementById("quick-chips").addEventListener("click", function(e) {
+    var chip = e.target.closest("button[data-q]");
+    if (!chip) return;
+    input.value = chip.getAttribute("data-q");
+    input.focus();
+  });
+  function startNewChat() {
+    thread.innerHTML = "";
+    thread.style.display = "none";
+    var empty = document.getElementById("chat-empty");
+    if (empty) empty.style.display = "flex";
+    // 保留 paperSeen：新会话只收「新」事件；仍在挂起的审批卡由 paperPoll 补挂。
+    try { sessionStorage.removeItem(transcriptKey); } catch (e) {}
+    try { chatSession = "web-" + Math.random().toString(16).slice(2, 10); sessionStorage.setItem("quant-chat-session", chatSession); } catch (e) {}
+    transcriptKey = "quant-chat-log:" + chatSession;
+    transcript = [];
+    setBotMood("idle");
+    input.value = "";
+    setSendState();
+    input.focus();
+  }
+  document.getElementById("new-chat").addEventListener("click", startNewChat);
+  document.addEventListener("keydown", function(e) {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      startNewChat();
+    }
+  });
 
   // ── 虚拟盘事件入聊天流（Grok Bot 模式：审批卡 + 事件通知主动找你）──────────
   var paperSeen = { orders: {}, fills: {}, sessionDone: {} };
-  function chatCard(el) { thread.appendChild(el); thread.scrollTop = thread.scrollHeight; }
+  function chatCard(el) { ensureThread(); thread.appendChild(el); thread.scrollTop = thread.scrollHeight; }
   function chatNote(text, cls) {
     var n = document.createElement("div");
     n.className = "chat-note " + (cls || "");
@@ -494,14 +648,35 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     ok.className = "sendbtn"; ok.style.padding = "7px 14px"; ok.textContent = "Approve";
     var no = document.createElement("button");
     no.className = "sendbtn btn-ghost"; no.style.padding = "7px 14px"; no.style.marginLeft = "8px"; no.textContent = "Deny";
-    ok.addEventListener("click", function() {
-      fetch("/api/paper/session/" + sessionId + "/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, approvedBy: "chat-operator" }) });
-      markCardResolved(key, { orderId: order.orderId, status: "filled", approvedBy: "chat-operator" });
-    });
-    no.addEventListener("click", function() {
-      fetch("/api/paper/session/" + sessionId + "/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.orderId, reason: "chat-operator denied" }) });
-      markCardResolved(key, { orderId: order.orderId, status: "rejected" });
-    });
+    function decide(decision) {
+      ok.disabled = true; no.disabled = true;
+      var endpoint = decision === "approve" ? "approve" : "reject";
+      var payload = decision === "approve"
+        ? { orderId: order.orderId, approvedBy: "chat-operator" }
+        : { orderId: order.orderId, reason: "chat-operator denied" };
+      fetch("/api/paper/session/" + sessionId + "/" + endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+        .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }).catch(function(){ return { status: r.status, body: {} }; }); })
+        .then(function(resp) {
+          if (resp.status === 200 && resp.body && resp.body.ok) {
+            markCardResolved(key, decision === "approve" ? { status: "filled", approvedBy: "chat-operator" } : { status: "rejected" });
+            return;
+          }
+          ok.disabled = false; no.disabled = false;
+          var note = document.createElement("div");
+          note.className = "chat-hint";
+          note.textContent = "操作未生效（" + ((resp.body && resp.body.code) || ("HTTP " + resp.status)) + "）：订单可能已被处理或会话已结束。";
+          card.appendChild(note);
+        })
+        .catch(function(err) {
+          ok.disabled = false; no.disabled = false;
+          var note = document.createElement("div");
+          note.className = "chat-hint";
+          note.textContent = "操作失败：" + err.message;
+          card.appendChild(note);
+        });
+    }
+    ok.addEventListener("click", function() { decide("approve"); });
+    no.addEventListener("click", function() { decide("reject"); });
     btns.appendChild(ok); btns.appendChild(no);
     card.appendChild(title); card.appendChild(body); card.appendChild(risk); card.appendChild(btns);
     return card;
@@ -518,6 +693,9 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
           paperSeen.orders[key] = order.status;
           if (order.status === "pending") chatCard(approvalCardElement(s.id, key, order));
           else chatNote("虚拟盘意图 " + order.orderId + "（" + s.id + "）" + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + " → " + order.status, order.status === "filled" ? "fill" : "reject");
+        } else if (order.status === "pending" && paperSeen.orders[key] === "pending" && !thread.querySelector('.approval-card[data-order="' + key + '"]')) {
+          // 新会话清空 DOM 后，仍挂起的审批卡补挂一次（已处理的历史不重放）。
+          chatCard(approvalCardElement(s.id, key, order));
         } else if (paperSeen.orders[key] === "pending" && order.status !== "pending") {
           paperSeen.orders[key] = order.status;
           markCardResolved(key, order);
@@ -554,16 +732,16 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     for (var g = 0; g <= 4; g++) {
       var gy = pad + g * (h - pad * 2) / 4;
       var gv = (max - span * g / 4);
-      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(255,255,255,.06)"/>' +
-              '<text x="'+(pad-6)+'" y="'+(gy+4).toFixed(1)+'" fill="#6f6f6f" font-size="10" text-anchor="end">'+Math.round(gv).toLocaleString()+'</text>';
+      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(0,0,0,.07)"/>' +
+              '<text x="'+(pad-6)+'" y="'+(gy+4).toFixed(1)+'" fill="#8e8e93" font-size="10" text-anchor="end">'+Math.round(gv).toLocaleString()+'</text>';
     }
     container.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">' + grid +
-      '<path d="'+path(b)+'" fill="none" stroke="#6f6f6f" stroke-width="1.5"/>' +
-      '<path d="'+path(a)+'" fill="none" stroke="#8b5cf6" stroke-width="2"/>' +
-      '<text x="'+pad+'" y="'+(pad-12)+'" fill="#8b5cf6" font-size="11">paper (all-approved) '+Math.round(a[a.length-1].equity).toLocaleString()+'</text>' +
-      '<text x="'+(pad+230)+'" y="'+(pad-12)+'" fill="#6f6f6f" font-size="11">backtest '+Math.round(b[b.length-1].equity).toLocaleString()+'</text>' +
-      '<text x="'+pad+'" y="'+(h-8)+'" fill="#6f6f6f" font-size="10">'+a[0].date+'</text>' +
-      '<text x="'+(w-pad)+'" y="'+(h-8)+'" fill="#6f6f6f" font-size="10" text-anchor="end">'+a[a.length-1].date+'</text>' +
+      '<path d="'+path(b)+'" fill="none" stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="5 4"/>' +
+      '<path d="'+path(a)+'" fill="none" stroke="#3b82f6" stroke-width="2"/>' +
+      '<text x="'+pad+'" y="'+(pad-12)+'" fill="#3b82f6" font-size="11">paper (all-approved) '+Math.round(a[a.length-1].equity).toLocaleString()+'</text>' +
+      '<text x="'+(pad+230)+'" y="'+(pad-12)+'" fill="#8e8e93" font-size="11">backtest '+Math.round(b[b.length-1].equity).toLocaleString()+'</text>' +
+      '<text x="'+pad+'" y="'+(h-8)+'" fill="#8e8e93" font-size="10">'+a[0].date+'</text>' +
+      '<text x="'+(w-pad)+'" y="'+(h-8)+'" fill="#8e8e93" font-size="10" text-anchor="end">'+a[a.length-1].date+'</text>' +
       '</svg>';
   }
   renderEquityChart();
