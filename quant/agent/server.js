@@ -331,7 +331,14 @@ export function createQuantConsoleServer(options = {}) {
           "X-Content-Type-Options": "nosniff",
           "Connection": "keep-alive"
         });
-        const writeEvent = payload => { if (!closed) res.write(`data: ${JSON.stringify(payload)}\n\n`); };
+        const writeEvent = payload => {
+          // 断连/超时竞态：连接已结束（closed/writableEnded/destroyed）时绝不再写，
+          // 否则 ERR_STREAM_WRITE_AFTER_END 会击穿进程。超时 race 落败后 askQuantStream
+          // 仍会继续 onEvent——这里必须静默丢弃。
+          if (closed || res.writableEnded || res.destroyed) return;
+          try { res.write(`data: ${JSON.stringify(payload)}\n\n`); }
+          catch { closed = true; }
+        };
         try {
           await withTimeout(
             assistant.askQuantStream({
@@ -352,7 +359,8 @@ export function createQuantConsoleServer(options = {}) {
           if (error?.code === "ASK_TIMEOUT") upstream.abort();
           writeEvent({ type: "done", result: { ok: false, harnessStatus: "unavailable", code: error?.code || "STREAM_ERROR", answer: "", toolCalls: [], steps: 0, citations: [], usage: null, sessionId: null, agentVersion: AGENT_VERSION, model: client.model, note: "流式请求失败：" + String(error?.message || error) } });
         }
-        return res.end();
+        if (!closed && !res.writableEnded && !res.destroyed) { try { res.end(); } catch { closed = true; } }
+        return;
       }
 
       return send(404, { ok: false, code: "NOT_FOUND", error: "unknown path" });

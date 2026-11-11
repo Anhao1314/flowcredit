@@ -67,25 +67,45 @@ const html = `<!DOCTYPE html>
 <style>
 :root{
   --bg:#fafafa; --sidebar:#f5f5f6; --card:#fff; --card2:#f7f7f8;
-  --border:#e8e8ec; --text:#1d1d1f; --muted:#8e8e93; --faint:#b0b0b5;
+  --border:#e8e8ec; --text:#1d1d1f; --muted:#6e6e73; --faint:#8e8e93;
   --accent:#3b82f6; --accent-soft:#eef3ff;
   --good:#34a853; --bad:#e5484d; --warn:#f5a623;
   --radius:16px;
   --shadow:0 1px 2px rgba(0,0,0,.04);
   --shadow-lg:0 14px 44px rgba(0,0,0,.10);
+  --track:#e9e9ec; --hover:rgba(0,0,0,.045); --user-bubble:#f1f1f3;
+}
+/* 深色：跟随系统；:root.dark 供手动预览/未来主题切换复用 */
+:root.dark{
+  --bg:#161617; --sidebar:#1c1c1e; --card:#232325; --card2:#2a2a2c;
+  --border:#333338; --text:#f5f5f7; --muted:#a1a1a6; --faint:#7c7c81;
+  --accent:#4f8ef7; --accent-soft:rgba(79,142,247,.16);
+  --shadow:0 1px 2px rgba(0,0,0,.30);
+  --shadow-lg:0 14px 44px rgba(0,0,0,.50);
+  --track:#2c2c2e; --hover:rgba(255,255,255,.06); --user-bubble:#2c2c2e;
+}
+@media (prefers-color-scheme: dark){
+  :root:not(.light){
+    --bg:#161617; --sidebar:#1c1c1e; --card:#232325; --card2:#2a2a2c;
+    --border:#333338; --text:#f5f5f7; --muted:#a1a1a6; --faint:#7c7c81;
+    --accent:#4f8ef7; --accent-soft:rgba(79,142,247,.16);
+    --shadow:0 1px 2px rgba(0,0,0,.30);
+    --shadow-lg:0 14px 44px rgba(0,0,0,.50);
+    --track:#2c2c2e; --hover:rgba(255,255,255,.06); --user-bubble:#2c2c2e;
+  }
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.55;display:flex;min-height:100vh}
 .sidebar{width:252px;background:var(--sidebar);border-right:1px solid var(--border);padding:14px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:3px}
 .brand{font-weight:650;font-size:15px;letter-spacing:.1px;padding:4px 10px 14px;display:flex;align-items:center;gap:9px}
 .brand .dot{display:none}
-.segmented{display:flex;background:#e9e9ec;border-radius:12px;padding:3px;gap:3px;margin:0 4px 8px}
-.seg-btn{flex:1;border:none;background:transparent;color:#6e6e73;font-size:12.5px;font-weight:500;padding:7px 10px;border-radius:9px;cursor:pointer}
-.seg-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.09);font-weight:600}
-.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:#3c3c43;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13.5px}
-.nav-btn:hover{background:rgba(0,0,0,.045)}
-.nav-btn.active{background:#e9e9ec;font-weight:550}
-.nav-btn svg{width:17px;height:17px;stroke:#6e6e73;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.segmented{display:flex;background:var(--track);border-radius:12px;padding:3px;gap:3px;margin:0 4px 8px}
+.seg-btn{flex:1;border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:500;padding:7px 10px;border-radius:9px;cursor:pointer}
+.seg-btn.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.09);font-weight:600}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13.5px}
+.nav-btn:hover{background:var(--hover)}
+.nav-btn.active{background:var(--track);font-weight:550}
+.nav-btn svg{width:17px;height:17px;stroke:var(--muted);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .nav-btn .kbd{margin-left:auto;color:var(--faint);font-size:11px;font-weight:400}
 /* ── Bot 头像（参考：蓝色圆脸+白椭圆眼；实时动态状态机）──────────────────*/
 .bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 3px 8px rgba(61,125,255,.28))}
@@ -104,7 +124,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 @keyframes avatar-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .sidebar-group{font-size:11px;color:var(--muted);padding:14px 10px 4px;font-weight:500}
 .sidebar-footer{margin-top:auto;padding:10px 8px 4px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px}
-.sidebar-footer .meta{font-size:10px;color:var(--faint);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:118px}
+.sidebar-footer .meta{font-size:10px;color:var(--muted);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:118px}
 .sidebar-footer .pill{margin-left:auto;font-size:10px;border:1px solid var(--border);border-radius:999px;padding:1px 8px;color:var(--muted);background:#fff}
 main{flex:1;padding:24px 32px 44px;display:flex;flex-direction:column;min-width:0;max-width:1120px;margin:0 auto}
 .topbar{margin-bottom:20px}
@@ -123,7 +143,7 @@ body[data-view="chat"] .topbar{display:none}
 .metric-sub{font-size:11px;color:var(--faint);margin-top:2px}
 .metric.good .metric-value{color:var(--good)}
 .metric.bad .metric-value{color:var(--bad)}
-.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:#fff}
+.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--card)}
 .badge-accent{color:var(--accent);border-color:rgba(59,130,246,.35);background:var(--accent-soft)}
 .badge-good{color:var(--good);border-color:rgba(52,168,83,.35);background:rgba(52,168,83,.08)}
 .badge-bad{color:var(--bad);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.07)}
@@ -139,7 +159,7 @@ body[data-view="chat"] .topbar{display:none}
 .callout{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;padding:12px 16px;margin:14px 0;font-size:13px}
 .callout.warn{border-left-color:var(--warn);background:rgba(245,166,35,.08)}
 .callout.good{border-left-color:var(--good);background:rgba(52,168,83,.07)}
-pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:#3c3c43}
+pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:auto;color:var(--text)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
@@ -152,46 +172,59 @@ body[data-view="chat"] .footer{display:none}
 .wordmark{font-size:40px;font-weight:800;letter-spacing:-1.1px;display:flex;align-items:center;gap:7px;line-height:1}
 .wordmark .dot-blue{width:13px;height:13px;border-radius:50%;background:var(--accent);align-self:flex-start;margin-top:7px}
 .wordmark-sub{color:var(--muted);font-size:13px}
-.chat-thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:8px 4px 12px}
+.chat-thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:8px 4px 12px;max-width:820px;margin:0 auto;width:100%}
 .msg{max-width:78%;border-radius:18px;padding:10px 14px;white-space:pre-wrap;font-size:14px}
-.msg.user{align-self:flex-end;background:#f1f1f3;color:var(--text)}
+.msg.user{align-self:flex-end;background:var(--user-bubble);color:var(--text)}
 .msg.assistant{align-self:flex-start;background:transparent;padding:6px 0}
-.msg .meta{font-size:10.5px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg .meta{font-size:10.5px;color:var(--muted);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .msg b{font-weight:600}
 .msg code{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:1px 5px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg .li{display:flex;gap:7px;margin:2px 0}
 .msg .li::before{content:"•";color:var(--muted);flex-shrink:0}
+.msg .oli{display:flex;gap:7px;margin:2px 0}
+.msg .oli .n{color:var(--muted);flex-shrink:0;min-width:18px}
+.msg .md-h2{font-weight:650;font-size:15px;margin:8px 0 2px}
+.msg .md-h3{font-weight:600;font-size:14px;margin:6px 0 2px}
+.msg .md-h4{font-weight:600;margin:5px 0 2px}
+.msg .md-ul,.msg .md-ol{margin:2px 0}
+.msg .md-code{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:6px 0;overflow-x:auto}
+.msg .md-code code{background:none;border:none;padding:0;font-size:12px;line-height:1.5;white-space:pre;display:block}
+.msg .md-table-wrap{overflow-x:auto;margin:6px 0}
+.msg table{border-collapse:collapse;font-size:12.5px;margin:0;width:100%}
+.msg th{border-bottom:1px solid var(--border);text-align:left;padding:4px 9px;font-weight:600;color:var(--muted);white-space:nowrap}
+.msg td{border-bottom:1px solid var(--border);padding:4px 9px;vertical-align:top}
 .composer{background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow-lg);padding:12px 14px 10px;margin:8px auto 0;width:100%;max-width:820px}
 .composer textarea{width:100%;border:none;outline:none;resize:none;background:transparent;color:var(--text);font:inherit;font-size:14px;min-height:46px}
 .composer textarea::placeholder{color:var(--faint)}
 .composer-row{display:flex;align-items:center;gap:10px;margin-top:6px}
 .consent-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--card2);border:1px solid var(--border);border-radius:999px;padding:5px 11px;cursor:pointer}
 .consent-pill input{accent-color:var(--accent);margin:0}
-.model-label{margin-left:auto;font-size:12px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.model-label{margin-left:auto;font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .send-circle{width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.send-circle:disabled{background:#e5e5e8;color:#b0b0b5;cursor:not-allowed}
+.send-circle:disabled{background:var(--track);color:var(--faint);cursor:not-allowed}
 .quick-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px auto 0;max-width:820px;width:100%}
-.quick-chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:7px 14px;font-size:12.5px;color:#3c3c43;cursor:pointer;box-shadow:var(--shadow)}
+.chat-shell.has-messages .quick-chips{display:none}
+.quick-chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:7px 14px;font-size:12.5px;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
 .quick-chip:hover{background:var(--card2)}
-.sendbtn{background:var(--text);border:none;color:#fff;border-radius:999px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
+.sendbtn{background:var(--text);border:none;color:var(--bg);border-radius:999px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
 .sendbtn:disabled{opacity:.45;cursor:not-allowed}
-.sendbtn.btn-ghost{background:#fff;color:var(--text);border:1px solid var(--border);font-weight:400}
-.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:16px;background:#fff;padding:12px 14px;max-width:78%;box-shadow:var(--shadow)}
+.sendbtn.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border);font-weight:400}
+.approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:16px;background:var(--card);padding:12px 14px;max-width:78%;box-shadow:var(--shadow)}
 .approval-card.resolved{border-left-color:var(--good);opacity:.92}
 .approval-card .risk{font-size:10.5px;color:#b7791f;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:12px;padding:7px 12px;background:#fff;max-width:78%}
+.chat-note{align-self:flex-start;font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:12px;padding:7px 12px;background:var(--card);max-width:78%}
 .chat-note.fill{border-left:3px solid var(--good)}
 .chat-note.reject{border-left:3px solid var(--bad)}
-.chat-hint{font-size:11.5px;color:var(--faint);margin:10px auto 0;max-width:820px;width:100%}
+.chat-hint{font-size:11.5px;color:var(--muted);margin:10px auto 0;max-width:820px;width:100%}
 /* ── P1：历史会话列表 / 流式光标 / 重试芯片 ──────────────────────────────── */
 .history-list{display:flex;flex-direction:column;gap:2px;max-height:184px;overflow:auto;margin:0 2px 4px}
 .history-item{display:flex;align-items:center;gap:6px;border-radius:10px;padding:4px 6px 4px 8px}
-.history-item:hover{background:rgba(0,0,0,.04)}
-.history-item.active{background:#e9e9ec}
-.history-open{flex:1;min-width:0;background:none;border:none;text-align:left;font-size:12.5px;color:#3c3c43;cursor:pointer;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-item:hover{background:var(--hover)}
+.history-item.active{background:var(--track)}
+.history-open{flex:1;min-width:0;background:none;border:none;text-align:left;font-size:12.5px;color:var(--text);cursor:pointer;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .history-item.active .history-open{font-weight:550}
-.history-time{font-size:10px;color:var(--faint);flex-shrink:0}
+.history-time{font-size:10px;color:var(--muted);flex-shrink:0}
 .history-del{border:none;background:none;color:var(--faint);font-size:11px;cursor:pointer;padding:2px 5px;border-radius:6px;visibility:hidden;flex-shrink:0}
 .history-item:hover .history-del{visibility:visible}
 .history-del:hover{color:var(--bad);background:rgba(229,72,77,.08)}
@@ -199,7 +232,7 @@ body[data-view="chat"] .footer{display:none}
 .streaming-text::after{content:"▍";color:var(--accent);margin-left:2px;animation:caret-blink 1s steps(2,start) infinite}
 @keyframes caret-blink{50%{opacity:0}}
 .retry-row{display:flex}
-.retry-chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 14px;font-size:12.5px;color:#3c3c43;cursor:pointer;box-shadow:var(--shadow)}
+.retry-chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:6px 14px;font-size:12.5px;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
 .retry-chip:hover{background:var(--card2)}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:200px}}
 </style>
@@ -461,25 +494,82 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   document.getElementById("bot-avatar-header").innerHTML = botAvatarSVG(30, "idle", true);
 
   function ensureThread() {
+    var shell = thread.closest(".chat-shell");
+    if (shell) shell.classList.add("has-messages"); // 有消息后收起快捷芯片（Kimi 式空态限定）
     var empty = document.getElementById("chat-empty");
     if (empty && empty.style.display !== "none") empty.style.display = "none";
     if (thread.style.display === "none") thread.style.display = "flex";
   }
   function formatInline(s) {
-    return s.replace(/^#{1,4}\\s+(.*)$/, "<b>$1</b>")
-      .replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>")
+    return s.replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>")
       .replace(/\\x60([^\\x60]+)\\x60/g, "<code>$1</code>");
   }
-  function formatText(text) {
-    // 先整体转义，再套用最小 markdown（粗体/行内代码/列表）；不引入任何外部渲染库。
-    var esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    var out = [];
-    esc.split("\\n").forEach(function(line) {
-      var item = line.match(/^\\s*[-*]\\s+(.*)$/);
-      if (item) { out.push('<div class="li"><span>' + formatInline(item[1]) + "</span></div>"); return; }
-      if (line.trim() === "") { out.push('<div style="height:6px"></div>'); return; }
-      out.push("<div>" + formatInline(line) + "</div>");
+  function splitRow(line) {
+    return line.trim().replace(/^\\|/, "").replace(/\\|$/, "").split("|").map(function(cell) { return cell.trim(); });
+  }
+  function buildTable(header, rows) {
+    var html = '<div class="md-table-wrap"><table><thead><tr>';
+    header.forEach(function(cell) { html += "<th>" + formatInline(cell) + "</th>"; });
+    html += "</tr></thead><tbody>";
+    rows.forEach(function(row) {
+      html += "<tr>";
+      for (var i = 0; i < header.length; i++) html += "<td>" + formatInline(row[i] || "") + "</td>";
+      html += "</tr>";
     });
+    return html + "</tbody></table></div>";
+  }
+  function formatText(text) {
+    // 先整体转义，再做块级解析（围栏代码/表格/标题/有序无序列表）；不引入任何外部渲染库。
+    var esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    var lines = esc.split("\\n");
+    var out = [];
+    var i = 0;
+    var inCode = false;
+    var codeBuf = [];
+    while (i < lines.length) {
+      var line = lines[i];
+      if (/^\\s*\\x60\\x60\\x60/.test(line)) { // 围栏开关（三反引号围栏，语言标注忽略）
+        if (!inCode) { inCode = true; codeBuf = []; }
+        else { out.push('<div class="md-code"><code>' + codeBuf.join("\\n") + "</code></div>"); inCode = false; }
+        i += 1;
+        continue;
+      }
+      if (inCode) { codeBuf.push(line); i += 1; continue; }
+      if (/^\\s*\\|/.test(line) && i + 1 < lines.length && /^\\s*\\|[\\s:|-]+\\|?\\s*$/.test(lines[i + 1])) { // 表头+分隔行
+        var header = splitRow(line);
+        i += 2;
+        var rows = [];
+        while (i < lines.length && /^\\s*\\|/.test(lines[i])) { rows.push(splitRow(lines[i])); i += 1; }
+        out.push(buildTable(header, rows));
+        continue;
+      }
+      var heading = line.match(/^\\s*(#{1,4})\\s+(.*)$/);
+      if (heading) { out.push('<div class="md-h' + heading[1].length + '">' + formatInline(heading[2]) + "</div>"); i += 1; continue; }
+      if (/^\\s*[-*]\\s+/.test(line)) {
+        out.push('<div class="md-ul">');
+        while (i < lines.length && /^\\s*[-*]\\s+/.test(lines[i])) {
+          var item = lines[i].match(/^\\s*[-*]\\s+(.*)$/);
+          out.push('<div class="li"><span>' + formatInline(item[1]) + "</span></div>");
+          i += 1;
+        }
+        out.push("</div>");
+        continue;
+      }
+      if (/^\\s*\\d+[.、)]\\s+/.test(line)) {
+        out.push('<div class="md-ol">');
+        while (i < lines.length && /^\\s*\\d+[.、)]\\s+/.test(lines[i])) {
+          var numbered = lines[i].match(/^\\s*(\\d+)[.、)]\\s+(.*)$/);
+          out.push('<div class="oli"><span class="n">' + numbered[1] + ".</span><span>" + formatInline(numbered[2]) + "</span></div>");
+          i += 1;
+        }
+        out.push("</div>");
+        continue;
+      }
+      if (line.trim() === "") { out.push('<div style="height:6px"></div>'); i += 1; continue; }
+      out.push("<div>" + formatInline(line) + "</div>");
+      i += 1;
+    }
+    if (inCode && codeBuf.length) out.push('<div class="md-code"><code>' + codeBuf.join("\\n") + "</code></div>");
     return out.join("");
   }
   // ── 可见历史（localStorage 历史列表 + 当前会话记录；只存已渲染的问答，不存 paper 卡片）──
@@ -811,6 +901,8 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   }
   function loadSessionIntoThread(entries) {
     thread.innerHTML = "";
+    var shell = thread.closest(".chat-shell");
+    if (shell) shell.classList.toggle("has-messages", entries.length > 0);
     if (entries.length) {
       thread.style.display = "flex";
       document.getElementById("chat-empty").style.display = "none";
@@ -844,6 +936,8 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     if (streaming && streaming.requestSession === chatSession) streaming.controller.abort();
     thread.innerHTML = "";
     thread.style.display = "none";
+    var shell = thread.closest(".chat-shell");
+    if (shell) shell.classList.remove("has-messages");
     var empty = document.getElementById("chat-empty");
     if (empty) empty.style.display = "flex";
     // 保留 paperSeen：新会话只收「新」事件；仍在挂起的审批卡由 paperPoll 补挂。
@@ -989,7 +1083,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     for (var g = 0; g <= 4; g++) {
       var gy = pad + g * (h - pad * 2) / 4;
       var gv = (max - span * g / 4);
-      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(0,0,0,.07)"/>' +
+      grid += '<line x1="'+pad+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad)+'" y2="'+gy.toFixed(1)+'" stroke="rgba(128,128,128,.20)"/>' +
               '<text x="'+(pad-6)+'" y="'+(gy+4).toFixed(1)+'" fill="#8e8e93" font-size="10" text-anchor="end">'+Math.round(gv).toLocaleString()+'</text>';
     }
     container.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto">' + grid +

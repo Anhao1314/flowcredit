@@ -158,4 +158,35 @@ test("server SSE endpoint: auth and rate limit still apply", async () => {
   await new Promise(resolve => server.close(resolve));
 });
 
+test("server SSE endpoint: late model events after timeout must not crash the process", async () => {
+  // 模型流 t=0 吐一帧、t≈6s 再吐一帧；ASK_TIMEOUT=5s 时服务端已 end——
+  // 落败的 askQuantStream 在 t≈6s 继续发 delta，write-after-end 必须被丢弃而不是崩进程。
+  const encoder = new TextEncoder();
+  const stalledTransport = async () => ({
+    ok: true, status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: "partial " } }] }) + '\\n\\n'));
+        setTimeout(() => {
+          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: "late" } }] }) + '\\n\\n')); } catch { /* 流已关闭 */ }
+        }, 6000);
+      }
+    })
+  });
+  const server = createQuantConsoleServer({
+    apiKey: "sk-test", transport: stalledTransport,
+    env: { CONSOLE_ASK_TIMEOUT_MS: "5000", DEEPSEEK_API_KEY: "sk-test" }
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const response = await fetch(`${base}/api/agent/ask/stream`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: "q", modelConsent: true }) });
+  assert.equal(response.status, 200);
+  const text = await response.text();
+  assert.match(text, /ASK_TIMEOUT/, "超时必须以 done 帧收尾");
+  await new Promise(resolve => setTimeout(resolve, 2500)); // 越过 t≈6s 的迟到帧
+  const health = await fetch(`${base}/api/health`);
+  assert.equal(health.status, 200, "进程必须存活（write-after-end 已被丢弃）");
+  await new Promise(resolve => server.close(resolve));
+});
+
 after(() => {}); // 服务器均已在各用例内关闭
