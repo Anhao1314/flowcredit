@@ -1,8 +1,8 @@
 {
   "artifactVersion": "quant-eval/v0.0.1",
-  "runDate": "2026-11-11T17:17:56.241Z",
+  "runDate": "2026-11-11T17:38:33.973Z",
   "dataVersion": "quant-dataset/v0.0.1",
-  "gitCommit": "02680c411d41955f96ccd43c08635f5c6b17f2ce",
+  "gitCommit": "66f8ee53c1107faf970293a2af7fd6eac519cac8",
   "MODEL": "NOT_RUN",
   "seed": 20261102,
   "offline": true,

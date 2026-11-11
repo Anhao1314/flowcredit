@@ -34,29 +34,54 @@ const metricCard = (label, value, sub, kind = "") => `<div class="metric ${kind}
 
 function pipelineCard(ds) {
   const p = ds.pipeline;
-  const guardKind = p.guardStatus === "halt" ? "bad" : "good";
-  const decisionKind = p.decisionStatus === "blocked" ? "bad" : "good";
+  const guardTone = p.guardStatus === "halt" ? "bad" : "good";
+  const decisionTone = p.decisionStatus === "blocked" ? "bad" : "good";
+  const ddTone = Number(p.signals.maxDrawdownPct) > 25 ? "warn" : "";
   const natureBadge = ds.nature === "real_market_data" ? badge("REAL · " + (ds.source || "").split(":")[0].toUpperCase(), "accent") : badge("SYNTHETIC", "muted");
   return `<div class="card">
-    <div class="card-head"><div><div class="eyebrow">${esc(ds.dataVersion)}</div><h2>${ds.nature === "real_market_data" ? "真实市场数据" : "合成夹具"}</h2></div>${natureBadge}</div>
-    <div class="metrics">
-      ${metricCard("Rows", ds.rows, `${ds.span[0]} .. ${ds.span[1]}`)}
-      ${metricCard("Signal Score", fmt(p.signalScore), "三分量合成分 0-100")}
-      ${metricCard("Guard", p.guardStatus.toUpperCase(), p.guardStatus === "halt" ? "breach: DRAWDOWN_LIMIT_EXCEEDED" : "no breach", guardKind)}
-      ${metricCard("Decision", p.decisionStatus.toUpperCase(), p.guardStatus === "halt" ? "回撤超 25% 冻结限额" : "eligible for review", decisionKind)}
-      ${metricCard("Max Drawdown", fmt(p.signals.maxDrawdownPct, 2) + "%", "限额 25%")}
+    <div class="card-head"><div><div class="eyebrow">${esc(ds.dataVersion)} · ${ds.rows} rows · ${esc(ds.span[0])} .. ${esc(ds.span[1])}</div><h2>${ds.nature === "real_market_data" ? "真实市场数据" : "合成夹具（对照）"}</h2></div>${natureBadge}</div>
+    <div class="tiles">
+      ${tile("Signal Score", fmt(p.signalScore), "三分量合成分 0-100")}
+      ${tile("Guard", p.guardStatus.toUpperCase(), p.guardStatus === "halt" ? "breach: DRAWDOWN_LIMIT_EXCEEDED" : "no breach", guardTone)}
+      ${tile("Decision", p.decisionStatus.toUpperCase(), p.guardStatus === "halt" ? "机器先于人说不" : "eligible for review", decisionTone)}
+      ${tile("Max Drawdown", fmt(p.signals.maxDrawdownPct, 2) + "%", "冻结限额 25%", ddTone)}
     </div>
-    <div class="chips">${badge("evalRunId " + p.evalRunId, "mono")}${badge("fp " + p.signalFingerprint, "mono")}</div>
+    <div class="chips">${badge("evalRunId " + p.evalRunId, "mono")}${badge("fp " + p.signalFingerprint, "mono")}${badge("权威输出 · 可反查", "muted")}</div>
   </div>`;
 }
 
 function rulesTable(result) {
-  const head = `<tr><th>Trial</th><th>Rule</th><th>pp-Sharpe</th><th>年化</th><th>IS</th><th>OOS</th><th>换手</th><th>MaxDD</th></tr>`;
+  const head = `<tr><th>Trial</th><th>Rule</th><th class="num">pp-Sharpe</th><th class="num">年化</th><th class="num">IS</th><th class="num">OOS</th><th class="num">换手</th><th class="num">MaxDD</th></tr>`;
   const rows = result.rows.map(row => {
     const selected = row.trialId === result.best.trialId ? " selected" : "";
-    return `<tr class="${selected.trim()}"><td class="mono">${esc(row.trialId)}${row.trialId === result.best.trialId ? ' <span class="badge badge-accent">BEST</span>' : ""}</td><td class="mono">${esc(row.ruleId || "legacy-composite")}</td><td>${fmt(row.sharpePerPeriod)}</td><td>${fmt(row.sharpeAnnualized)}</td><td>${fmt(row.isSharpePerPeriod)}</td><td>${fmt(row.oosSharpePerPeriod)}</td><td>${fmt(row.turnover)}</td><td>${fmt(row.maxDrawdownPct, 2)}%</td></tr>`;
+    return `<tr class="${selected.trim()}"><td class="mono">${esc(row.trialId)}${row.trialId === result.best.trialId ? ' <span class="badge badge-accent">BEST</span>' : ""}</td><td class="mono">${esc(row.ruleId || "legacy-composite")}</td><td class="num">${fmt(row.sharpePerPeriod)}</td><td class="num">${fmt(row.sharpeAnnualized)}</td><td class="num">${fmt(row.isSharpePerPeriod)}</td><td class="num">${fmt(row.oosSharpePerPeriod)}</td><td class="num">${fmt(row.turnover)}</td><td class="num">${fmt(row.maxDrawdownPct, 2)}%</td></tr>`;
   }).join("");
-  return `<table class="tbl"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  return `<table class="data-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── F7 仪表盘组件 helpers（裁决报告语言；全部静态事实，展示层不判定）────────
+const tile = (label, value, sub, tone = "") => `<div class="tile ${tone ? "tone-" + tone : ""}"><div class="tile-label">${esc(label)}</div><div class="tile-value">${esc(value)}</div>${sub ? `<div class="tile-sub">${esc(sub)}</div>` : ""}</div>`;
+const viewHead = (title, sub, badges = "") => `<div class="view-head"><div><h1>${title}</h1><div class="sub">${sub}</div></div><div class="badges">${badges}</div></div>`; // title 由调用方传纯文本（含 & 直接写 &，不再 esc——避免二次转义）
+const banner = (tone, icon, htmlBody) => `<div class="banner ${tone}"><div class="icon">${icon}</div><div>${htmlBody}</div></div>`;
+
+// 系统全景与边界（行业七层 + 本仓库覆盖标记；事实来源 = README「在完整量化系统中的定位」，展示层只呈现不判定）
+function layerBand() {
+  const layers = [
+    { num: "①", name: "数据设施", state: "covered", stateText: "最小可用", note: "BTC 日线快照 + 质量门禁", view: "quality" },
+    { num: "②", name: "策略研究", state: "partial", stateText: "部分", note: "6 条冻结规则；LLM 提案未闭环", view: "rules" },
+    { num: "③", name: "回测方法论", state: "covered", stateText: "已覆盖", note: "净成本 + IS/OOS + DSR + N_eff", view: "dsr" },
+    { num: "④", name: "风险管理", state: "partial", stateText: "前半", note: "事前守卫 halt；事中/事后未做", view: "paper" },
+    { num: "⑤", name: "组合构建", state: "gap", stateText: "缺口", note: "单策略，无资金分配层", view: null },
+    { num: "⑥", name: "执行 EMS/OMS", state: "never", stateText: "永不进入", note: "禁令原文保留，测试锁死", view: null },
+    { num: "⑦", name: "监控运维", state: "gap", stateText: "缺口", note: "仅审计统计，无实时监控", view: "agent" },
+    { num: "⑧", name: "治理与审计", state: "covered", stateText: "已覆盖", note: "指纹 + 晋升门禁 + 哈希审计", view: "agent" }
+  ];
+  return `<div class="layer-band">` + layers.map(layer => {
+    const inner = `<span class="layer-num">${layer.num} LAYER</span><div class="layer-name">${esc(layer.name)}</div><span class="layer-state ${layer.state}">${esc(layer.stateText)}</span><div class="layer-note">${esc(layer.note)}</div>`;
+    return layer.view
+      ? `<button class="layer-cell" data-view="${layer.view}" title="查看证据 → ${layer.view}">${inner}</button>`
+      : `<div class="layer-cell nolink">${inner}</div>`;
+  }).join("") + `</div>`;
 }
 
 const checksRows = payload.eval ? payload.eval.checksTotal + " / " + payload.eval.checksPassed : "n/a";
@@ -167,6 +192,72 @@ pre{background:var(--card2);border:1px solid var(--border);border-radius:12px;pa
 .footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);color:var(--faint);font-size:11.5px;text-align:center}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:13px}
 .kv .k{color:var(--muted)}
+/* ── F7 仪表盘组件层（裁决报告语言：全景图/横幅/tile/步骤条/门禁清单）────── */
+body[data-view] .topbar{display:none}
+.view-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:4px 0 18px}
+.view-head h1{font-size:22px;font-weight:650;letter-spacing:-.2px}
+.view-head .sub{color:var(--muted);margin-top:4px;font-size:13px;max-width:660px}
+.view-head .badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px}
+.banner{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:14px;padding:13px 16px;margin-bottom:16px;font-size:13.5px;line-height:1.55}
+.banner .icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;color:#fff}
+.banner.bad{border-color:rgba(229,72,77,.4);background:rgba(229,72,77,.07)}
+.banner.bad .icon{background:var(--bad)}
+.banner.good{border-color:rgba(52,168,83,.4);background:rgba(52,168,83,.07)}
+.banner.good .icon{background:var(--good)}
+.banner.accent{border-color:rgba(59,130,246,.4);background:var(--accent-soft)}
+.banner.accent .icon{background:var(--accent)}
+.banner .b{font-weight:650}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px}
+.tile{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:14px;padding:13px 16px}
+.tile.tone-good{border-left-color:var(--good)}
+.tile.tone-bad{border-left-color:var(--bad)}
+.tile.tone-warn{border-left-color:var(--warn)}
+.tile.tone-accent{border-left-color:var(--accent)}
+.tile-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.tile-value{font-size:25px;font-weight:650;margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:-.3px}
+.tile.tone-good .tile-value{color:var(--good)}
+.tile.tone-bad .tile-value{color:var(--bad)}
+.tile.tone-warn .tile-value{color:#b7791f}
+.tile-sub{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.45}
+.layer-band{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-bottom:16px}
+@media (max-width:1100px){.layer-band{grid-template-columns:repeat(4,1fr)}}
+.layer-cell{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:9px 11px 8px;cursor:pointer;text-align:left;font:inherit;color:var(--text);display:block;width:100%}
+.layer-cell:hover{border-color:var(--accent)}
+.layer-cell.nolink{cursor:default}
+.layer-num{font-size:9.5px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.layer-name{font-size:12.5px;font-weight:600;margin-top:2px}
+.layer-state{font-size:10px;margin-top:5px;display:inline-block;padding:1px 7px;border-radius:999px}
+.layer-state.covered{color:var(--good);background:rgba(52,168,83,.1)}
+.layer-state.partial{color:#b7791f;background:rgba(245,166,35,.14)}
+.layer-state.gap{color:var(--muted);background:var(--card2)}
+.layer-state.never{color:var(--bad);background:rgba(229,72,77,.09)}
+.layer-note{font-size:10.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+.step-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.step{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 15px;position:relative}
+.step .n{position:absolute;top:-9px;left:14px;background:var(--accent);color:#fff;font-size:10px;border-radius:999px;padding:1px 9px;font-weight:600}
+.step .t{font-weight:600;font-size:13px;margin-top:5px}
+.step .d{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.gate-list{display:flex;flex-direction:column;gap:8px}
+.gate{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
+.gate .mark{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;margin-top:1px}
+.gate.ok .mark{background:rgba(52,168,83,.12);color:var(--good)}
+.gate.bad .mark{background:rgba(229,72,77,.1);color:var(--bad)}
+.gate .t{font-size:13px;font-weight:550}
+.gate .d{font-size:11.5px;color:var(--muted);margin-top:1px;line-height:1.5}
+details.card{padding:0}
+details.card summary{cursor:pointer;list-style:none;padding:15px 22px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary .eyebrow{margin-bottom:0}
+details.card[open] summary{border-bottom:1px solid var(--border)}
+details.card .card-body{padding:16px 22px}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{text-align:left;color:var(--muted);font-weight:550;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.data-table td{padding:11px 12px;border-bottom:1px solid var(--border)}
+.data-table tbody tr:last-child td{border-bottom:none}
+.data-table tbody tr:hover td{background:var(--card2)}
+.data-table tr.selected td{background:var(--accent-soft)}
+.data-table td.num{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.data-table th.num{text-align:right}
 /* ── Chat（Kimi 式：居中空态 + 悬浮输入卡 + 快捷芯片）────────────────── */
 .chat-shell{flex:1;display:flex;flex-direction:column;height:calc(100vh - 32px)}
 body[data-view="chat"] main{padding:16px 24px}
@@ -269,122 +360,163 @@ body[data-view="chat"] .footer{display:none}
   <div class="topbar"><h1 id="view-title">Chat</h1><div class="sub" id="view-sub">与有界 agent 对话 · 数字来自工具，引用可反查</div></div>
 
   <section class="view" data-view="overview">
+    ${viewHead("Overview", "裁决报告——数据验货 → 信号测量 → 守卫刹车 → DSR 裁决 → 人工门禁。点击下方系统全景任一格，查看该层的证据。", badge("basis " + payload.meta.metricsBasis, "mono") + badge("MODEL " + (payload.eval ? payload.eval.MODEL : "NOT_RUN"), "mono"))}
+    <div class="eyebrow" style="margin:0 0 8px 2px">系统全景与边界 · 行业七层（覆盖标记 = README 定位图事实）</div>
+    ${layerBand()}
+    ${banner("bad", "！", `真实数据上的权威判定：BTC 快照回撤 <b>${fmt(payload.datasets.v002.pipeline.signals.maxDrawdownPct, 2)}%</b> 超过 25% 冻结限额 → 守卫 <b>halt</b>，decisionStatus = <b>blocked</b>（breach: DRAWDOWN_LIMIT_EXCEEDED）。<b>机器先于人说不</b>——守卫解除并人工 review 之前，该策略集不进入任何下一环节。`)}
     <div class="grid2">
       ${pipelineCard(payload.datasets.v001)}
       ${pipelineCard(payload.datasets.v002)}
     </div>
-    <div class="callout good">真实数据上的权威判定：BTC 快照回撤 ${fmt(payload.datasets.v002.pipeline.signals.maxDrawdownPct, 2)}% 超过 25% 冻结限额 → 守卫 <b>halt</b>，decisionStatus = <b>blocked</b>（breach: DRAWDOWN_LIMIT_EXCEEDED）。机器先于人说不。</div>
+    <div class="callout warn"><b>诚实披露</b>：单资产 / 260 日 / 成本未校准 / 无显著性结论——本系统是"信任机制的完整验证"，不是赚钱工具；指标语义与冻结参数见 Rules / DSR 视图。</div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">LAST OFFLINE EVAL</div><h2>治理检查 ${esc(checksRows)} passed</h2></div>${payload.eval ? badge("MODEL " + payload.eval.MODEL, "muted") : ""}</div>
-      <div class="kv">
-        <div class="k">runDate</div><div class="mono">${payload.eval ? esc(payload.eval.runDate) : "n/a"}</div>
-        <div class="k">gitCommit</div><div class="mono">${payload.eval ? esc(payload.eval.gitCommit.slice(0, 12)) : "n/a"}</div>
-        <div class="k">failed checks</div><div>${payload.eval && payload.eval.failedChecks.length ? esc(payload.eval.failedChecks.join(", ")) : "none"}</div>
-      </div>
+      <div class="card-head"><div><div class="eyebrow">GOVERNANCE · 最近离线评估</div><h2>治理检查 ${esc(checksRows)} passed</h2></div>${payload.eval ? badge("MODEL " + payload.eval.MODEL, "muted") : ""}</div>
+      <table class="data-table"><tbody>
+        <tr><td style="color:var(--muted);width:180px">runDate</td><td class="num">${payload.eval ? esc(payload.eval.runDate) : "n/a"}</td></tr>
+        <tr><td style="color:var(--muted)">gitCommit</td><td class="num">${payload.eval ? esc(payload.eval.gitCommit.slice(0, 12)) : "n/a"}</td></tr>
+        <tr><td style="color:var(--muted)">failed checks</td><td class="num">${payload.eval && payload.eval.failedChecks.length ? esc(payload.eval.failedChecks.join(", ")) : "none"}</td></tr>
+      </tbody></table>
     </div>
   </section>
 
   <section class="view" data-view="rules">
+    ${viewHead("Rules & Trials", "候选人名单——6 条注册规则按净口径评测（成本 " + payload.meta.costModel.commissionBps + "+" + payload.meta.costModel.slippageBps + " bps）。BEST 由确定性回测选出，不是人工圈定；任何更替走晋升门禁。", badge("basis " + payload.meta.metricsBasis, "mono") + badge(esc(payload.trials.v002.trialsVersion), "mono"))}
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">quant-trials/${esc(payload.trials.v002.trialsVersion.split("/").pop())} · 真实 BTC · 净口径（成本 ${payload.meta.costModel.commissionBps}+${payload.meta.costModel.slippageBps} bps）</div><h2>规则网格 · 6 条注册规则</h2></div>${badge("basis " + payload.meta.metricsBasis, "mono")}</div>
+      <div class="card-head"><div><div class="eyebrow">CANDIDATES · 真实 BTC · 净口径</div><h2>规则网格 · 6 条注册规则</h2></div>${badge("IS/OOS 70/30", "mono")}</div>
       ${rulesTable(payload.trials.v002)}
-      <div class="chips">${badge("selected " + payload.trials.v002.best.trialId + " (" + (payload.trials.v002.best.ruleId || "") + ")", "accent")}</div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">LEGACY · 合成夹具 · 毛口径（superseded）</div><h2>v001 占位规则对照</h2></div>${badge("legacy", "muted")}</div>
-      ${rulesTable(payload.trials.v001)}
+      <div class="card-head"><div><div class="eyebrow">SELECTED · 确定性回测的选中者</div><h2>${esc(payload.trials.v002.best.trialId)}（${esc(payload.trials.v002.best.ruleId || "")}）</h2></div>${badge("BEST", "accent")}</div>
+      <div class="tiles">
+        ${tile("pp-Sharpe（未年化）", fmt(payload.trials.v002.rows.find(row => row.trialId === payload.trials.v002.best.trialId)?.sharpePerPeriod), "全样本净口径")}
+        ${tile("OOS Sharpe", fmt(payload.trials.v002.rows.find(row => row.trialId === payload.trials.v002.best.trialId)?.oosSharpePerPeriod), "样本外 30%（78 根）")}
+        ${tile("DSR（N_eff 口径）", fmt(payload.trials.v002.dsr?.dsr), "防作弊校正后", "good")}
+        ${tile("MaxDD", fmt(payload.trials.v002.rows.find(row => row.trialId === payload.trials.v002.best.trialId)?.maxDrawdownPct, 2) + "%", "守卫限额 25%", Number(payload.trials.v002.rows.find(row => row.trialId === payload.trials.v002.best.trialId)?.maxDrawdownPct) > 25 ? "bad" : "")}
+      </div>
+      <div class="chips">${badge("更替此规则 = bump trialsVersion + golden 重算 + 人工 review", "muted")}</div>
     </div>
+    <details class="card">
+      <summary><span><div class="eyebrow">LEGACY · 合成夹具 · 毛口径（superseded）</div></span><span class="badge">展开对照 ▾</span></summary>
+      <div class="card-body">
+        ${rulesTable(payload.trials.v001)}
+        <div class="chat-hint" style="margin-top:10px">v001 为阶段 0 的占位规则（毛口径、无成本模型），仅作回归对照；结论一律以 v002 净口径为准。</div>
+      </div>
+    </details>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">REGISTERED RULES</div><h2>规则定义（quant-rules/v0.0.2）</h2></div></div>
-      <table class="tbl"><thead><tr><th>ruleId</th><th>族</th><th>说明</th><th>冻结参数</th></tr></thead><tbody>
-        ${payload.rules.map(rule => `<tr><td class="mono">${esc(rule.ruleId)}</td><td>${esc(rule.family)}</td><td>${esc(rule.description)}</td><td class="mono">${esc(JSON.stringify(rule.params))}</td></tr>`).join("")}
+      <div class="card-head"><div><div class="eyebrow">REGISTERED RULES · quant-rules/v0.0.2</div><h2>规则定义（冻结参数）</h2></div>${badge("6 rules", "mono")}</div>
+      <table class="data-table"><thead><tr><th>ruleId</th><th>族</th><th>说明</th><th class="num">冻结参数</th></tr></thead><tbody>
+        ${payload.rules.map(rule => `<tr><td class="mono">${esc(rule.ruleId)}</td><td>${esc(rule.family)}</td><td>${esc(rule.description)}</td><td class="num">${esc(JSON.stringify(rule.params))}</td></tr>`).join("")}
       </tbody></table>
     </div>
   </section>
 
   <section class="view" data-view="dsr">
+    ${viewHead("DSR & Promotion", "防作弊裁决书——“试 100 次挑最走运那次”不算本事：DSR 对选优效应定量折减，有效 N 承认试验间相关性。公式已对照 SSRN 2460551 核实（Eq.1/2/6）。", badge("SR 未年化", "mono") + badge("γ=0.5772…", "mono"))}
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">DEFLATED SHARPE RATIO · 真实数据网格</div><h2>防作弊校正结果（双口径）</h2></div></div>
-      <div class="metrics">
-        ${metricCard("DSR (N_eff)", fmt(payload.trials.v002.dsr?.dsr), "N_eff=" + fmt(payload.trials.v002.effective?.effectiveTrials, 2) + "（A.3 主口径）")}
-        ${metricCard("DSR (名义 N)", fmt(payload.trials.v002.dsrNominal?.dsr), "N=" + (payload.trials.v002.dsrNominal?.trials?.count ?? "n/a") + "（旧口径对照）")}
-        ${metricCard("SR₀", fmt(payload.trials.v002.dsr?.sr0), "√V·maxZ（零假设式）")}
-        ${metricCard("n returns", payload.trials.v002.dsr?.n ?? "n/a", "选中 " + payload.trials.v002.best.trialId)}
-        ${metricCard("trials std", fmt(payload.trials.v002.dsr?.trials?.std), "6 组两两不同")}
+      <div class="card-head"><div><div class="eyebrow">ADJUDICATION PATH · 名义口径 → 有效 N → 修正后</div><h2>双口径裁决路径</h2></div>${badge("A.3 主口径", "accent")}</div>
+      <div class="step-flow">
+        <div class="step"><span class="n">STEP 1</span><div class="t">名义口径</div><div class="d">N=6 条 trials 全当独立 → DSR=<b>${fmt(payload.trials.v002.dsrNominal?.dsr)}</b>（过度折减，保守偏差）</div></div>
+        <div class="step"><span class="n">STEP 2</span><div class="t">测相关性（A.3）</div><div class="d">等权平均非对角相关 ρ̄=<b>${fmt(payload.trials.v002.effective?.averageCorrelation)}</b> → N_eff=M^(1−ρ̄)=<b>${fmt(payload.trials.v002.effective?.effectiveTrials, 2)}</b></div></div>
+        <div class="step"><span class="n">STEP 3</span><div class="t">修正后裁决</div><div class="d">DSR(N_eff)=<b>${fmt(payload.trials.v002.dsr?.dsr)}</b> ≥ 名义口径——过度折减被量化消除</div></div>
+        <div class="step"><span class="n">STEP 4</span><div class="t">诚实结论</div><div class="d">DSR∈(0,1)，选中 ${esc(payload.trials.v002.best.trialId)}；历史表现不构成未来预期</div></div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">DEFLATED SHARPE RATIO · 公式与出处</div><h2>裁决公式（已对照论文核实）</h2></div>${badge("SSRN 2460551", "mono")}</div>
       <pre>DSR   = Φ( (SR̂ − SR₀)·√(T−1) / √(1 − γ₃·SR̂ + ((γ₄−1)/4)·SR̂²) )      —— Eq.(2), SSRN 2460551
 SR₀   = √(V[{SR̂}]) · ( (1−γ)·Z⁻¹(1−1/N) + γ·Z⁻¹(1−1/(N·e)) )          —— Eq.(1)/(6)，零假设下无均值项
 N_eff = M^(1−ρ̄)，ρ̄ = 等权平均非对角相关（矩阵等长收益两两 Pearson）  —— A.3 Eq.(8)/(9)
 γ₄    = 原始峰度（正态=3；正态下分母退化为 Lo(2002) 的 1+SR²/2）
 SR̂, SR₀ 均为未年化 per-period 口径；2026-11-07 公式核实、2026-11-10 实现 A.3</pre>
+      <div class="chips">${badge("SR₀ " + fmt(payload.trials.v002.dsr?.sr0), "mono")}${badge("n " + (payload.trials.v002.dsr?.n ?? "n/a"), "mono")}${badge("trials std " + fmt(payload.trials.v002.dsr?.trials?.std), "mono")}${badge("6 组两两不同", "muted")}</div>
     </div>
-    <div class="callout good"><b>有效 N 已实现（论文 A.3）</b>：6 条规则两两平均相关 ρ̄=${fmt(payload.trials.v002.effective?.averageCorrelation)} → N_eff=M^(1−ρ̄)=<b>${fmt(payload.trials.v002.effective?.effectiveTrials, 2)}</b>（名义 6）。修正后 DSR 由名义口径 ${fmt(payload.trials.v002.dsrNominal?.dsr)} 提升至 <b>${fmt(payload.trials.v002.dsr?.dsr)}</b>——过度折减被量化。</div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">PROMOTION GATE</div><h2>人工 review 是硬门禁</h2></div></div>
-      <div class="kv">
-        <div class="k">① 版本</div><div>权重/阈值/规则/数据任何变更 → 文件名与常量升版本</div>
-        <div class="k">② golden</div><div>同步重算并冻结 golden（quant-rules / quant-metrics / dataset-v002 测试）</div>
-        <div class="k">③ 数据版本</div><div>dataVersion / trialsVersion bump（版本化契约）</div>
-        <div class="k">④ 人工批准</div><div>机器永不自我升格；CI 不代替人工批准</div>
+      <div class="card-head"><div><div class="eyebrow">PROMOTION GATE · 机器永不自我升格</div><h2>人工 review 是硬门禁</h2></div>${badge("不变式 3", "muted")}</div>
+      <div class="step-flow">
+        <div class="step"><span class="n">① 版本</span><div class="t">升版本</div><div class="d">权重/阈值/规则/数据任何变更 → 文件名与常量升版本</div></div>
+        <div class="step"><span class="n">② golden</span><div class="t">重算冻结</div><div class="d">同步重算并冻结 golden（quant-rules / quant-metrics / dataset-v002 测试）</div></div>
+        <div class="step"><span class="n">③ 数据版本</span><div class="t">版本契约</div><div class="d">dataVersion / trialsVersion bump（版本化契约）</div></div>
+        <div class="step"><span class="n">④ 人工</span><div class="t">签字批准</div><div class="d">机器永不自我升格；CI 不代替人工批准</div></div>
       </div>
     </div>
   </section>
 
   <section class="view" data-view="quality">
+    ${viewHead("Data Quality", "验货单——假数据 / 缺口 / 异常跳动在入库前拒收（任一 critical 即不落盘）。本快照实测 " + (payload.datasets.v002.quality.passed ? "PASS" : "REJECTED") + "。", badge("OKX · BTC-USDT · 1D", "accent") + badge("point-in-time", "mono"))}
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">quality-gates/v0.0.2 · 真实快照</div><h2>数据质量门禁：${payload.datasets.v002.quality.passed ? "PASS" : "REJECTED"}</h2></div>${badge("OKX · BTC-USDT · 1D", "accent")}</div>
-      <div class="metrics">
-        ${metricCard("Rows", payload.datasets.v002.quality.stats.rows, payload.datasets.v002.quality.stats.firstDate + " .. " + payload.datasets.v002.quality.stats.lastDate)}
-        ${metricCard("Max |move|", payload.datasets.v002.quality.stats.maxAbsMovePct + "%", "闸值 25%（crypto 放宽，冻结决定）")}
-        ${metricCard("Critical", payload.datasets.v002.quality.criticalCount, "findings 总数 " + payload.datasets.v002.quality.findings.length)}
-        ${metricCard("Close range", payload.datasets.v002.quality.stats.minClose + " ~ " + payload.datasets.v002.quality.stats.maxClose, "USD")}
+      <div class="card-head"><div><div class="eyebrow">INTAKE GATES · quality-gates/v0.0.2</div><h2>入库前验货：${payload.datasets.v002.quality.passed ? "PASS" : "REJECTED"}</h2></div>${payload.datasets.v002.quality.passed ? badge("PASS", "good") : badge("REJECTED", "bad")}</div>
+      <div class="gate-list">
+        <div class="gate ok"><span class="mark">✓</span><div><div class="t">日期严格升序且唯一</div><div class="d">无重复棒、无乱序；时间 = 数据棒日期（可回放）</div></div></div>
+        <div class="gate ok"><span class="mark">✓</span><div><div class="t">24/7 无日历缺口</div><div class="d">crypto 全周交易；日线序列不允许缺天</div></div></div>
+        <div class="gate ok"><span class="mark">✓</span><div><div class="t">close 正且有限</div><div class="d">${esc(String(payload.datasets.v002.quality.stats.minClose))} ~ ${esc(String(payload.datasets.v002.quality.stats.maxClose))} USD</div></div></div>
+        <div class="gate ${Number(payload.datasets.v002.quality.stats.maxAbsMovePct) > 25 ? "bad" : "ok"}"><span class="mark">${Number(payload.datasets.v002.quality.stats.maxAbsMovePct) > 25 ? "✗" : "✓"}</span><div><div class="t">单日 |变动| ≤ 25%</div><div class="d">实测最大 ${esc(String(payload.datasets.v002.quality.stats.maxAbsMovePct))}%（行业 10% 基线按 crypto 放宽并冻结）；闸值越限 = critical → 拒收</div></div></div>
       </div>
-      <div class="chips">${badge("fetchedAtUtc " + payload.datasets.v002.fetchedAtUtc, "mono")}${badge("point-in-time：仅已收盘棒", "mono")}</div>
+      <div class="tiles" style="margin-top:14px">
+        ${tile("Rows", payload.datasets.v002.quality.stats.rows, payload.datasets.v002.quality.stats.firstDate + " .. " + payload.datasets.v002.quality.stats.lastDate)}
+        ${tile("Max |move|", payload.datasets.v002.quality.stats.maxAbsMovePct + "%", "闸值 25%", Number(payload.datasets.v002.quality.stats.maxAbsMovePct) > 25 ? "bad" : "good")}
+        ${tile("Critical", payload.datasets.v002.quality.criticalCount, "findings 总数 " + payload.datasets.v002.quality.findings.length, payload.datasets.v002.quality.criticalCount ? "bad" : "good")}
+        ${tile("fetchedAtUtc", esc((payload.datasets.v002.fetchedAtUtc || "").slice(0, 10)), "仅已收盘棒（confirmed bars）")}
+      </div>
     </div>
-    <div class="callout">门禁项：日期严格升序且唯一 · 24/7 无日历缺口 · close 正且有限 · 单日 |变动| ≤ 25%。任一 critical → 抓取脚本拒收、不落盘。刷新数据 = 重跑 fetch + fetchedAtUtc 更新 + dataVersion 升级 + golden 重算 + 人工 review。</div>
-    <div class="card">
-      <div class="card-head"><div><div class="eyebrow">SYNTHETIC BASELINE</div><h2>v001 合成夹具（对照）</h2></div>${badge("SYNTHETIC", "muted")}</div>
-      <div class="kv"><div class="k">dataVersion</div><div class="mono">${esc(payload.datasets.v001.dataVersion)}</div><div class="k">rows</div><div>${payload.datasets.v001.rows}（LCG seed=20261102）</div></div>
-    </div>
+    <div class="callout">刷新数据 = 重跑 fetch → 门禁 → 冻结快照 → fetchedAtUtc 更新 → dataVersion 升级 → golden 重算 → 人工 review。接任何新市场同套路。</div>
+    <details class="card">
+      <summary><span><div class="eyebrow">SYNTHETIC BASELINE · v001 对照</div></span><span class="badge">展开 ▾</span></summary>
+      <div class="card-body">
+        <div class="kv"><div class="k">dataVersion</div><div class="mono">${esc(payload.datasets.v001.dataVersion)}</div><div class="k">rows</div><div>${payload.datasets.v001.rows}（LCG seed=20261102）</div></div>
+        <div class="chat-hint" style="margin-top:10px">合成夹具用于治理回归（注入控制 / golden 稳定性），不构成任何市场结论。</div>
+      </div>
+    </details>
   </section>
 
   <section class="view" data-view="agent">
+    ${viewHead("Agent & Audit", "边界说明书——agent 是形式，确定性内核是灵魂：AI 只能调用封闭注册表里的确定性工具，只能解释、不能编数、不能下单；每次问答落一条仅元数据的审计记录。", badge("quant-agent/v0.0.3", "mono") + badge("authority: deterministic-tools", "mono"))}
+    ${banner("accent", "⚖", `<b>权威白名单</b>：模型只能调用以下 5 个确定性工具，不能自供数据、不能下单交易。citations 只来自成功工具返回的 evalRunId/signalFingerprint；<b>模型文本中的数字不构成引用</b>。`)}
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">quant-agent/v0.0.2 · 有界对话 agent</div><h2>用法与边界</h2></div>${badge("authority: deterministic-tools", "mono")}</div>
+      <div class="card-head"><div><div class="eyebrow">CLOSED REGISTRY · 封闭注册表</div><h2>5 个确定性工具</h2></div>${badge("place_order 被拒", "good")}</div>
+      <table class="data-table"><thead><tr><th>tool</th><th>职责</th><th>权威输出</th></tr></thead><tbody>
+        <tr><td class="mono">assess_frozen_dataset</td><td>跑完整 pipeline：数据 → 信号 → 守卫 → 裁决</td><td>signalScore / guardStatus / decisionStatus / 双指纹</td></tr>
+        <tr><td class="mono">signal_components</td><td>三分量拆解（动量/趋势/稳定性）</td><td>components + signalFingerprint</td></tr>
+        <tr><td class="mono">guard_check</td><td>风控守卫复核（回撤/单日波动限额）</td><td>guardStatus + breach 明细</td></tr>
+        <tr><td class="mono">trial_metrics</td><td>6 条 trials 的净口径指标 + 选中者</td><td>trials[] + selected（含 DSR）</td></tr>
+        <tr><td class="mono">data_quality</td><td>数据质量门禁复核</td><td>passed / findings / stats</td></tr>
+      </tbody></table>
+      <div class="chips">${badge("自供数据 ✗", "bad")}${badge("下单交易 ✗", "bad")}${badge("写权威字段 ✗", "bad")}${badge("只读解释 ✓", "good")}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">USAGE · CLI</div><h2>命令行用法</h2></div></div>
       <pre>node quant/agent/cli.js ask "当前数据集质量如何？"            # 确定性摘要，永不触网
 node --env-file=.env quant/agent/cli.js ask "解释 DSR" --consent  # 需 DEEPSEEK_API_KEY
 node quant/agent/cli.js repl --consent                            # 交互模式</pre>
-      <div class="chips">${["assess_frozen_dataset", "signal_components", "guard_check", "trial_metrics", "data_quality"].map(name => badge(name, "mono")).join("")}</div>
-      <div class="callout">封闭注册表 = 权威白名单：模型只能调用以上 5 个确定性工具，不能自供数据、不能下单交易。citations 只来自成功工具返回的 evalRunId/signalFingerprint；模型文本中的数字不构成引用。</div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">AUDIT LOG · 仅元数据</div><h2>${payload.audit ? "问答审计统计" : "本机暂无审计记录"}</h2></div>${payload.audit ? badge(payload.audit.entries + " entries", "mono") : ""}</div>
-      ${payload.audit ? `<div class="kv">
-        <div class="k">total asks</div><div>${payload.audit.entries}</div>
-        <div class="k">harness</div><div>${esc(Object.entries(payload.audit.byStatus).map(([key, count]) => key + " ×" + count).join(" · "))}</div>
-        <div class="k">tool calls</div><div>${esc(Object.entries(payload.audit.byTool).map(([key, count]) => key + " ×" + count).join(" · ") || "none")}</div>
-        <div class="k">last activity</div><div class="mono">${esc(payload.audit.lastTs || "n/a")}</div>
-        <div class="k">log file</div><div class="mono">agent-audit.jsonl（哈希存储，无明文）</div>
+      <div class="card-head"><div><div class="eyebrow">AUDIT TAPE · 仅元数据（哈希不存明文）</div><h2>${payload.audit ? "问答审计统计" : "本机暂无审计记录"}</h2></div>${payload.audit ? badge(payload.audit.entries + " entries", "mono") : ""}</div>
+      ${payload.audit ? `<div class="tiles">
+        ${tile("Total asks", payload.audit.entries, "agent-audit.jsonl")}
+        ${tile("Harness", Object.entries(payload.audit.byStatus).map(([key, count]) => key + " ×" + count).join(" · ") || "none", "含降级路径（fail-open 即 fail-honest）")}
+        ${tile("Tool calls", Object.entries(payload.audit.byTool).map(([key, count]) => key + " ×" + count).join(" · ") || "none", "全部来自封闭注册表")}
+        ${tile("Last activity", esc((payload.audit.lastTs || "n/a").slice(0, 19).replace("T", " ")), "UTC")}
       </div>` : `<div class="kv"><div class="k">位置</div><div class="mono">系统临时目录 fc-quant-audit/agent-audit.jsonl（QUANT_AUDIT_DIR 可覆盖）</div><div class="k">说明</div><div>每次 agent 问答落一条仅元数据记录：问题/回答只存 SHA-256 前缀哈希，永不存明文。</div></div>`}
     </div>
   </section>
 
   <section class="view" data-view="paper">
+    ${viewHead("Paper", "纸上演练场——执行层的 rehearsal：本地确定性撮合（MOC）、每单人工批准、与回测逐点对等（二阶差异 &lt; 1e-4）。批准策略来自配置文件，freqtrade 式命令控制面。", badge("paper-engine/v0.1.0", "mono") + badge("无真实资金", "good"))}
+    ${banner("good", "✓", `<b>边界重申</b>：无真实资金 · <b>未批准永不成交</b>（终态 rejected）· agent 永不持有下单工具 · "聊天即交易"禁令原文保留。`)}
     <div class="card">
-      <div class="card-head"><div><div class="eyebrow">PAPER ENGINE · 真实快照 · 净口径含成本</div><h2>虚拟盘权益曲线 vs 回测（参考会话：全批准）</h2></div>${badge("paper-engine/v0.1.0", "mono")}</div>
-      <div class="metrics">
-        ${metricCard("Final Equity", fmt(payload.paper.reference.report.finalEquity, 0), "起始 " + fmt(payload.paper.reference.capital, 0))}
-        ${metricCard("Total Return", fmt(payload.paper.reference.report.totalReturnPct, 2) + "%", "6 笔成交全批准")}
-        ${metricCard("Max DD", fmt(payload.paper.reference.report.maxDrawdownPct, 2) + "%", "权益曲线峰谷")}
-        ${metricCard("Orders / Fills", payload.paper.reference.report.orders + " / " + payload.paper.reference.report.fills, "MOC：决策棒收盘成交")}
+      <div class="card-head"><div><div class="eyebrow">REFERENCE · 真实快照 · 净口径含成本 · 全批准</div><h2>虚拟盘权益曲线 vs 回测（参考会话）</h2></div>${badge("DSR 选中规则", "accent")}</div>
+      <div class="tiles">
+        ${tile("Final Equity", fmt(payload.paper.reference.report.finalEquity, 0), "起始 " + fmt(payload.paper.reference.capital, 0))}
+        ${tile("Total Return", fmt(payload.paper.reference.report.totalReturnPct, 2) + "%", "6 笔成交全批准", "good")}
+        ${tile("Max DD", fmt(payload.paper.reference.report.maxDrawdownPct, 2) + "%", "权益曲线峰谷", "warn")}
+        ${tile("Orders / Fills", payload.paper.reference.report.orders + " / " + payload.paper.reference.report.fills, "MOC：决策棒收盘成交")}
       </div>
       <div id="paper-chart" style="margin-top:14px"></div>
       <div class="chips">${badge("—— 蓝线 = 虚拟盘账本", "accent")}${badge("—— 虚线 = 回测口径（与账本逐点重合）", "mono")}</div>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">REFERENCE FILLS · 全批准会话</div><h2>成交记录</h2></div></div>
-      <table class="tbl"><thead><tr><th>bar</th><th>date</th><th>side</th><th>units</th><th>price</th><th>cost</th></tr></thead><tbody>
-        ${payload.paper.reference.fills.map(fill => `<tr><td class="mono">${fill.barIndex}</td><td class="mono">${esc(fill.date)}</td><td>${fill.side}</td><td class="mono">${fmt(fill.units, 6)}</td><td class="mono">${fmt(fill.price, 1)}</td><td class="mono">${fmt(fill.cost, 2)}</td></tr>`).join("")}
+      <table class="data-table"><thead><tr><th>bar</th><th>date</th><th>side</th><th class="num">units</th><th class="num">price</th><th class="num">cost</th></tr></thead><tbody>
+        ${payload.paper.reference.fills.map(fill => `<tr><td class="mono">${fill.barIndex}</td><td class="mono">${esc(fill.date)}</td><td>${fill.side}</td><td class="num">${fmt(fill.units, 6)}</td><td class="num">${fmt(fill.price, 1)}</td><td class="num">${fmt(fill.cost, 2)}</td></tr>`).join("")}
       </tbody></table>
     </div>
     <div class="card">
