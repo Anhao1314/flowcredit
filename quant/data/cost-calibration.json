@@ -1,0 +1,51 @@
+{
+  "costModelVersion": "quant-cost/v0.0.1",
+  "fetchedAtUtc": "2026-11-11T18:21:21.480Z",
+  "equityBasisUsd": 100000,
+  "perSymbol": {
+    "BTC-USDT": {
+      "costModelVersion": "quant-cost/v0.0.1",
+      "symbol": "BTC-USDT",
+      "measured": {
+        "bid": 74486.4,
+        "ask": 74486.5,
+        "mid": 74486.45,
+        "spreadBps": 0.0134,
+        "volCcy24hQuoteUsd": 520040412.6949817,
+        "fetchedAtUtc": "2026-11-11T18:21:21.480Z"
+      },
+      "assumptions": {
+        "takerFeeBps": 10,
+        "impactK": 25,
+        "impactFormula": "impact_bps = K · √(参与率%，equity / 24h 成交额 × 100)",
+        "equityBasisUsd": 100000,
+        "note": "冲击系数为冻结假设（待真实成交流水重校准）；spread 为 point-in-time 可测值。"
+      },
+      "slippageBps": 3.4735,
+      "oneSideRateBps": 13.4735,
+      "oneSideRate": 0.00134735
+    },
+    "ETH-USDT": {
+      "costModelVersion": "quant-cost/v0.0.1",
+      "symbol": "ETH-USDT",
+      "measured": {
+        "bid": 2090.65,
+        "ask": 2090.66,
+        "mid": 2090.6549999999997,
+        "spreadBps": 0.0478,
+        "volCcy24hQuoteUsd": 225442799.1589964,
+        "fetchedAtUtc": "2026-11-11T18:21:21.480Z"
+      },
+      "assumptions": {
+        "takerFeeBps": 10,
+        "impactK": 25,
+        "impactFormula": "impact_bps = K · √(参与率%，equity / 24h 成交额 × 100)",
+        "equityBasisUsd": 100000,
+        "note": "冲击系数为冻结假设（待真实成交流水重校准）；spread 为 point-in-time 可测值。"
+      },
+      "slippageBps": 5.2892,
+      "oneSideRateBps": 15.2892,
+      "oneSideRate": 0.00152892
+    }
+  }
+}

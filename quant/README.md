@@ -129,6 +129,14 @@ LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立�
 
 **活体记录（2026-11-12，kimi-k2.6 真实提案）**：`--count 4 --consent` 产出 4 条（3 条与已库重复被去重、1 条入库：composite-percentile {window:50, percentile:75}）。全池裁决 N=9（6 注册+3 候选）、N_eff=2.19：kimi 候选 pp-Sharpe 0.0447 / OOS 0.1212 / DSR 0.6838，**超过在册 BEST T2（0.0416/0.6655）**——证据已呈现，晋升决定权留给人工 review。
 
+## R1 数据升级与成本校准（2026-11-12，结果导向路线第一段）
+
+- **多市场 2 年快照**：`quant/data/fetch-daily.js --symbol ETH-USDT --days 730 ...`（OKX history-candles 分页，泛化自 fetch-btc-daily；`dataset-v003`=BTC 2y 730 根、`dataset-v004`=ETH 2y 730 根，门禁全 PASS）
+- **成本校准（结果导向第一个真实发现）**：冻结成本 7bps **漏算 10bps taker 佣金**且滑点被低估。校准模型（`quant/data/cost-calibration.js`，纯函数）= taker 10bps（费率表事实）+ 半价差（point-in-time 可测）+ √参与率冲击（K=25 冻结假设，待真实成交重校准）。实测：BTC 一侧 13.47bps / ETH 15.29bps——**此前净口径 Sharpe 全部偏乐观**。
+- `netBacktest` 接受可选 `costRate`（缺省冻结路径逐字节不变）；adjudicate 按数据集 symbol 查校准费率并如实写进报告 costModel。
+- **多市场一致性裁决**（`adjudicateMultiMarket`，纯函数）：同批候选 × BTC/ETH 各自校准成本 → R1 验收指标：方向一致 ✓（已达成）、IS/OOS 全正 ✗（未达成，如实显示——方向一致 ≠ 显著性，R2 继续）。
+- 控制台 Overview 四数据集卡 + Proposals 视图 R1 验收横幅；测试 `quant-cost.test.js` 5 例。
+
 ## 运行
 
 ```sh

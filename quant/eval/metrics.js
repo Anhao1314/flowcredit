@@ -127,13 +127,19 @@ export function trailingComponents(closes, index) {
  * 共同约定：T+1 执行（无前视）；positions[i] 为 bar startIndex+i 的决策仓位，作用于下一棒收益。
  * 返回：{ returns[], positions[], startIndex, ruleId?, netOfCost?, costOneSideRate? }。
  */
-/** 净口径回测：任意 0/1 仓位序列 → 与注册规则完全相同的成本路径（提案裁决共用，勿另写第二套）。 */
-export function netBacktest(series, fullPositions, ruleId = null) {
+/** 净口径回测：任意 0/1 仓位序列 → 与注册规则完全相同的成本路径（提案裁决共用，勿另写第二套）。
+ *  options.costRate 可选：校准后的单侧成本率（如来自 cost-calibration.json）；缺省用冻结
+ *  COST_ONE_SIDE_RATE_V002（历史路径逐字节不变）。调用方必须把所用费率如实写进报告。 */
+export function netBacktest(series, fullPositions, ruleId = null, options = {}) {
   if (!Array.isArray(series) || series.length < BACKTEST_PARAMS_V001.warmupBars + 2) {
     throw new TypeError(`strategyReturns needs at least ${BACKTEST_PARAMS_V001.warmupBars + 2} bars`);
   }
   if (!Array.isArray(fullPositions) || fullPositions.length !== series.length) {
     throw new TypeError("fullPositions must align with series length");
+  }
+  const costRate = options.costRate === undefined ? COST_ONE_SIDE_RATE_V002 : options.costRate;
+  if (!(typeof costRate === "number" && Number.isFinite(costRate) && costRate >= 0 && costRate < 0.05)) {
+    throw new TypeError("costRate must be a finite number within [0, 0.05)");
   }
   const closes = series.map(row => row?.close);
   if (closes.some(value => !finite(value) || value <= 0)) throw new TypeError("closes must be positive finite numbers");
@@ -143,11 +149,11 @@ export function netBacktest(series, fullPositions, ruleId = null) {
   let prevEarned = 0;
   for (let i = 1; i < positions.length; i += 1) {
     const assetReturn = closes[startIndex + i] / closes[startIndex + i - 1] - 1;
-    const tradeCost = Math.abs(positions[i - 1] - prevEarned) * COST_ONE_SIDE_RATE_V002;
+    const tradeCost = Math.abs(positions[i - 1] - prevEarned) * costRate;
     returns.push(positions[i - 1] * assetReturn - tradeCost);
     prevEarned = positions[i - 1];
   }
-  return { returns, positions, startIndex, ruleId, netOfCost: true, costOneSideRate: COST_ONE_SIDE_RATE_V002 };
+  return { returns, positions, startIndex, ruleId, netOfCost: true, costOneSideRate: costRate, costSource: options.costRate === undefined ? "frozen-v002" : "calibrated" };
 }
 
 export function strategyReturns(series, trial) {

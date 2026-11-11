@@ -1,22 +1,26 @@
 {
-  "runDate": "2026-11-11T18:09:18.406Z",
+  "runDate": "2026-11-11T18:24:53.455Z",
+  "market": "BTC-USDT · 2y",
+  "symbol": "BTC-USDT",
   "adjudicationVersion": "quant-adjudication/v0.0.1",
-  "datasetVersion": "quant-dataset/v0.0.2",
+  "datasetVersion": "quant-dataset/v0.0.3",
   "rulesVersion": "quant-rules/v0.0.2",
   "metricsVersion": "eval-metrics/v0.0.3",
   "metricsBasis": "synthetic_fixture_placeholder_rules",
   "costModel": {
     "commissionBps": 2,
-    "slippageBps": 5
+    "slippageBps": 5,
+    "effectiveOneSideRate": 0.00134735,
+    "effectiveSource": "calibrated"
   },
   "nTrials": {
     "nominal": 9,
     "registered": 6,
     "proposed": 3,
-    "effective": 2.193617621072279,
+    "effective": 2.3757458956121176,
     "method": "A.3 等权平均非对角相关"
   },
-  "averageCorrelation": 0.6424798489679714,
+  "averageCorrelation": 0.6061797877124192,
   "candidates": [
     {
       "kind": "proposal",
@@ -29,13 +33,13 @@
         "exitBandPct": -0.4
       },
       "rationale": "演示候选 A（更快交叉，带宽收窄）",
-      "nReturns": 199,
-      "sharpeAnnualized": 0.38085390404318253,
-      "sharpePerPeriod": 0.02399154085586471,
-      "isSharpePerPeriod": -0.043815734622940555,
-      "oosSharpePerPeriod": 0.08710240641473356,
-      "turnover": 0.020100502512562814,
-      "maxDrawdownPct": 19.345000217671256
+      "nReturns": 669,
+      "sharpeAnnualized": 0.04329306329664538,
+      "sharpePerPeriod": 0.0027272066423119482,
+      "isSharpePerPeriod": -0.028044858433556964,
+      "oosSharpePerPeriod": 0.04618326426813973,
+      "turnover": 0.02092675635276532,
+      "maxDrawdownPct": 34.24469239566817
     },
     {
       "kind": "proposal",
@@ -48,13 +52,13 @@
         "cooldownBars": 6
       },
       "rationale": "演示候选 B（中周期动量）",
-      "nReturns": 199,
-      "sharpeAnnualized": 0.2822699515035317,
-      "sharpePerPeriod": 0.017781335577728746,
-      "isSharpePerPeriod": -0.0063810891215468945,
-      "oosSharpePerPeriod": 0.04709519798501618,
-      "turnover": 0.09547738693467336,
-      "maxDrawdownPct": 12.510354081141342
+      "nReturns": 669,
+      "sharpeAnnualized": 0.42689431908953057,
+      "sharpePerPeriod": 0.02689181439088455,
+      "isSharpePerPeriod": 0.014065493963858304,
+      "oosSharpePerPeriod": 0.04969434238127256,
+      "turnover": 0.08370702541106129,
+      "maxDrawdownPct": 24.958864714251703
     },
     {
       "kind": "proposal",
@@ -65,13 +69,13 @@
         "percentile": 75
       },
       "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
-      "nReturns": 199,
-      "sharpeAnnualized": 0.7094502084963155,
-      "sharpePerPeriod": 0.04469116236343271,
-      "isSharpePerPeriod": -0.09224907481447428,
-      "oosSharpePerPeriod": 0.12122664042930985,
-      "turnover": 0.07035175879396985,
-      "maxDrawdownPct": 6.462603780103889
+      "nReturns": 669,
+      "sharpeAnnualized": 0.43820034048016393,
+      "sharpePerPeriod": 0.02760402679367485,
+      "isSharpePerPeriod": -0.011761066754344653,
+      "oosSharpePerPeriod": 0.08506145101828302,
+      "turnover": 0.07772795216741404,
+      "maxDrawdownPct": 25.92106955751177
     }
   ],
   "registered": [
@@ -85,13 +89,13 @@
         "entryBandPct": 0.1,
         "exitBandPct": -0.5
       },
-      "nReturns": 199,
-      "sharpeAnnualized": 0.35660869975426307,
-      "sharpePerPeriod": 0.022464236545520964,
-      "isSharpePerPeriod": -0.04601375150062451,
-      "oosSharpePerPeriod": 0.0905268606646923,
-      "turnover": 0.01507537688442211,
-      "maxDrawdownPct": 21.794033597134998
+      "nReturns": 669,
+      "sharpeAnnualized": 0.037687365588450115,
+      "sharpePerPeriod": 0.0023740808789574387,
+      "isSharpePerPeriod": -0.032453525888267866,
+      "oosSharpePerPeriod": 0.052256958469327514,
+      "turnover": 0.017937219730941704,
+      "maxDrawdownPct": 33.22811725729249
     },
     {
       "kind": "registered",
@@ -103,13 +107,13 @@
         "entryBandPct": 0.05,
         "exitBandPct": -0.3
       },
-      "nReturns": 199,
-      "sharpeAnnualized": 0.6609705351542389,
-      "sharpePerPeriod": 0.04163722999903313,
-      "isSharpePerPeriod": -0.011527082181515711,
-      "oosSharpePerPeriod": 0.09264473234597712,
-      "turnover": 0.02512562814070352,
-      "maxDrawdownPct": 9.939600598842
+      "nReturns": 669,
+      "sharpeAnnualized": 0.2213377448956962,
+      "sharpePerPeriod": 0.013942967351092097,
+      "isSharpePerPeriod": -0.013005805438870916,
+      "oosSharpePerPeriod": 0.05801137184090359,
+      "turnover": 0.029895366218236172,
+      "maxDrawdownPct": 27.859436500157177
     },
     {
       "kind": "registered",
@@ -121,13 +125,13 @@
         "exitPct": -1,
         "cooldownBars": 5
       },
-      "nReturns": 199,
-      "sharpeAnnualized": 0.16960084440536438,
-      "sharpePerPeriod": 0.010683848962932249,
-      "isSharpePerPeriod": -0.062196749101302705,
-      "oosSharpePerPeriod": 0.09855047271805069,
-      "turnover": 0.06532663316582915,
-      "maxDrawdownPct": 13.308210475557846
+      "nReturns": 669,
+      "sharpeAnnualized": -0.26883366437636863,
+      "sharpePerPeriod": -0.016934929047192272,
+      "isSharpePerPeriod": -0.0461477582861359,
+      "oosSharpePerPeriod": 0.0339383188483956,
+      "turnover": 0.08071748878923767,
+      "maxDrawdownPct": 31.125390415182153
     },
     {
       "kind": "registered",
@@ -139,13 +143,13 @@
         "exitPct": -0.5,
         "cooldownBars": 8
       },
-      "nReturns": 199,
-      "sharpeAnnualized": -0.445378678825312,
-      "sharpePerPeriod": -0.028056219605292487,
-      "isSharpePerPeriod": -0.03823924211518666,
-      "oosSharpePerPeriod": -0.016111867167277565,
-      "turnover": 0.11557788944723618,
-      "maxDrawdownPct": 15.16041180508795
+      "nReturns": 669,
+      "sharpeAnnualized": -0.6725091408296869,
+      "sharpePerPeriod": -0.0423640938345968,
+      "isSharpePerPeriod": -0.07757271550389383,
+      "oosSharpePerPeriod": 0.011552914263301716,
+      "turnover": 0.10762331838565023,
+      "maxDrawdownPct": 35.73445632748907
     },
     {
       "kind": "registered",
@@ -155,13 +159,13 @@
         "window": 40,
         "percentile": 70
       },
-      "nReturns": 199,
-      "sharpeAnnualized": 0.5915332399141368,
-      "sharpePerPeriod": 0.03726309154859791,
-      "isSharpePerPeriod": -0.0729316487642392,
-      "oosSharpePerPeriod": 0.12102972285619477,
-      "turnover": 0.07035175879396985,
-      "maxDrawdownPct": 8.617880937285
+      "nReturns": 669,
+      "sharpeAnnualized": 0.06535220035674319,
+      "sharpePerPeriod": 0.0041168016613049785,
+      "isSharpePerPeriod": -0.036572497189511874,
+      "oosSharpePerPeriod": 0.07834957953441074,
+      "turnover": 0.09865470852017937,
+      "maxDrawdownPct": 32.8821895735174
     },
     {
       "kind": "registered",
@@ -171,13 +175,13 @@
         "window": 40,
         "percentile": 60
       },
-      "nReturns": 199,
-      "sharpeAnnualized": 0.19524128861703358,
-      "sharpePerPeriod": 0.012299045126963254,
-      "isSharpePerPeriod": -0.07242755505323818,
-      "oosSharpePerPeriod": 0.07620095372548809,
-      "turnover": 0.10050251256281408,
-      "maxDrawdownPct": 8.374748245133636
+      "nReturns": 669,
+      "sharpeAnnualized": -0.08002586179516752,
+      "sharpePerPeriod": -0.00504115544675329,
+      "isSharpePerPeriod": -0.04183320699917966,
+      "oosSharpePerPeriod": 0.06575132638420875,
+      "turnover": 0.11061285500747384,
+      "maxDrawdownPct": 35.522875797772365
     }
   ],
   "best": {
@@ -189,14 +193,14 @@
       "percentile": 75
     },
     "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
-    "nReturns": 199,
-    "sharpeAnnualized": 0.7094502084963155,
-    "sharpePerPeriod": 0.04469116236343271,
-    "isSharpePerPeriod": -0.09224907481447428,
-    "oosSharpePerPeriod": 0.12122664042930985,
-    "turnover": 0.07035175879396985,
-    "maxDrawdownPct": 6.462603780103889,
-    "dsr": 0.6838295526463012,
+    "nReturns": 669,
+    "sharpeAnnualized": 0.43820034048016393,
+    "sharpePerPeriod": 0.02760402679367485,
+    "isSharpePerPeriod": -0.011761066754344653,
+    "oosSharpePerPeriod": 0.08506145101828302,
+    "turnover": 0.07772795216741404,
+    "maxDrawdownPct": 25.92106955751177,
+    "dsr": 0.633540739919293,
     "dsrNominal": null
   },
   "disclaimer": "裁决报告只是 review 材料：不注册、不晋升、不进入任何执行层；晋升 = 人工把候选写入 quant/strategy/rules-v002.js + 版本升级 + golden 重算 + 人工 review。"

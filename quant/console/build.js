@@ -67,7 +67,7 @@ const banner = (tone, icon, htmlBody) => `<div class="banner ${tone}"><div class
 // 系统全景与边界（行业七层 + 本仓库覆盖标记；事实来源 = README「在完整量化系统中的定位」，展示层只呈现不判定）
 function layerBand() {
   const layers = [
-    { num: "①", name: "数据设施", state: "covered", stateText: "最小可用", note: "BTC 日线快照 + 质量门禁", view: "quality" },
+    { num: "①", name: "数据设施", state: "covered", stateText: "最小可用", note: "BTC/ETH 2 年快照 + 质量门禁", view: "quality" },
     { num: "②", name: "策略研究", state: "covered", stateText: "闭环 v0.1", note: "LLM 提案 → 确定性裁决 → 人工晋升；提案端仍窄（3 族参数）", view: "proposals" },
     { num: "③", name: "回测方法论", state: "covered", stateText: "已覆盖", note: "净成本 + IS/OOS + DSR + N_eff", view: "dsr" },
     { num: "④", name: "风险管理", state: "partial", stateText: "前半", note: "事前守卫 halt；事中/事后未做", view: "paper" },
@@ -369,7 +369,12 @@ body[data-view="chat"] .footer{display:none}
       ${pipelineCard(payload.datasets.v001)}
       ${pipelineCard(payload.datasets.v002)}
     </div>
-    <div class="callout warn"><b>诚实披露</b>：单资产 / 260 日 / 成本未校准 / 无显著性结论——本系统是"信任机制的完整验证"，不是赚钱工具；指标语义与冻结参数见 Rules / DSR 视图。</div>
+    <div class="eyebrow" style="margin:18px 0 8px 2px">R1 数据升级 · 2 年快照（多市场）</div>
+    <div class="grid2">
+      ${payload.datasets.v003 ? pipelineCard(payload.datasets.v003) : ""}
+      ${payload.datasets.v004 ? pipelineCard(payload.datasets.v004) : ""}
+    </div>
+    <div class="callout warn"><b>诚实披露（R1 后）</b>：双资产（BTC/ETH）2 年快照已入库，但成本校准揭示<b>冻结成本 7bps 显著低估真实成本</b>（taker 10bps + 滑点：BTC 一侧 13.47bps / ETH 15.29bps）——此前净口径指标偏乐观；无显著性结论依旧（R2）。本系统是信任机制的验证与筛选器，不是赚钱工具。</div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">GOVERNANCE · 最近离线评估</div><h2>治理检查 ${esc(checksRows)} passed</h2></div>${payload.eval ? badge("MODEL " + payload.eval.MODEL, "muted") : ""}</div>
       <table class="data-table"><tbody>
@@ -421,6 +426,16 @@ body[data-view="chat"] .footer{display:none}
         <div class="step"><span class="n">③ 晋升</span><div class="t">人工 review + 签字</div><div class="d">人把候选写入 quant/strategy/rules-v002.js + RULES_VERSION 升级 + golden 重算 + 人工批准（不变式 3）</div></div>
       </div>
     </div>
+    ${payload.proposals.adjudicationMulti ? `<div class="card">
+      <div class="card-head"><div><div class="eyebrow">R1 MULTI-MARKET · 跨市场一致性验收（2 年样本 × 各自校准成本）</div><h2>多市场裁决</h2></div><span class="badge ${payload.proposals.adjudicationMulti.verdict.signConsistent ? "badge-good" : "badge-warn"}">方向一致 ${payload.proposals.adjudicationMulti.verdict.signConsistent ? "✓" : "✗"}</span><span class="badge ${payload.proposals.adjudicationMulti.verdict.profitableEverywhere ? "badge-good" : "badge-warn"}">IS/OOS 全正 ${payload.proposals.adjudicationMulti.verdict.profitableEverywhere ? "✓" : "✗"}</span></div>
+      <div class="tiles">
+        ${payload.proposals.adjudicationMulti.markets.map(market => tile(market.label, market.best.proposalId, `pp-Sharpe ${fmt(market.best.sharpePerPeriod)} · DSR ${fmt(market.best.dsr)} · 成本 ${market.costRate ? (market.costRate * 10000).toFixed(2) : "7.00"}bps（${market.costRate ? "校准" : "冻结"}）`, market.best.sharpePerPeriod > 0 ? "good" : "bad")).join("")}
+      </div>
+      <table class="data-table" style="margin-top:6px"><thead><tr><th>proposalId</th><th>family</th>${payload.proposals.adjudicationMulti.markets.map(market => `<th class="num">${esc(market.label)}</th>`).join("")}<th>跨市场</th></tr></thead><tbody>
+        ${payload.proposals.adjudicationMulti.candidatesConsistency.map(row => `<tr><td class="mono">${esc(row.proposalId)}</td><td class="mono">${esc(row.family)}</td>${row.perMarket.map(p => `<td class="num">${fmt(p.sharpePerPeriod)}${p.isSharpePerPeriod > 0 && p.oosSharpePerPeriod > 0 ? ' <span class="badge badge-good">IS/OOS+</span>' : ""}</td>`).join("")}<td>${row.signConsistent ? badge("方向一致", "good") : badge("方向分歧", "warn")}${row.profitableEverywhere ? " " + badge("盈利一致", "good") : ""}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="callout warn"><b>R1 验收口径</b>：方向一致 = 候选 pp-Sharpe 在两市场同号（已达成/未达成如实显示）；IS/OOS 全正 = 晋升参考线（未达成则该候选只是演示）。方向一致 ≠ 统计显著性（R2：PSR / walk-forward）。</div>
+    </div>` : ""}
     ${payload.proposals.adjudication ? `<div class="card">
       <div class="card-head"><div><div class="eyebrow">LATEST ADJUDICATION · 全池裁决（候选 ${payload.proposals.adjudication.candidates.length} 条）</div><h2>裁决报告</h2></div>${badge("N " + payload.proposals.adjudication.nTrials.nominal + " · N_eff " + fmt(payload.proposals.adjudication.nTrials.effective, 2), "mono")}</div>
       <div class="tiles">

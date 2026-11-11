@@ -10,7 +10,7 @@
  *   4. 同输入 → 同输出（可重放）；无随机数、无时钟。
  */
 
-import { netBacktest, sharpeRatio, turnover, maxDrawdownPct, effectiveTrials, deflatedSharpe, splitPoint, COST_MODEL_V002, METRICS_VERSION, METRICS_BASIS } from "../eval/metrics.js";
+import { netBacktest, sharpeRatio, turnover, maxDrawdownPct, effectiveTrials, deflatedSharpe, splitPoint, COST_MODEL_V002, COST_ONE_SIDE_RATE_V002, METRICS_VERSION, METRICS_BASIS } from "../eval/metrics.js";
 import { listRules, runFamily, RULES_VERSION } from "../strategy/rules-v002.js";
 
 export const ADJUDICATION_VERSION = "quant-adjudication/v0.0.1";
@@ -19,15 +19,16 @@ export const ADJUDICATION_VERSION = "quant-adjudication/v0.0.1";
  * 输入：{ dataset, candidates }（candidates = schema.validateCandidateBatch 的产出）。
  * 输出：裁决报告（含每个候选的净口径指标、全池 DSR、best、数据与代码指纹来源）。
  */
-export function adjudicateCandidates({ dataset, candidates } = {}) {
+export function adjudicateCandidates({ dataset, candidates, costRate } = {}) {
   if (!dataset?.dataVersion || !Array.isArray(dataset.series)) throw new TypeError("frozen dataset required");
   if (!Array.isArray(candidates) || !candidates.length) throw new TypeError("candidates must be a non-empty array");
   const closes = dataset.series.map(row => row?.close);
   const sp = splitPoint(dataset.series.length);
+  const costOptions = costRate === undefined ? {} : { costRate }; // 缺省 = 冻结 V002；校准费率由调用方传入并如实写进报告
 
   // 注册规则池（与 trials-v002 同口径重算——保证候选与在册规则在同一证据平面上比较）。
   const registered = listRules().map(rule => {
-    const backtest = netBacktest(dataset.series, runFamily(rule.family, rule.params, closes), rule.ruleId);
+    const backtest = netBacktest(dataset.series, runFamily(rule.family, rule.params, closes), rule.ruleId, costOptions);
     const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
     const oos = backtest.returns.slice(sp.firstOosReturnIndex);
     return {
@@ -45,7 +46,7 @@ export function adjudicateCandidates({ dataset, candidates } = {}) {
 
   // 候选池（同一成本路径；候选绝不写入注册表）。
   const proposed = candidates.map(candidate => {
-    const backtest = netBacktest(dataset.series, runFamily(candidate.family, candidate.params, closes), null);
+    const backtest = netBacktest(dataset.series, runFamily(candidate.family, candidate.params, closes), null, costOptions);
     const is = backtest.returns.slice(0, sp.firstOosReturnIndex);
     const oos = backtest.returns.slice(sp.firstOosReturnIndex);
     return {
@@ -81,12 +82,57 @@ export function adjudicateCandidates({ dataset, candidates } = {}) {
     rulesVersion: RULES_VERSION,
     metricsVersion: METRICS_VERSION,
     metricsBasis: METRICS_BASIS,
-    costModel: COST_MODEL_V002,
+    costModel: { ...COST_MODEL_V002, effectiveOneSideRate: costOptions.costRate ?? COST_ONE_SIDE_RATE_V002, effectiveSource: costOptions.costRate === undefined ? "frozen-v002" : "calibrated" },
     nTrials: { nominal: pool.length, registered: registered.length, proposed: proposed.length, effective: effective.effectiveTrials, method: "A.3 等权平均非对角相关" },
     averageCorrelation: effective.averageCorrelation,
     candidates: proposed.map(strip),
     registered: registered.map(strip),
     best: { ...strip(bestProposal), dsr: dsrBest.dsr, dsrNominal: dsrBest.dsrNominal ?? null },
     disclaimer: "裁决报告只是 review 材料：不注册、不晋升、不进入任何执行层；晋升 = 人工把候选写入 quant/strategy/rules-v002.js + 版本升级 + golden 重算 + 人工 review。"
+  };
+}
+
+export const MULTI_MARKET_VERSION = "quant-adjudication-multi/v0.0.1";
+
+/**
+ * 多市场一致性裁决（R1 验收：候选在 ≥2 市场、≥2 年样本上 IS/OOS 方向一致）。
+ * datasets: [{ label, dataset, costRate }]——每市场用各自校准费率；同批候选逐市场裁决后汇总。
+ * 输出两个诚实指标：signConsistent（跨市场收益方向一致）与 profitableEverywhere（IS 与 OOS 全为正）。
+ * 方向一致 ≠ 显著性（样本量检验属 R2）——disclaimer 原文保留。
+ */
+export function adjudicateMultiMarket({ datasets, candidates } = {}) {
+  if (!Array.isArray(datasets) || datasets.length < 2) throw new TypeError("multi-market adjudication needs at least 2 datasets");
+  if (!Array.isArray(candidates) || !candidates.length) throw new TypeError("candidates must be a non-empty array");
+  const markets = datasets.map(({ label, dataset, costRate }) => {
+    const report = adjudicateCandidates({ dataset, candidates, costRate });
+    return { label, symbol: dataset.symbol ?? null, datasetVersion: dataset.dataVersion, costRate: costRate ?? null, nTrials: report.nTrials, best: report.best };
+  });
+  const byId = new Map();
+  // 逐候选跨市场对比：重跑轻量单市场报告拿全候选行（deterministic，成本可接受）。
+  const perMarketRows = datasets.map(({ label, dataset, costRate }) => ({
+    label,
+    rows: adjudicateCandidates({ dataset, candidates, costRate }).candidates
+  }));
+  for (const { label, rows } of perMarketRows) {
+    for (const row of rows) {
+      const entry = byId.get(row.proposalId) ?? { proposalId: row.proposalId, family: row.family, params: row.params, perMarket: [] };
+      entry.perMarket.push({ market: label, sharpePerPeriod: row.sharpePerPeriod, isSharpePerPeriod: row.isSharpePerPeriod, oosSharpePerPeriod: row.oosSharpePerPeriod });
+      byId.set(row.proposalId, entry);
+    }
+  }
+  const candidatesConsistency = [...byId.values()].map(entry => {
+    const signs = new Set(entry.perMarket.map(p => Math.sign(p.sharpePerPeriod ?? 0)));
+    const profitableEverywhere = entry.perMarket.every(p => (p.isSharpePerPeriod ?? -Infinity) > 0 && (p.oosSharpePerPeriod ?? -Infinity) > 0);
+    return { ...entry, signConsistent: signs.size === 1, profitableEverywhere };
+  });
+  return {
+    multiMarketVersion: MULTI_MARKET_VERSION,
+    markets,
+    candidatesConsistency,
+    verdict: {
+      signConsistent: candidatesConsistency.every(c => c.signConsistent),
+      profitableEverywhere: candidatesConsistency.every(c => c.profitableEverywhere),
+      disclaimer: "方向一致 ≠ 统计显著性；样本量与 PSR/walk-forward 检验属 R2。"
+    }
   };
 }

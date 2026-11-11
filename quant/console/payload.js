@@ -127,7 +127,7 @@ export function readPaperSessions(auditDir) {
 /** 提案闭环数据（非权威区）：候选库 + 最新裁决报告；文件不存在 = 空态（引导先跑 generate）。 */
 function readProposals() {
   const dir = join(urlDir(), "proposals");
-  const empty = { proposalsVersion: "quant-proposals/v0.0.1", candidates: [], adjudication: null };
+  const empty = { proposalsVersion: "quant-proposals/v0.0.1", candidates: [], adjudication: null, adjudicationMulti: null };
   try {
     const stored = JSON.parse(readFileSync(join(dir, "candidates.json"), "utf8"));
     if (stored?.proposalsVersion !== empty.proposalsVersion || !Array.isArray(stored.candidates)) return empty;
@@ -136,10 +136,30 @@ function readProposals() {
     if (existsSync(adjPath)) {
       try { adjudication = JSON.parse(readFileSync(adjPath, "utf8")); } catch { adjudication = null; }
     }
-    return { proposalsVersion: empty.proposalsVersion, candidates: stored.candidates, adjudication };
+    let adjudicationMulti = null;
+    const multiPath = join(dir, "adjudication-multi-latest.json");
+    if (existsSync(multiPath)) {
+      try { adjudicationMulti = JSON.parse(readFileSync(multiPath, "utf8")); } catch { adjudicationMulti = null; }
+    }
+    return { proposalsVersion: empty.proposalsVersion, candidates: stored.candidates, adjudication, adjudicationMulti };
   } catch {
     return empty;
   }
+}
+
+function readJsonOptional(path) {
+  try { return readJson(path); } catch { return null; }
+}
+
+function datasetEntry(ds) {
+  const gates = runQualityGates(ds.series);
+  return {
+    dataVersion: ds.dataVersion, nature: ds.nature, symbol: ds.symbol ?? null, source: ds.source,
+    fetchedAtUtc: ds.fetchedAtUtc, rows: ds.series.length,
+    span: [ds.series[0].date, ds.series.at(-1).date],
+    pipeline: pipelineOf(ds).authoritative,
+    quality: { passed: gates.passed, criticalCount: gates.criticalCount, findings: gates.findings, stats: gates.stats }
+  };
 }
 
 export { formatNumber };
@@ -170,6 +190,9 @@ async function buildPaperReference(dataset, ruleId, capital = 100000) {
 export async function computeConsolePayload({ quantDir = urlDir(), auditDir, paperAuditDir, generatedAtUtc } = {}) {
   const datasetV001 = readJson(join(quantDir, "data", "dataset-v001.json"));
   const datasetV002 = readJson(join(quantDir, "data", "dataset-v002.json"));
+  const datasetV003 = readJsonOptional(join(quantDir, "data", "dataset-v003.json")); // R1：BTC 2 年
+  const datasetV004 = readJsonOptional(join(quantDir, "data", "dataset-v004.json")); // R1：ETH 2 年
+  const costCalibration = readJsonOptional(join(quantDir, "data", "cost-calibration.json"));
   const trialsV001 = readJson(join(quantDir, "eval", "trials-v001.json"));
   const trialsV002 = readJson(join(quantDir, "eval", "trials-v002.json"));
   const evalArtifact = latestEvalArtifact(quantDir);
@@ -192,8 +215,11 @@ export async function computeConsolePayload({ quantDir = urlDir(), auditDir, pap
         span: [datasetV002.series[0].date, datasetV002.series.at(-1).date],
         pipeline: pipelineOf(datasetV002).authoritative,
         quality: { passed: gatesV002.passed, criticalCount: gatesV002.criticalCount, findings: gatesV002.findings, stats: gatesV002.stats }
-      }
+      },
+      ...(datasetV003 ? { v003: datasetEntry(datasetV003) } : {}),
+      ...(datasetV004 ? { v004: datasetEntry(datasetV004) } : {})
     },
+    costCalibration: costCalibration ? { costModelVersion: costCalibration.costModelVersion, fetchedAtUtc: costCalibration.fetchedAtUtc, equityBasisUsd: costCalibration.equityBasisUsd, perSymbol: Object.fromEntries(Object.entries(costCalibration.perSymbol || {}).map(([symbol, record]) => [symbol, { oneSideRateBps: record.oneSideRateBps, spreadBps: record.measured.spreadBps, slippageBps: record.slippageBps, fetchedAtUtc: record.measured.fetchedAtUtc }])) } : null,
     rules: listRules(),
     trials: {
       v001: { trialsVersion: trialsV001.trialsVersion, net: t1.net, rows: t1.rows, best: t1.best, dsr: t1.dsr, dsrNominal: t1.dsrNominal, effective: t1.effective },
