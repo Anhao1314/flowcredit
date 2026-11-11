@@ -1,0 +1,31 @@
+{
+  "proposalsVersion": "quant-proposals/v0.0.1",
+  "updatedAtUtc": "2026-11-11T18:03:30.534Z",
+  "source": "file:/tmp/propose-demo.json",
+  "candidates": [
+    {
+      "proposalId": "p-69c9f905705356af",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 14,
+        "smaLong": 65,
+        "entryBandPct": 0.15,
+        "exitBandPct": -0.4
+      },
+      "rationale": "演示候选 A（更快交叉，带宽收窄）",
+      "PROPOSALS_VERSION": "quant-proposals/v0.0.1"
+    },
+    {
+      "proposalId": "p-fcabb1cf103b2636",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 8,
+        "entryPct": 0.8,
+        "exitPct": -0.8,
+        "cooldownBars": 6
+      },
+      "rationale": "演示候选 B（中周期动量）",
+      "PROPOSALS_VERSION": "quant-proposals/v0.0.1"
+    }
+  ]
+}

@@ -160,6 +160,14 @@ const RULES_V002 = Object.freeze([
   })
 ]);
 
+/** 任意族 + 参数 → 0/1 仓位序列（提案裁决与冻结规则共用同一实现；未知族 fail-closed）。 */
+export function runFamily(family, params, closes) {
+  if (family === "sma-cross-hysteresis") return smaCrossHysteresisPositions(closes, params);
+  if (family === "momentum-cooldown") return momentumCooldownPositions(closes, params);
+  if (family === "composite-percentile") return compositePercentilePositions(closes, params);
+  throw new TypeError(`unknown rule family: ${family}`);
+}
+
 export function listRules() {
   return RULES_V002.map(rule => ({ ruleId: rule.ruleId, family: rule.family, description: rule.description, params: rule.params, version: RULES_VERSION }));
 }

@@ -124,6 +124,24 @@ export function readPaperSessions(auditDir) {
   }
 }
 
+/** 提案闭环数据（非权威区）：候选库 + 最新裁决报告；文件不存在 = 空态（引导先跑 generate）。 */
+function readProposals() {
+  const dir = join(urlDir(), "proposals");
+  const empty = { proposalsVersion: "quant-proposals/v0.0.1", candidates: [], adjudication: null };
+  try {
+    const stored = JSON.parse(readFileSync(join(dir, "candidates.json"), "utf8"));
+    if (stored?.proposalsVersion !== empty.proposalsVersion || !Array.isArray(stored.candidates)) return empty;
+    let adjudication = null;
+    const adjPath = join(dir, "adjudication-latest.json");
+    if (existsSync(adjPath)) {
+      try { adjudication = JSON.parse(readFileSync(adjPath, "utf8")); } catch { adjudication = null; }
+    }
+    return { proposalsVersion: empty.proposalsVersion, candidates: stored.candidates, adjudication };
+  } catch {
+    return empty;
+  }
+}
+
 export { formatNumber };
 
 /** 参考虚拟盘会话：全批准确定性运行 + 回测权益曲线（同口径对齐，供 Paper 视图双线图）。 */
@@ -191,6 +209,7 @@ export async function computeConsolePayload({ quantDir = urlDir(), auditDir, pap
       reference: await buildPaperReference(datasetV002, t2.best.ruleId),
       sessions: readPaperSessions(paperAuditDir)
     },
-    audit: readAuditSummary(auditDir)
+    audit: readAuditSummary(auditDir),
+    proposals: readProposals()
   };
 }

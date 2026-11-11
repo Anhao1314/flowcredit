@@ -26,7 +26,9 @@
     "verify:finch-submission": "node scripts/verify-finch-submission.js",
     "check": "npm run check:syntax && npm run typecheck && npm test",
     "typecheck": "tsc -p tsconfig.json",
-    "check:syntax": "node scripts/check-syntax.js"
+    "check:syntax": "node scripts/check-syntax.js",
+    "propose": "node ../quant/proposals/generate.js",
+    "adjudicate": "node ../quant/proposals/run-adjudication.js"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.2",

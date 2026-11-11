@@ -127,30 +127,39 @@ export function trailingComponents(closes, index) {
  * 共同约定：T+1 执行（无前视）；positions[i] 为 bar startIndex+i 的决策仓位，作用于下一棒收益。
  * 返回：{ returns[], positions[], startIndex, ruleId?, netOfCost?, costOneSideRate? }。
  */
+/** 净口径回测：任意 0/1 仓位序列 → 与注册规则完全相同的成本路径（提案裁决共用，勿另写第二套）。 */
+export function netBacktest(series, fullPositions, ruleId = null) {
+  if (!Array.isArray(series) || series.length < BACKTEST_PARAMS_V001.warmupBars + 2) {
+    throw new TypeError(`strategyReturns needs at least ${BACKTEST_PARAMS_V001.warmupBars + 2} bars`);
+  }
+  if (!Array.isArray(fullPositions) || fullPositions.length !== series.length) {
+    throw new TypeError("fullPositions must align with series length");
+  }
+  const closes = series.map(row => row?.close);
+  if (closes.some(value => !finite(value) || value <= 0)) throw new TypeError("closes must be positive finite numbers");
+  const startIndex = BACKTEST_PARAMS_V001.warmupBars;
+  const positions = fullPositions.slice(startIndex);
+  const returns = [];
+  let prevEarned = 0;
+  for (let i = 1; i < positions.length; i += 1) {
+    const assetReturn = closes[startIndex + i] / closes[startIndex + i - 1] - 1;
+    const tradeCost = Math.abs(positions[i - 1] - prevEarned) * COST_ONE_SIDE_RATE_V002;
+    returns.push(positions[i - 1] * assetReturn - tradeCost);
+    prevEarned = positions[i - 1];
+  }
+  return { returns, positions, startIndex, ruleId, netOfCost: true, costOneSideRate: COST_ONE_SIDE_RATE_V002 };
+}
+
 export function strategyReturns(series, trial) {
   if (!Array.isArray(series) || series.length < BACKTEST_PARAMS_V001.warmupBars + 2) {
     throw new TypeError(`strategyReturns needs at least ${BACKTEST_PARAMS_V001.warmupBars + 2} bars`);
   }
+  const closes = series.map(row => row?.close);
+  if (closes.some(value => !finite(value) || value <= 0)) throw new TypeError("closes must be positive finite numbers");
   if (trial && trial.ruleId !== undefined) {
     const rule = getRule(trial.ruleId);
     if (!rule) throw new TypeError(`unknown ruleId: ${trial.ruleId}`);
-    const closes = series.map(row => row?.close);
-    if (closes.some(value => !finite(value) || value <= 0)) throw new TypeError("closes must be positive finite numbers");
-    const desired = rule.positions(closes);
-    const startIndex = BACKTEST_PARAMS_V001.warmupBars;
-    const positions = desired.slice(startIndex);
-    const returns = [];
-    let prevEarned = 0;
-    for (let i = 1; i < positions.length; i += 1) {
-      const assetReturn = closes[startIndex + i] / closes[startIndex + i - 1] - 1;
-      const tradeCost = Math.abs(positions[i - 1] - prevEarned) * COST_ONE_SIDE_RATE_V002;
-      returns.push(positions[i - 1] * assetReturn - tradeCost);
-      prevEarned = positions[i - 1];
-    }
-    return {
-      returns, positions, startIndex,
-      ruleId: trial.ruleId, netOfCost: true, costOneSideRate: COST_ONE_SIDE_RATE_V002
-    };
+    return netBacktest(series, rule.positions(closes), trial.ruleId);
   }
   const { weights, entryThresholdPct } = trial || {};
   const weightSum = (weights?.momentum ?? NaN) + (weights?.trend ?? NaN) + (weights?.stability ?? NaN);
@@ -158,8 +167,6 @@ export function strategyReturns(series, trial) {
   if (!finite(entryThresholdPct) || entryThresholdPct < 0 || entryThresholdPct > 100) {
     throw new TypeError("entryThresholdPct must be within [0,100]");
   }
-  const closes = series.map(row => row?.close);
-  if (closes.some(value => !finite(value) || value <= 0)) throw new TypeError("closes must be positive finite numbers");
 
   const startIndex = BACKTEST_PARAMS_V001.warmupBars;
   const positions = [];

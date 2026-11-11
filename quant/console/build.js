@@ -68,7 +68,7 @@ const banner = (tone, icon, htmlBody) => `<div class="banner ${tone}"><div class
 function layerBand() {
   const layers = [
     { num: "①", name: "数据设施", state: "covered", stateText: "最小可用", note: "BTC 日线快照 + 质量门禁", view: "quality" },
-    { num: "②", name: "策略研究", state: "partial", stateText: "部分", note: "6 条冻结规则；LLM 提案未闭环", view: "rules" },
+    { num: "②", name: "策略研究", state: "covered", stateText: "闭环 v0.1", note: "LLM 提案 → 确定性裁决 → 人工晋升；提案端仍窄（3 族参数）", view: "proposals" },
     { num: "③", name: "回测方法论", state: "covered", stateText: "已覆盖", note: "净成本 + IS/OOS + DSR + N_eff", view: "dsr" },
     { num: "④", name: "风险管理", state: "partial", stateText: "前半", note: "事前守卫 halt；事中/事后未做", view: "paper" },
     { num: "⑤", name: "组合构建", state: "gap", stateText: "缺口", note: "单策略，无资金分配层", view: null },
@@ -214,7 +214,7 @@ body[data-view] .topbar{display:none}
 .tile.tone-warn{border-left-color:var(--warn)}
 .tile.tone-accent{border-left-color:var(--accent)}
 .tile-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.tile-value{font-size:25px;font-weight:650;margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:-.3px}
+.tile-value{font-size:25px;font-weight:650;margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:-.3px;word-break:break-all}
 .tile.tone-good .tile-value{color:var(--good)}
 .tile.tone-bad .tile-value{color:var(--bad)}
 .tile.tone-warn .tile-value{color:#b7791f}
@@ -342,6 +342,7 @@ body[data-view="chat"] .footer{display:none}
   <div class="sidebar-group">仪表盘</div>
   <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
   <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
+  <button class="nav-btn" data-view="proposals"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg><span>Proposals</span></button>
   <button class="nav-btn" data-view="dsr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r=".5"/><circle cx="15" cy="15" r=".5"/></svg><span>DSR &amp; Promotion</span></button>
   <button class="nav-btn" data-view="quality"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v12c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9v-12"/><path d="M4.5 11.5c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9"/></svg><span>Data Quality</span></button>
   <button class="nav-btn" data-view="agent"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M9 12h7M9 16h7"/></svg><span>Agent &amp; Audit</span></button>
@@ -406,6 +407,47 @@ body[data-view="chat"] .footer{display:none}
       <div class="card-head"><div><div class="eyebrow">REGISTERED RULES · quant-rules/v0.0.2</div><h2>规则定义（冻结参数）</h2></div>${badge("6 rules", "mono")}</div>
       <table class="data-table"><thead><tr><th>ruleId</th><th>族</th><th>说明</th><th class="num">冻结参数</th></tr></thead><tbody>
         ${payload.rules.map(rule => `<tr><td class="mono">${esc(rule.ruleId)}</td><td>${esc(rule.family)}</td><td>${esc(rule.description)}</td><td class="num">${esc(JSON.stringify(rule.params))}</td></tr>`).join("")}
+      </tbody></table>
+    </div>
+  </section>
+
+  <section class="view" data-view="proposals">
+    ${viewHead("Proposals", "提案闭环 v0.1——北极星第一段：LLM 生成候选参数 → 确定性回测 + 全池 DSR 裁决 → <b>人工晋升</b>。候选永远不是权威规则；晋升 = 人工写入 rules-v002.js + 版本升级 + golden 重算。", badge(esc(payload.proposals.proposalsVersion), "mono") + badge("候选 " + payload.proposals.candidates.length, "accent"))}
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">PIPELINE · 三段流水线</div><h2>提案如何变成可部署配置</h2></div>${badge("机器永不自我升格", "muted")}</div>
+      <div class="step-flow">
+        <div class="step"><span class="n">① 提案</span><div class="t">LLM 生成候选</div><div class="d">npm run propose -- --count 4 --consent<br>参数边界硬校验 + 与冻结规则去重；写入非权威候选库</div></div>
+        <div class="step"><span class="n">② 裁决</span><div class="t">确定性回测 + DSR</div><div class="d">npm run adjudicate<br>候选与注册 6 条同池比较：净成本、IS/OOS、全池 N_eff、DSR</div></div>
+        <div class="step"><span class="n">③ 晋升</span><div class="t">人工 review + 签字</div><div class="d">人把候选写入 quant/strategy/rules-v002.js + RULES_VERSION 升级 + golden 重算 + 人工批准（不变式 3）</div></div>
+      </div>
+    </div>
+    ${payload.proposals.adjudication ? `<div class="card">
+      <div class="card-head"><div><div class="eyebrow">LATEST ADJUDICATION · 全池裁决（候选 ${payload.proposals.adjudication.candidates.length} 条）</div><h2>裁决报告</h2></div>${badge("N " + payload.proposals.adjudication.nTrials.nominal + " · N_eff " + fmt(payload.proposals.adjudication.nTrials.effective, 2), "mono")}</div>
+      <div class="tiles">
+        ${tile("Best proposal", esc(payload.proposals.adjudication.best.proposalId), esc(payload.proposals.adjudication.best.family))}
+        ${tile("pp-Sharpe", fmt(payload.proposals.adjudication.best.sharpePerPeriod), "未年化净口径")}
+        ${tile("OOS Sharpe", fmt(payload.proposals.adjudication.best.oosSharpePerPeriod), "样本外 30%")}
+        ${tile("DSR（全池）", fmt(payload.proposals.adjudication.best.dsr), "N_eff 口径", "good")}
+      </div>
+      <table class="data-table" style="margin-top:6px"><thead><tr><th>proposalId</th><th>family</th><th>params</th><th class="num">pp-Sharpe</th><th class="num">OOS</th><th class="num">换手</th><th class="num">MaxDD</th><th>rationale</th></tr></thead><tbody>
+        ${payload.proposals.adjudication.candidates.map(row => `<tr class="${row.proposalId === payload.proposals.adjudication.best.proposalId ? "selected" : ""}"><td class="mono">${esc(row.proposalId)}${row.proposalId === payload.proposals.adjudication.best.proposalId ? ' <span class="badge badge-accent">BEST</span>' : ""}</td><td class="mono">${esc(row.family)}</td><td class="mono">${esc(JSON.stringify(row.params))}</td><td class="num">${fmt(row.sharpePerPeriod)}</td><td class="num">${fmt(row.oosSharpePerPeriod)}</td><td class="num">${fmt(row.turnover)}</td><td class="num">${fmt(row.maxDrawdownPct, 2)}%</td><td>${esc(row.rationale || "")}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="callout warn"><b>诚实披露</b>：BEST 只是"本批候选里确定性指标最好"——不构成显著性结论，不构成晋升建议；晋升决定权完全在人工。</div>
+    </div>` : `<div class="card">
+      <div class="card-head"><div><div class="eyebrow">EMPTY · 候选库为空</div><h2>还没有提案</h2></div></div>
+      <div class="gate-list">
+        <div class="gate ok"><span class="mark">1</span><div><div class="t">生成候选（需模型同意）</div><div class="d">cd agent && npm run propose -- --count 4 --consent（需 DEEPSEEK_API_KEY）</div></div></div>
+        <div class="gate ok"><span class="mark">2</span><div><div class="t">离线路径（无模型）</div><div class="d">npm run propose -- --from-file my-candidates.json（手工候选同样走硬校验）</div></div></div>
+        <div class="gate ok"><span class="mark">3</span><div><div class="t">裁决并回到本视图</div><div class="d">npm run adjudicate —— 报告落 quant/proposals/adjudication-latest.json，此视图自动展示</div></div></div>
+      </div>
+    </div>`}
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">GOVERNANCE · 提案的边界</div><h2>这条流水线不做什么</h2></div></div>
+      <table class="data-table"><thead><tr><th>行为</th><th>状态</th><th>机制</th></tr></thead><tbody>
+        <tr><td>LLM 直接写权威规则文件</td><td>${badge("禁止", "bad")}</td><td>候选只落 quant/proposals/（非权威区）；晋升必须人工编辑 rules-v002.js</td></tr>
+        <tr><td>机器自动晋升</td><td>${badge("禁止", "bad")}</td><td>adjudicate 输出仅 review 材料；注册表在裁决前后逐字节不变（测试锁死）</td></tr>
+        <tr><td>病态参数进入回测</td><td>${badge("禁止", "bad")}</td><td>schema 参数边界（窗口/带宽/周期）硬校验，越界即拒</td></tr>
+        <tr><td>候选绕过 DSR 全池校正</td><td>${badge("禁止", "bad")}</td><td>trials 池 = 注册 6 条 + 全部候选，N 随候选增长（诚实口径）</td></tr>
       </tbody></table>
     </div>
   </section>
@@ -576,7 +618,7 @@ ${markdownSource}
 <script>
 var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
 (function(){
-  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
+  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], proposals: ["Proposals", "提案闭环 · LLM 提案 → 确定性裁决 → 人工晋升"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
   var buttons = document.querySelectorAll("button[data-view]");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {

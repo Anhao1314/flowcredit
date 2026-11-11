@@ -161,6 +161,12 @@ for (const path of walk(QUANT)) {
     scanPaperImports(path, rel);
     if (rel.endsWith("runner.js")) scan(path, [/\bMath\.random\b/], "zoneP-purity");
     else scan(path, [/\bMath\.random\b/, /\bprocess\.env\b/, /\bDate\.now\b/, /\bnew\s+Date\b/], "zoneP-purity");
+  } else if (/^quant[/\\]proposals[/\\]/.test(rel)) {
+    // Zone PR — 提案闭环区（LLM 提案 → 确定性裁决 → 人工晋升；候选永不写入权威注册表）：
+    //   generate.js 是第三个时钟岛（proposedAtUtc 为运营记录）；fetch 只经 agent/client.js，
+    //   本区禁直接 fetch/process.env/Math.random；adjudicate/schema 纯函数连时钟都禁。
+    if (rel.endsWith("generate.js") || rel.endsWith("run-adjudication.js")) scan(path, [/\bMath\.random\b/, /\bfetch\s*\(/, /\bchild_process\b/, /\bprocess\.env\b/], "zonePR-clock-island");
+    else scan(path, [/\bMath\.random\b/, /\bfetch\s*\(/, /\bprocess\.env\b/, /\bchild_process\b/, /\bDate\.now\b/, /\bnew\s+Date\b/], "zonePR-purity");
   } else if (/^quant[/\\]lab-(?:langgraph|vercel-ai-sdk)[/\\]/.test(rel)) {
     // Zone LX — 隔离实验区（用户 2026-11-10 授权的框架对照实验，非主线）：
     //   允许 langchain/openai/ai-sdk 框架依赖；仍禁 @deepseek-ai SDK、agent/src、harness.js、

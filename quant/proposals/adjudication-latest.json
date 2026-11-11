@@ -1,0 +1,188 @@
+{
+  "runDate": "2026-11-11T18:03:30.634Z",
+  "adjudicationVersion": "quant-adjudication/v0.0.1",
+  "datasetVersion": "quant-dataset/v0.0.2",
+  "rulesVersion": "quant-rules/v0.0.2",
+  "metricsVersion": "eval-metrics/v0.0.3",
+  "metricsBasis": "synthetic_fixture_placeholder_rules",
+  "costModel": {
+    "commissionBps": 2,
+    "slippageBps": 5
+  },
+  "nTrials": {
+    "nominal": 8,
+    "registered": 6,
+    "proposed": 2,
+    "effective": 2.123096802804344,
+    "method": "A.3 等权平均非对角相关"
+  },
+  "averageCorrelation": 0.6379432824789772,
+  "candidates": [
+    {
+      "kind": "proposal",
+      "proposalId": "p-69c9f905705356af",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 14,
+        "smaLong": 65,
+        "entryBandPct": 0.15,
+        "exitBandPct": -0.4
+      },
+      "rationale": "演示候选 A（更快交叉，带宽收窄）",
+      "nReturns": 199,
+      "sharpeAnnualized": 0.38085390404318253,
+      "sharpePerPeriod": 0.02399154085586471,
+      "isSharpePerPeriod": -0.043815734622940555,
+      "oosSharpePerPeriod": 0.08710240641473356,
+      "turnover": 0.020100502512562814,
+      "maxDrawdownPct": 19.345000217671256
+    },
+    {
+      "kind": "proposal",
+      "proposalId": "p-fcabb1cf103b2636",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 8,
+        "entryPct": 0.8,
+        "exitPct": -0.8,
+        "cooldownBars": 6
+      },
+      "rationale": "演示候选 B（中周期动量）",
+      "nReturns": 199,
+      "sharpeAnnualized": 0.2822699515035317,
+      "sharpePerPeriod": 0.017781335577728746,
+      "isSharpePerPeriod": -0.0063810891215468945,
+      "oosSharpePerPeriod": 0.04709519798501618,
+      "turnover": 0.09547738693467336,
+      "maxDrawdownPct": 12.510354081141342
+    }
+  ],
+  "registered": [
+    {
+      "kind": "registered",
+      "trialId": "sma-cross-hysteresis-a",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 20,
+        "smaLong": 60,
+        "entryBandPct": 0.1,
+        "exitBandPct": -0.5
+      },
+      "nReturns": 199,
+      "sharpeAnnualized": 0.35660869975426307,
+      "sharpePerPeriod": 0.022464236545520964,
+      "isSharpePerPeriod": -0.04601375150062451,
+      "oosSharpePerPeriod": 0.0905268606646923,
+      "turnover": 0.01507537688442211,
+      "maxDrawdownPct": 21.794033597134998
+    },
+    {
+      "kind": "registered",
+      "trialId": "sma-cross-hysteresis-b",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 10,
+        "smaLong": 40,
+        "entryBandPct": 0.05,
+        "exitBandPct": -0.3
+      },
+      "nReturns": 199,
+      "sharpeAnnualized": 0.6609705351542389,
+      "sharpePerPeriod": 0.04163722999903313,
+      "isSharpePerPeriod": -0.011527082181515711,
+      "oosSharpePerPeriod": 0.09264473234597712,
+      "turnover": 0.02512562814070352,
+      "maxDrawdownPct": 9.939600598842
+    },
+    {
+      "kind": "registered",
+      "trialId": "momentum-cooldown-a",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 10,
+        "entryPct": 1,
+        "exitPct": -1,
+        "cooldownBars": 5
+      },
+      "nReturns": 199,
+      "sharpeAnnualized": 0.16960084440536438,
+      "sharpePerPeriod": 0.010683848962932249,
+      "isSharpePerPeriod": -0.062196749101302705,
+      "oosSharpePerPeriod": 0.09855047271805069,
+      "turnover": 0.06532663316582915,
+      "maxDrawdownPct": 13.308210475557846
+    },
+    {
+      "kind": "registered",
+      "trialId": "momentum-cooldown-b",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 5,
+        "entryPct": 0.5,
+        "exitPct": -0.5,
+        "cooldownBars": 8
+      },
+      "nReturns": 199,
+      "sharpeAnnualized": -0.445378678825312,
+      "sharpePerPeriod": -0.028056219605292487,
+      "isSharpePerPeriod": -0.03823924211518666,
+      "oosSharpePerPeriod": -0.016111867167277565,
+      "turnover": 0.11557788944723618,
+      "maxDrawdownPct": 15.16041180508795
+    },
+    {
+      "kind": "registered",
+      "trialId": "composite-percentile-a",
+      "family": "composite-percentile",
+      "params": {
+        "window": 40,
+        "percentile": 70
+      },
+      "nReturns": 199,
+      "sharpeAnnualized": 0.5915332399141368,
+      "sharpePerPeriod": 0.03726309154859791,
+      "isSharpePerPeriod": -0.0729316487642392,
+      "oosSharpePerPeriod": 0.12102972285619477,
+      "turnover": 0.07035175879396985,
+      "maxDrawdownPct": 8.617880937285
+    },
+    {
+      "kind": "registered",
+      "trialId": "composite-percentile-b",
+      "family": "composite-percentile",
+      "params": {
+        "window": 40,
+        "percentile": 60
+      },
+      "nReturns": 199,
+      "sharpeAnnualized": 0.19524128861703358,
+      "sharpePerPeriod": 0.012299045126963254,
+      "isSharpePerPeriod": -0.07242755505323818,
+      "oosSharpePerPeriod": 0.07620095372548809,
+      "turnover": 0.10050251256281408,
+      "maxDrawdownPct": 8.374748245133636
+    }
+  ],
+  "best": {
+    "kind": "proposal",
+    "proposalId": "p-69c9f905705356af",
+    "family": "sma-cross-hysteresis",
+    "params": {
+      "smaShort": 14,
+      "smaLong": 65,
+      "entryBandPct": 0.15,
+      "exitBandPct": -0.4
+    },
+    "rationale": "演示候选 A（更快交叉，带宽收窄）",
+    "nReturns": 199,
+    "sharpeAnnualized": 0.38085390404318253,
+    "sharpePerPeriod": 0.02399154085586471,
+    "isSharpePerPeriod": -0.043815734622940555,
+    "oosSharpePerPeriod": 0.08710240641473356,
+    "turnover": 0.020100502512562814,
+    "maxDrawdownPct": 19.345000217671256,
+    "dsr": 0.5662118548374244,
+    "dsrNominal": null
+  },
+  "disclaimer": "裁决报告只是 review 材料：不注册、不晋升、不进入任何执行层；晋升 = 人工把候选写入 quant/strategy/rules-v002.js + 版本升级 + golden 重算 + 人工 review。"
+}

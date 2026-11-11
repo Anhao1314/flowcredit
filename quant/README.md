@@ -116,6 +116,17 @@ node quant/data/fetch-btc-daily.js          # 手动运行；OKX 主源，失败
 
 行业七层（数据设施 → 策略引擎 → 风控 → 组合 → 执行 EMS → 订单 OMS → 监控）中，本仓库覆盖**数据设施最小可用（快照+门禁，①）+ 策略引擎（②）+ 事前风控（③前半）+ 回测方法论（DSR/trials）+ 审计指纹**，**永远不进入** 执行（EMS）与订单（OMS）层。agent 定位：**研究层只读解释器**——比 RD-Agent(Q)（自动写因子代码）保守一级，比 TradingAgents（多角色交易决策）保守两级。剩余缺口：多市场/复权/实时性、成本模型校准、会话记忆与引用结构（0.2.1 候选）。
 
+## 提案闭环 v0.1（2026-11-12，北极星第一段）
+
+LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立）：
+
+1. `npm run propose -- --count 4 --consent`（LLM 生成候选；或 `--from-file` 离线/手工）
+2. 候选经 schema 硬校验（3 族参数边界）+ 与冻结规则去重 → `quant/proposals/candidates.json`（**非权威区**）
+3. `npm run adjudicate`：候选与注册 6 条**同池**比较（同一 netBacktest 成本路径），全池 N=6+候选、N_eff/DSR 诚实口径 → `adjudication-latest.json`
+4. 晋升 = 人工把候选写入 `quant/strategy/rules-v002.js` + `RULES_VERSION` 升级 + golden 重算 + 人工 review——机器永不自我升格（`quant-proposals.test.js` 锁死：裁决前后注册表逐字节不变）
+
+控制台 Proposals 视图展示候选/裁决/晋升步骤；lint Zone PR：proposals 区禁直接 fetch/env/random（generate.js 为时钟岛）。
+
 ## 运行
 
 ```sh
