@@ -218,7 +218,7 @@ body[data-view="chat"] .footer{display:none}
 .chat-note.reject{border-left:3px solid var(--bad)}
 .chat-hint{font-size:11.5px;color:var(--muted);margin:10px auto 0;max-width:820px;width:100%}
 /* ── P1：历史会话列表 / 流式光标 / 重试芯片 ──────────────────────────────── */
-.history-list{display:flex;flex-direction:column;gap:2px;max-height:184px;overflow:auto;margin:0 2px 4px}
+.history-list{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow:auto;margin:0 2px 4px}
 .history-item{display:flex;align-items:center;gap:6px;border-radius:10px;padding:4px 6px 4px 8px}
 .history-item:hover{background:var(--hover)}
 .history-item.active{background:var(--track)}
@@ -245,14 +245,14 @@ body[data-view="chat"] .footer{display:none}
     <button class="seg-btn" data-view="paper">Paper</button>
   </div>
   <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘K</span></button>
-  <div class="sidebar-group">历史会话</div>
-  <div id="chat-history" class="history-list"></div>
   <div class="sidebar-group">仪表盘</div>
   <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
   <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
   <button class="nav-btn" data-view="dsr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r=".5"/><circle cx="15" cy="15" r=".5"/></svg><span>DSR &amp; Promotion</span></button>
   <button class="nav-btn" data-view="quality"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v12c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9v-12"/><path d="M4.5 11.5c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9"/></svg><span>Data Quality</span></button>
   <button class="nav-btn" data-view="agent"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M9 12h7M9 16h7"/></svg><span>Agent &amp; Audit</span></button>
+  <div class="sidebar-group">历史会话</div>
+  <div id="chat-history" class="history-list"></div>
   <div class="sidebar-footer">
     <span>👤</span>
     <div style="display:flex;flex-direction:column;line-height:1.3">
