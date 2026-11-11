@@ -184,6 +184,23 @@ body[data-view="chat"] .footer{display:none}
 .chat-note.fill{border-left:3px solid var(--good)}
 .chat-note.reject{border-left:3px solid var(--bad)}
 .chat-hint{font-size:11.5px;color:var(--faint);margin:10px auto 0;max-width:820px;width:100%}
+/* ── P1：历史会话列表 / 流式光标 / 重试芯片 ──────────────────────────────── */
+.history-list{display:flex;flex-direction:column;gap:2px;max-height:184px;overflow:auto;margin:0 2px 4px}
+.history-item{display:flex;align-items:center;gap:6px;border-radius:10px;padding:4px 6px 4px 8px}
+.history-item:hover{background:rgba(0,0,0,.04)}
+.history-item.active{background:#e9e9ec}
+.history-open{flex:1;min-width:0;background:none;border:none;text-align:left;font-size:12.5px;color:#3c3c43;cursor:pointer;padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-item.active .history-open{font-weight:550}
+.history-time{font-size:10px;color:var(--faint);flex-shrink:0}
+.history-del{border:none;background:none;color:var(--faint);font-size:11px;cursor:pointer;padding:2px 5px;border-radius:6px;visibility:hidden;flex-shrink:0}
+.history-item:hover .history-del{visibility:visible}
+.history-del:hover{color:var(--bad);background:rgba(229,72,77,.08)}
+.history-empty{font-size:11.5px;color:var(--faint);padding:4px 10px}
+.streaming-text::after{content:"▍";color:var(--accent);margin-left:2px;animation:caret-blink 1s steps(2,start) infinite}
+@keyframes caret-blink{50%{opacity:0}}
+.retry-row{display:flex}
+.retry-chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 14px;font-size:12.5px;color:#3c3c43;cursor:pointer;box-shadow:var(--shadow)}
+.retry-chip:hover{background:var(--card2)}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:200px}}
 </style>
 </head>
@@ -195,6 +212,8 @@ body[data-view="chat"] .footer{display:none}
     <button class="seg-btn" data-view="paper">Paper</button>
   </div>
   <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘K</span></button>
+  <div class="sidebar-group">历史会话</div>
+  <div id="chat-history" class="history-list"></div>
   <div class="sidebar-group">仪表盘</div>
   <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
   <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
@@ -463,22 +482,48 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     });
     return out.join("");
   }
-  // ── 可见历史（sessionStorage，按会话隔离；只存已渲染的问答，不存 paper 卡片）──
-  // 目的：刷新后界面与 sidecar 的会话记忆不再错位。关闭标签页即弃，不落盘。
-  var transcriptKey = "quant-chat-log:" + chatSession;
+  // ── 可见历史（localStorage 历史列表 + 当前会话记录；只存已渲染的问答，不存 paper 卡片）──
+  // 目的：刷新/重启后界面可恢复，且侧栏提供 Kimi 式历史会话列表。仅存本机浏览器。
   var transcript = [];
-  try {
-    var savedTranscript = JSON.parse(sessionStorage.getItem(transcriptKey) || "[]");
-    if (Array.isArray(savedTranscript)) transcript = savedTranscript.slice(-60);
-  } catch (e) { transcript = []; }
   var restoring = false;
-  function persistTranscript() {
+  var HISTORY_KEY = "quant-chat-history";
+  var HISTORY_MAX_SESSIONS = 30;
+  var HISTORY_BYTES_LIMIT = 1500000;
+  function loadHistory() {
     try {
-      var capped = transcript.slice(-60).map(function(entry) {
-        return { role: entry.role, text: String(entry.text || "").slice(0, 20000), meta: entry.meta || null, cites: entry.cites || null };
+      var list = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function saveHistory(list) {
+    try {
+      var capped = list.slice(-HISTORY_MAX_SESSIONS).map(function(entry) {
+        return { id: entry.id, title: entry.title || "新会话", updatedAt: entry.updatedAt || 0, entries: (entry.entries || []).slice(-60) };
       });
-      sessionStorage.setItem(transcriptKey, JSON.stringify(capped));
+      var json = JSON.stringify(capped);
+      while (json.length > HISTORY_BYTES_LIMIT && capped.length > 1) {
+        capped = capped.slice(1);
+        json = JSON.stringify(capped);
+      }
+      localStorage.setItem(HISTORY_KEY, json);
     } catch (e) { /* 配额/隐私模式：静默降级，仅丢可见历史，不影响对话 */ }
+  }
+  function findHistoryEntry(id) {
+    var list = loadHistory();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  function saveCurrentHistory() {
+    var title = "";
+    for (var i = 0; i < transcript.length; i++) {
+      if (transcript[i].role === "user") { title = String(transcript[i].text || "").slice(0, 26); break; }
+    }
+    var entry = { id: chatSession, title: title, updatedAt: Date.now(), entries: transcript.slice(-60) };
+    var list = loadHistory();
+    var index = -1;
+    for (var j = 0; j < list.length; j++) if (list[j].id === chatSession) { index = j; break; }
+    if (index >= 0) list[index] = entry; else list.push(entry);
+    saveHistory(list);
   }
   function bubble(cls, text, meta, cites) {
     ensureThread();
@@ -507,16 +552,21 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     }
     if (!restoring) {
       transcript.push({ role: cls, text: text, meta: meta || null, cites: cites || null });
-      persistTranscript();
+      saveCurrentHistory();
+      renderHistory();
     }
     thread.scrollTop = thread.scrollHeight;
   }
-  // 恢复本会话的可见记录（内容仍走同一转义/markdown 路径）。
-  if (transcript.length) {
-    restoring = true;
-    transcript.forEach(function(entry) { bubble(entry.role === "assistant" ? "assistant" : "user", entry.text, entry.meta, entry.cites); });
-    restoring = false;
-  }
+  // 恢复当前会话的可见记录（来自 localStorage 历史库；内容仍走同一转义/markdown 路径）。
+  (function restoreTranscript() {
+    var entry = findHistoryEntry(chatSession);
+    if (entry && Array.isArray(entry.entries) && entry.entries.length) {
+      transcript = entry.entries.slice(-60);
+      restoring = true;
+      transcript.forEach(function(item) { bubble(item.role === "assistant" ? "assistant" : "user", item.text, item.meta, item.cites); });
+      restoring = false;
+    }
+  })();
 
   // ── 健康探测：首次 + 每 15s 复查；恢复/中断都更新状态，避免“服务挂了仍显示已连接”──
   var healthOk = false;
@@ -544,35 +594,164 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   setInterval(checkHealth, 15000);
   document.addEventListener("visibilitychange", function() { if (!document.hidden) checkHealth(); });
 
-  // 按会话跟踪在途请求：切换会话后旧请求不阻塞新会话，也不会把回答写进新会话。
+  // ── 发送：SSE 流式（/api/agent/ask/stream）+ 停止 + 重试；按会话跟踪在途请求 ──
   var inflight = {};
-  function setSendState() { sendBtn.disabled = !healthOk || !!inflight[chatSession]; }
+  var streaming = null; // { controller, requestSession }
+  var lastQuestion = "";
+  function setSendState() {
+    if (streaming && streaming.requestSession === chatSession) {
+      sendBtn.textContent = "■";
+      sendBtn.title = "停止生成";
+      sendBtn.disabled = false;
+      return;
+    }
+    sendBtn.textContent = "↑";
+    sendBtn.title = "发送";
+    sendBtn.disabled = !healthOk || !!inflight[chatSession];
+  }
+  function buildLive() {
+    var wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;gap:9px;align-items:flex-start;width:100%";
+    wrap.innerHTML = botAvatarSVG(26, "idle", true);
+    var msg = document.createElement("div");
+    msg.className = "msg assistant live";
+    var text = document.createElement("div");
+    text.className = "streaming-text";
+    var meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = "生成中…";
+    msg.appendChild(text);
+    msg.appendChild(meta);
+    wrap.appendChild(msg);
+    thread.appendChild(wrap);
+    thread.scrollTop = thread.scrollHeight;
+    return { wrap: wrap, text: text, meta: meta };
+  }
+  function removeLive(live) {
+    if (live && live.wrap.parentNode) live.wrap.parentNode.removeChild(live.wrap);
+  }
+  function renderRetry(question, session) {
+    var row = document.createElement("div");
+    row.className = "retry-row";
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "retry-chip";
+    chip.textContent = "↻ 重试上一问";
+    chip.addEventListener("click", function() {
+      if (chatSession !== session) return; // 会话已切换：不跨会话重放
+      row.remove();
+      input.value = question;
+      send();
+    });
+    row.appendChild(chip);
+    thread.appendChild(row);
+    thread.scrollTop = thread.scrollHeight;
+  }
   function send() {
+    if (streaming && streaming.requestSession === chatSession) { streaming.controller.abort(); return; } // 发送键 = 停止键（先于空输入守卫）
     var question = input.value.trim();
-    if (!question || inflight[chatSession]) return;
+    if (!question) return;
+    if (inflight[chatSession]) return;
     var requestSession = chatSession; // 捕获请求发出时的会话，响应回来时据此判定是否仍属当前会话
     bubble("user", question);
+    lastQuestion = question;
     input.value = "";
     inflight[requestSession] = true;
+    var controller = new AbortController();
+    streaming = { controller: controller, requestSession: requestSession };
     setSendState();
     setBotMood("think");
-    fetch("/api/agent/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: requestSession }) })
-      .then(function(r){ return r.json().then(function(body){ return { status: r.status, body: body }; }); })
-      .then(function(resp) {
-        if (requestSession !== chatSession) return; // 会话已切换：丢弃旧回答，避免污染新会话
-        var body = resp.body;
-        bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
-          (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
-          body.citations || []);
-        setBotMood(body.ok ? "happy" : "idle", 1600);
-        if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
-      })
-      .catch(function(err) { if (requestSession === chatSession) { bubble("assistant", "请求失败：" + err.message); setBotMood("idle"); } })
-      .finally(function() {
-        delete inflight[requestSession];
-        setSendState();
-        if (requestSession === chatSession) input.focus();
+    var acc = "";
+    var live = null;
+    var finalize = function(result) {
+      removeLive(live); live = null;
+      if (requestSession !== chatSession) return; // 会话已切换：丢弃旧回答，避免污染新会话
+      var body = result || {};
+      if (body.harnessStatus === "aborted") {
+        chatNote("已停止生成；本轮不进入会话记忆。", "reject");
+        if (lastQuestion === question) renderRetry(question, requestSession);
+        setBotMood("idle");
+        return;
+      }
+      bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
+        (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
+        body.citations || []);
+      if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
+      var degraded = body.harnessStatus && body.harnessStatus !== "ok" && body.harnessStatus !== "not-requested";
+      if (degraded && lastQuestion === question) renderRetry(question, requestSession);
+      setBotMood(body.harnessStatus === "ok" ? "happy" : "idle", 1600);
+    };
+    fetch("/api/agent/ask/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: question, modelConsent: consent.checked, sessionId: requestSession }),
+      signal: controller.signal
+    }).then(function(response) {
+      if (!response.ok || !response.body) throw new Error("HTTP " + response.status);
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = "";
+      var handleFrame = function(frame) {
+        frame.split("\\n").forEach(function(line) {
+          if (line.indexOf("data:") !== 0) return;
+          var payload;
+          try { payload = JSON.parse(line.slice(5).trim()); } catch (e) { return; }
+          if (requestSession !== chatSession) return; // 会话已切换：丢弃
+          if (payload.type === "delta") {
+            acc += payload.text || "";
+            if (!live) live = buildLive();
+            live.text.innerHTML = formatText(acc);
+            thread.scrollTop = thread.scrollHeight;
+          } else if (payload.type === "reset") {
+            acc = "";
+            if (live) { live.text.innerHTML = ""; live.meta.textContent = "调用工具中…"; }
+          } else if (payload.type === "tool") {
+            var names = (payload.calls || []).map(function(call) { return (call.name || "?") + (call.ok ? " ✓" : " ✗"); }).join("、");
+            if (!live) live = buildLive();
+            live.meta.textContent = "步骤 " + (payload.step || "?") + " · " + names;
+          } else if (payload.type === "done") {
+            finalize(payload.result);
+          }
+        });
+      };
+      var pump = function() {
+        return reader.read().then(function(chunk) {
+          if (chunk.done) return null;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var sep;
+          while ((sep = buffer.indexOf("\\n\\n")) >= 0) {
+            var frame = buffer.slice(0, sep);
+            buffer = buffer.slice(sep + 2);
+            if (frame.trim()) handleFrame(frame);
+          }
+          return pump();
+        });
+      };
+      return pump().then(function() {
+        if (buffer.trim()) handleFrame(buffer.trim());
+        if (live) { // 服务端提前收尾且无 done 帧：把已收文本落地为普通回答
+          removeLive(live); live = null;
+          if (requestSession === chatSession) bubble("assistant", acc || "（空回答）", "", []);
+        }
       });
+    }).catch(function(err) {
+      removeLive(live); live = null;
+      if (requestSession !== chatSession) return;
+      if (err && err.name === "AbortError") {
+        chatNote("已停止生成；本轮不进入会话记忆。", "reject");
+        if (lastQuestion === question) renderRetry(question, requestSession);
+        setBotMood("idle");
+        return;
+      }
+      bubble("assistant", "请求失败：" + err.message);
+      if (lastQuestion === question) renderRetry(question, requestSession);
+      setBotMood("idle");
+    }).finally(function() {
+      delete inflight[requestSession];
+      if (streaming && streaming.requestSession === requestSession) streaming = null;
+      setSendState();
+      if (requestSession === chatSession) input.focus();
+    });
   }
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", function(e) {
@@ -584,19 +763,96 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     input.value = chip.getAttribute("data-q");
     input.focus();
   });
+
+  // ── 历史会话列表（localStorage；点击切换/悬浮删除；当前会话高亮）────────────
+  function fmtHistoryTime(ts) {
+    if (!ts) return "";
+    var d = new Date(ts);
+    var now = new Date();
+    var pad2 = function(n) { return String(n).padStart(2, "0"); };
+    if (d.toDateString() === now.toDateString()) return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    return (d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
+  function renderHistory() {
+    var box = document.getElementById("chat-history");
+    if (!box) return;
+    var list = loadHistory().slice().reverse();
+    box.innerHTML = "";
+    if (!list.length) {
+      var emptyItem = document.createElement("div");
+      emptyItem.className = "history-empty";
+      emptyItem.textContent = "暂无历史";
+      box.appendChild(emptyItem);
+      return;
+    }
+    list.forEach(function(entry) {
+      var item = document.createElement("div");
+      item.className = "history-item" + (entry.id === chatSession ? " active" : "");
+      var open = document.createElement("button");
+      open.type = "button";
+      open.className = "history-open";
+      open.title = entry.title || "新会话";
+      open.textContent = entry.title || "新会话";
+      open.addEventListener("click", function() { switchSession(entry.id); });
+      var time = document.createElement("span");
+      time.className = "history-time";
+      time.textContent = fmtHistoryTime(entry.updatedAt);
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "history-del";
+      del.textContent = "✕";
+      del.title = "删除该记录";
+      del.addEventListener("click", function() { deleteHistoryEntry(entry.id); });
+      item.appendChild(open);
+      item.appendChild(time);
+      item.appendChild(del);
+      box.appendChild(item);
+    });
+  }
+  function loadSessionIntoThread(entries) {
+    thread.innerHTML = "";
+    if (entries.length) {
+      thread.style.display = "flex";
+      document.getElementById("chat-empty").style.display = "none";
+      restoring = true;
+      entries.forEach(function(item) { bubble(item.role === "assistant" ? "assistant" : "user", item.text, item.meta, item.cites); });
+      restoring = false;
+    } else {
+      thread.style.display = "none";
+      document.getElementById("chat-empty").style.display = "flex";
+    }
+  }
+  function switchSession(id) {
+    if (!id || id === chatSession) return;
+    if (streaming && streaming.requestSession === chatSession) streaming.controller.abort(); // 停止当前流，记录已随写随存
+    if (transcript.length) saveCurrentHistory();
+    chatSession = id;
+    try { sessionStorage.setItem("quant-chat-session", id); } catch (e) {}
+    var entry = findHistoryEntry(id);
+    transcript = entry && Array.isArray(entry.entries) ? entry.entries.slice(-60) : [];
+    loadSessionIntoThread(transcript.slice());
+    setSendState();
+    renderHistory();
+    input.focus();
+  }
+  function deleteHistoryEntry(id) {
+    saveHistory(loadHistory().filter(function(item) { return item.id !== id; }));
+    if (id === chatSession) startNewChat();
+    else renderHistory();
+  }
   function startNewChat() {
+    if (streaming && streaming.requestSession === chatSession) streaming.controller.abort();
     thread.innerHTML = "";
     thread.style.display = "none";
     var empty = document.getElementById("chat-empty");
     if (empty) empty.style.display = "flex";
     // 保留 paperSeen：新会话只收「新」事件；仍在挂起的审批卡由 paperPoll 补挂。
-    try { sessionStorage.removeItem(transcriptKey); } catch (e) {}
     try { chatSession = "web-" + Math.random().toString(16).slice(2, 10); sessionStorage.setItem("quant-chat-session", chatSession); } catch (e) {}
-    transcriptKey = "quant-chat-log:" + chatSession;
     transcript = [];
     setBotMood("idle");
     input.value = "";
     setSendState();
+    renderHistory();
     input.focus();
   }
   document.getElementById("new-chat").addEventListener("click", startNewChat);
@@ -606,6 +862,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       startNewChat();
     }
   });
+  renderHistory();
 
   // ── 虚拟盘事件入聊天流（Grok Bot 模式：审批卡 + 事件通知主动找你）──────────
   var paperSeen = { orders: {}, fills: {}, sessionDone: {} };

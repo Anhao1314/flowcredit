@@ -161,7 +161,7 @@ export async function computeConsolePayload({ quantDir = urlDir(), auditDir, pap
 
   return {
     generatedAtUtc: generatedAtUtc || null,
-    meta: { metricsVersion: METRICS_VERSION, metricsBasis: METRICS_BASIS, costModel: COST_MODEL_V002, rulesVersion: RULES_VERSION, gatesVersion: GATES_VERSION, agentVersion: "quant-agent/v0.0.2" },
+    meta: { metricsVersion: METRICS_VERSION, metricsBasis: METRICS_BASIS, costModel: COST_MODEL_V002, rulesVersion: RULES_VERSION, gatesVersion: GATES_VERSION, agentVersion: "quant-agent/v0.0.3" },
     datasets: {
       v001: {
         dataVersion: datasetV001.dataVersion, nature: datasetV001.nature, rows: datasetV001.series.length,

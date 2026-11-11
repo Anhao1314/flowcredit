@@ -131,7 +131,7 @@ npm run eval                     # 离线评估 → ../quant/eval/results/
 - ✅~~❌~~ **修订（0.2）**：允许 `quant/agent/` 内存在**有界对话 agent**——单问工具轮次 ≤4、封闭注册表、无 planner/任务图/自我反思；权威层之外的其他形态（自主多步规划、多 Agent 编排）仍禁止
 - ❌ 不引入 LangChain / AutoGen / CrewAI / 任何 agent 框架（含 @deepseek-ai SDK 包——agent 仅用 REST 直连，lint 强制；隔离实验区 Zone LX 除外）
 - ❌ 不让任何 LLM 输出写入 `signal/` 或 `risk/` 读取的字段（agent 输出只进注记层，测试锁死）
-- ✅~~❌~~ **修订（F2）**：允许 **本地 HTTP 服务**（`quant/agent/server.js`）——仅限静态控制台 + 只读数据端点 + agent 问答端点；默认绑定 127.0.0.1、可选 Bearer 鉴权（≥16 字符）、限流 30/min、body 64KB、fail-safe 默认
+- ✅~~❌~~ **修订（F2）**：允许 **本地 HTTP 服务**（`quant/agent/server.js`）——仅限静态控制台 + 只读数据端点 + agent 问答端点（JSON `/api/agent/ask` 与 SSE 流式 `/api/agent/ask/stream`，P1：同一门禁/限流/鉴权，断连与超时取消上游模型调用；delta 只是注记层文本，最终采用 done.answer）；默认绑定 127.0.0.1、可选 Bearer 鉴权（≥16 字符）、限流 30/min、body 64KB、fail-safe 默认
 - ✅~~❌~~ **修订（4a）**：允许 **虚拟盘**（`quant/paper/`）——仅限①本地确定性模拟撮合、②官方 paper/testnet 账户（4b）；**无任何真实资金**；下单意图只能来自冻结规则，**每笔订单必须人工批准**（未批准 = 永不成交，测试锁定）；**agent 永不持有下单工具**（治理测试锁定）。**"聊天即交易"禁令原文保留**：agent 与控制台均无下单能力；真实资金、自动交易、实盘仍然禁止
 - ❌ 不自动 promote 任何策略配置（原文保留：人工 review 是硬门禁）
 - ❌ 不改动 `agent/src/` 的权威边界逻辑（原文保留：只读参考）

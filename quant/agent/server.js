@@ -1,9 +1,9 @@
 /*
- * quant/agent/server.js — 本地控制台服务 v0.0.3（quant-console/v0.0.3）
+ * quant/agent/server.js — 本地控制台服务 v0.0.5（quant-console/v0.0.5）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
- *   1. 无任何交易能力：端面只有 静态控制台 / 只读数据端点 / agent 问答——
- *      agent 输出永远不写权威层（askQuant 原语义零改动，仅增加 HTTP 传输）。
+ *   1. 无任何交易能力：端面只有 静态控制台 / 只读数据端点 / agent 问答（JSON+SSE 流式）——
+ *      agent 输出永远不写权威层（askQuant/askQuantStream 原语义零改动，仅增加 HTTP 传输）。
  *   2. 默认仅绑定 127.0.0.1；鉴权默认关闭、开启后 Bearer 必须 ≥16 字符
  *      （timing-safe 比较）；限流默认 30 req/min；body 上限 64KB——fail-safe 默认。
  *   3. 本文件是 agent 层第二个时钟岛（限流窗口需要时间；lint 豁免 Date，Math.random 仍禁）。
@@ -26,7 +26,7 @@ import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/eng
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
 
-export const SERVER_VERSION = "quant-console/v0.0.4";
+export const SERVER_VERSION = "quant-console/v0.0.5";
 
 const bool = value => /^(1|true|yes|on)$/i.test(String(value ?? ""));
 const intBetween = (value, fallback, min, max) => {
@@ -306,6 +306,53 @@ export function createQuantConsoleServer(options = {}) {
         );
         const status = result.ok ? 200 : 400;
         return send(status, result);
+      }
+
+      // 流式问答端点：同一门禁/限流/body 校验；SSE 增量 + 最终 done 帧。
+      // 客户端断连或整体超时 → abort 上游模型调用（不浪费 token，不留孤儿请求）。
+      if (req.method === "POST" && url.pathname === "/api/agent/ask/stream") {
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required (CONSOLE_AUTH_ENABLED=true)" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
+        const ip = req.socket?.remoteAddress || "unknown";
+        const rate = limiter.consume(ip, nowMs());
+        if (!rate.allowed) {
+          return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
+        }
+        const raw = await readBody(req, security.bodyLimit);
+        let body;
+        try { body = JSON.parse(raw || "{}"); } catch { return send(400, { ok: false, code: "INVALID_JSON", error: "request body must be valid JSON" }); }
+        const upstream = new AbortController();
+        let closed = false;
+        res.on("close", () => { closed = true; upstream.abort(); });
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+          "Connection": "keep-alive"
+        });
+        const writeEvent = payload => { if (!closed) res.write(`data: ${JSON.stringify(payload)}\n\n`); };
+        try {
+          await withTimeout(
+            assistant.askQuantStream({
+              question: body.question,
+              modelConsent: body.modelConsent === true,
+              sessionId: typeof body.sessionId === "string" ? body.sessionId : null,
+              signal: upstream.signal,
+              onEvent: event => {
+                if (event.type === "delta") writeEvent({ type: "delta", text: event.text });
+                else if (event.type === "reset") writeEvent({ type: "reset" });
+                else if (event.type === "tool") writeEvent({ type: "tool", step: event.step, calls: event.calls });
+                else if (event.type === "done") writeEvent({ type: "done", result: event.result });
+              }
+            }),
+            security.askTimeoutMs, "ASK_TIMEOUT"
+          );
+        } catch (error) {
+          if (error?.code === "ASK_TIMEOUT") upstream.abort();
+          writeEvent({ type: "done", result: { ok: false, harnessStatus: "unavailable", code: error?.code || "STREAM_ERROR", answer: "", toolCalls: [], steps: 0, citations: [], usage: null, sessionId: null, agentVersion: AGENT_VERSION, model: client.model, note: "流式请求失败：" + String(error?.message || error) } });
+        }
+        return res.end();
       }
 
       return send(404, { ok: false, code: "NOT_FOUND", error: "unknown path" });

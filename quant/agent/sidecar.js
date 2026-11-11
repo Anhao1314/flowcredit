@@ -16,6 +16,8 @@
  *   7. 不用随机数；时钟只经 audit.nowMs() 读取（耗时统计），不进入可重放输出。
  *      同输入 + 同 transport → 同输出（可重放）。
  *   8. 每次回答（含降级/拒答路径）经审计日志落一条仅元数据记录（问题/回答只存哈希）。
+ *   9. 流式路径（askQuantStream）：delta 只是注记层模型文本，最终采用 done.result.answer；
+ *      权威边界、门禁顺序、重试预算、降级与审计语义与 askQuant 完全一致。
  */
 
 import { AGENT_VERSION } from "./client.js";
@@ -224,5 +226,140 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
     };
   }
 
-  return { askQuant, deterministicSummary, maxSteps: MAX_STEPS_V002, retryBudget: RETRY_BUDGET_V002, agentVersion: AGENT_VERSION };
+  /**
+   * askQuant 的流式版：同一门禁/同一工具循环/同一降级与审计语义，额外通过
+   * onEvent 逐块吐出 {type:"delta"|"reset"|"tool"|"done"} 事件。权威边界不变：
+   * delta 只是模型文本（注记层），最终 done.result.answer 才是展示层采用的完整回答。
+   * signal（可选 AbortSignal）→ 用户/调用方停止：done.result.harnessStatus="aborted"。
+   */
+  async function askQuantStream({ question, modelConsent = false, sessionId = null, onEvent = () => {}, signal = null } = {}) {
+    const startedAt = auditLogger.nowMs();
+    const emit = event => { try { onEvent(event); } catch { /* 观察者异常不污染主流程 */ } };
+    const finish = result => {
+      auditLogger.write({
+        sessionId: sessionId ?? null, question, answer: result.answer ?? "",
+        harnessStatus: result.harnessStatus ?? null, code: result.code ?? null,
+        toolCalls: result.toolCalls ?? [], steps: result.steps ?? null,
+        usage: result.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
+        durationMs: auditLogger.nowMs() - startedAt
+      });
+      emit({ type: "done", result });
+      return result;
+    };
+
+    if (typeof question !== "string" || !question.trim() || question.length > 2000) {
+      return finish({ ok: false, code: "INVALID_QUESTION", harnessStatus: "not-requested", answer: "", toolCalls: [], steps: 0, citations: [], usage: null, sessionId, agentVersion: AGENT_VERSION, model: client.model });
+    }
+
+    const nowMs = () => auditLogger.nowMs();
+
+    if (modelConsent !== true) {
+      return finish({
+        ok: false, code: "MODEL_CONSENT_REQUIRED", harnessStatus: "not-requested",
+        answer: deterministicSummary(),
+        toolCalls: [], steps: 0, citations: [], usage: null, sessionId,
+        agentVersion: AGENT_VERSION, model: client.model,
+        authority: "deterministic-tools",
+        note: "未获得 modelConsent=true：不发送任何文本到模型；以上为确定性摘要。"
+      });
+    }
+
+    if (!client.configured()) {
+      return finish(fallback("unconfigured", "HARNESS_UNCONFIGURED", [], 0, null));
+    }
+
+    if (typeof client.chatStream !== "function") {
+      // 无流式能力的 client：退化为一次性 askQuant（自身写审计），此处不再重复写。
+      const result = await askQuant({ question, modelConsent: true, sessionId });
+      emit({ type: "done", result });
+      return result;
+    }
+
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...sessionTurns(sessionId, nowMs()),
+      { role: "user", content: question }
+    ];
+    const toolCalls = [];
+    let steps = 0;
+    let totalUsage = null;
+
+    for (let step = 1; step <= MAX_STEPS_V002; step += 1) {
+      let message = null;
+      let lastError = null;
+      let emittedDelta = false;
+      for (let attempt = 0; attempt <= RETRY_BUDGET_V002; attempt += 1) {
+        emittedDelta = false;
+        try {
+          const response = await client.chatStream({
+            messages, tools: registry.schemas, signal,
+            onDelta: text => { emittedDelta = true; emit({ type: "delta", text }); }
+          });
+          message = response.message;
+          totalUsage = addUsage(totalUsage, response.usage);
+          break;
+        } catch (error) {
+          lastError = error;
+          if (emittedDelta) break; // 已吐过部分文本：重试会造成重复内容，直接收尾
+          const retryable = !error?.code || RETRYABLE_CODES.has(error.code);
+          if (!retryable) break;
+        }
+      }
+      if (!message) {
+        if (lastError?.code === "MODEL_ABORTED") {
+          return finish({ ok: false, harnessStatus: "aborted", code: "MODEL_ABORTED", answer: "", toolCalls, steps, citations: [], usage: totalUsage, sessionId, agentVersion: AGENT_VERSION, model: client.model, note: "已停止生成；本轮不进入会话记忆。" });
+        }
+        const status = lastError?.code === "HARNESS_UNCONFIGURED" ? "unconfigured" : "unavailable";
+        return finish(fallback(status, lastError?.code || "MODEL_ERROR", toolCalls, steps, totalUsage));
+      }
+
+      if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
+        steps = step;
+        if (emittedDelta) emit({ type: "reset" }); // 工具轮的前导文本不是最终回答，通知展示层清空
+        messages.push({ role: "assistant", content: message.content ?? null, tool_calls: message.tool_calls });
+        const before = toolCalls.length;
+        for (const call of message.tool_calls) {
+          const tool = registry.get(call?.function?.name);
+          let result;
+          if (!tool) {
+            result = { ok: false, error: "TOOL_NOT_IN_REGISTRY", message: "only registered deterministic tools are callable" };
+          } else {
+            try {
+              result = { ok: true, tool: tool.name, result: tool.execute(parseToolArguments(call?.function?.arguments)) };
+            } catch (error) {
+              result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
+            }
+          }
+          const authoritative = result?.result?.authoritative ?? null;
+          toolCalls.push({
+            step, name: call?.function?.name ?? null, ok: result.ok,
+            evalRunId: authoritative?.evalRunId ?? null,
+            signalFingerprint: authoritative?.signalFingerprint ?? null
+          });
+          messages.push({ role: "tool", tool_call_id: call?.id ?? `call-${step}`, content: JSON.stringify(result) });
+        }
+        emit({ type: "tool", step, calls: toolCalls.slice(before) });
+        continue;
+      }
+
+      const answer = typeof message.content === "string" ? message.content : "";
+      if (!answer.trim()) {
+        return finish(fallback("unavailable", "MODEL_EMPTY_ANSWER", toolCalls, steps, totalUsage));
+      }
+      if (sessionId) sessionAppend(sessionId, question, answer, nowMs());
+      return finish({
+        ok: true, harnessStatus: "ok",
+        answer, toolCalls, steps,
+        citations: toolCalls.filter(call => call.evalRunId).map(call => ({ tool: call.name, evalRunId: call.evalRunId, signalFingerprint: call.signalFingerprint })),
+        usage: totalUsage, sessionId,
+        agentVersion: AGENT_VERSION, model: client.model,
+        authority: "deterministic-tools",
+        note: "回答为模型对权威工具输出的解释（注记层，非权威）；与工具输出冲突的数字一律以工具为准。"
+      });
+    }
+
+    return finish(fallback("max-steps-reached", "MAX_STEPS_EXCEEDED", toolCalls, steps, totalUsage));
+  }
+
+  return { askQuant, askQuantStream, deterministicSummary, maxSteps: MAX_STEPS_V002, retryBudget: RETRY_BUDGET_V002, agentVersion: AGENT_VERSION };
 }
