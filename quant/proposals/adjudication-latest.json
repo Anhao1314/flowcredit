@@ -1,11 +1,11 @@
 {
-  "runDate": "2026-11-11T18:24:53.455Z",
+  "runDate": "2026-11-11T18:35:45.178Z",
   "market": "BTC-USDT · 2y",
   "symbol": "BTC-USDT",
   "adjudicationVersion": "quant-adjudication/v0.0.1",
   "datasetVersion": "quant-dataset/v0.0.3",
   "rulesVersion": "quant-rules/v0.0.2",
-  "metricsVersion": "eval-metrics/v0.0.3",
+  "metricsVersion": "eval-metrics/v0.0.4",
   "metricsBasis": "synthetic_fixture_placeholder_rules",
   "costModel": {
     "commissionBps": 2,
@@ -39,7 +39,13 @@
       "isSharpePerPeriod": -0.028044858433556964,
       "oosSharpePerPeriod": 0.04618326426813973,
       "turnover": 0.02092675635276532,
-      "maxDrawdownPct": 34.24469239566817
+      "maxDrawdownPct": 34.24469239566817,
+      "psrZero": 0.5281136156458253,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      }
     },
     {
       "kind": "proposal",
@@ -58,7 +64,13 @@
       "isSharpePerPeriod": 0.014065493963858304,
       "oosSharpePerPeriod": 0.04969434238127256,
       "turnover": 0.08370702541106129,
-      "maxDrawdownPct": 24.958864714251703
+      "maxDrawdownPct": 24.958864714251703,
+      "psrZero": 0.7583397267688176,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      }
     },
     {
       "kind": "proposal",
@@ -75,7 +87,13 @@
       "isSharpePerPeriod": -0.011761066754344653,
       "oosSharpePerPeriod": 0.08506145101828302,
       "turnover": 0.07772795216741404,
-      "maxDrawdownPct": 25.92106955751177
+      "maxDrawdownPct": 25.92106955751177,
+      "psrZero": 0.7657889080437447,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      }
     }
   ],
   "registered": [
@@ -95,7 +113,13 @@
       "isSharpePerPeriod": -0.032453525888267866,
       "oosSharpePerPeriod": 0.052256958469327514,
       "turnover": 0.017937219730941704,
-      "maxDrawdownPct": 33.22811725729249
+      "maxDrawdownPct": 33.22811725729249,
+      "psrZero": 0.5244739293835141,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      }
     },
     {
       "kind": "registered",
@@ -113,7 +137,13 @@
       "isSharpePerPeriod": -0.013005805438870916,
       "oosSharpePerPeriod": 0.05801137184090359,
       "turnover": 0.029895366218236172,
-      "maxDrawdownPct": 27.859436500157177
+      "maxDrawdownPct": 27.859436500157177,
+      "psrZero": 0.6412878219943621,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      }
     },
     {
       "kind": "registered",
@@ -131,7 +161,13 @@
       "isSharpePerPeriod": -0.0461477582861359,
       "oosSharpePerPeriod": 0.0339383188483956,
       "turnover": 0.08071748878923767,
-      "maxDrawdownPct": 31.125390415182153
+      "maxDrawdownPct": 31.125390415182153,
+      "psrZero": 0.33159704667111967,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      }
     },
     {
       "kind": "registered",
@@ -149,7 +185,13 @@
       "isSharpePerPeriod": -0.07757271550389383,
       "oosSharpePerPeriod": 0.011552914263301716,
       "turnover": 0.10762331838565023,
-      "maxDrawdownPct": 35.73445632748907
+      "maxDrawdownPct": 35.73445632748907,
+      "psrZero": 0.13744060867559016,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0
+      }
     },
     {
       "kind": "registered",
@@ -165,7 +207,13 @@
       "isSharpePerPeriod": -0.036572497189511874,
       "oosSharpePerPeriod": 0.07834957953441074,
       "turnover": 0.09865470852017937,
-      "maxDrawdownPct": 32.8821895735174
+      "maxDrawdownPct": 32.8821895735174,
+      "psrZero": 0.5424145851604406,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      }
     },
     {
       "kind": "registered",
@@ -181,7 +229,13 @@
       "isSharpePerPeriod": -0.04183320699917966,
       "oosSharpePerPeriod": 0.06575132638420875,
       "turnover": 0.11061285500747384,
-      "maxDrawdownPct": 35.522875797772365
+      "maxDrawdownPct": 35.522875797772365,
+      "psrZero": 0.44821638232119115,
+      "psrN": 669,
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      }
     }
   ],
   "best": {
@@ -200,6 +254,12 @@
     "oosSharpePerPeriod": 0.08506145101828302,
     "turnover": 0.07772795216741404,
     "maxDrawdownPct": 25.92106955751177,
+    "psrZero": 0.7657889080437447,
+    "psrN": 669,
+    "robustness": {
+      "segments": 4,
+      "positiveRatio": 0.75
+    },
     "dsr": 0.633540739919293,
     "dsrNominal": null
   },

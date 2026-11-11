@@ -35,7 +35,7 @@
 
 import { getRule } from "../strategy/rules-v002.js";
 
-export const METRICS_VERSION = "eval-metrics/v0.0.3";
+export const METRICS_VERSION = "eval-metrics/v0.0.4";
 export const METRICS_BASIS = "synthetic_fixture_placeholder_rules";
 
 // 成本模型（冻结常量，阶段 1）：单边成本 = (佣金 + 滑点) bps，按仓位变动幅度计提在兑现收益的棒上。
@@ -316,6 +316,23 @@ function moments(returns) {
   const m3 = returns.reduce((sum, value) => sum + (value - mean) ** 3, 0) / n;
   const m4 = returns.reduce((sum, value) => sum + (value - mean) ** 4, 0) / n;
   return { gamma3: m2 > 0 ? m3 / Math.pow(m2, 1.5) : 0, gamma4: m2 > 0 ? m4 / (m2 * m2) : 3 };
+}
+
+
+/** 分段稳健性（R2）：参数冻结 → 等分 K 段看各时段表现一致性（无再训练偏移，非训练/测试式 walk-forward）。
+ *  返回 { segments: [{index, n, sharpePerPeriod, positive}], positiveRatio, k }；收益不足 2·K 根 → null（不足分段）。 */
+export function segmentRobustness(returns, options = {}) {
+  const k = options.segments ?? 4;
+  if (!Array.isArray(returns) || !Number.isInteger(k) || k < 2 || returns.length < k * 2) return null;
+  const size = Math.floor(returns.length / k);
+  const segments = [];
+  for (let i = 0; i < k; i += 1) {
+    const slice = returns.slice(i * size, i === k - 1 ? returns.length : (i + 1) * size);
+    const sharpe = sharpeRatio(slice, { annualize: false });
+    segments.push({ index: i + 1, n: slice.length, sharpePerPeriod: sharpe, positive: sharpe !== null && sharpe > 0 });
+  }
+  const positiveRatio = segments.filter(segment => segment.positive).length / segments.length;
+  return { segments, positiveRatio, k };
 }
 
 /** PSR(SR*)：见文件头引用 (2012, eq. 7)。返回 { psr, sr, n, gamma3, gamma4, basis }；分母非正 → psr=null。 */

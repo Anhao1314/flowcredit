@@ -10,7 +10,7 @@
  *   4. 同输入 → 同输出（可重放）；无随机数、无时钟。
  */
 
-import { netBacktest, sharpeRatio, turnover, maxDrawdownPct, effectiveTrials, deflatedSharpe, splitPoint, COST_MODEL_V002, COST_ONE_SIDE_RATE_V002, METRICS_VERSION, METRICS_BASIS } from "../eval/metrics.js";
+import { netBacktest, sharpeRatio, turnover, maxDrawdownPct, effectiveTrials, deflatedSharpe, probabilisticSharpe, segmentRobustness, splitPoint, COST_MODEL_V002, COST_ONE_SIDE_RATE_V002, METRICS_VERSION, METRICS_BASIS } from "../eval/metrics.js";
 import { listRules, runFamily, RULES_VERSION } from "../strategy/rules-v002.js";
 
 export const ADJUDICATION_VERSION = "quant-adjudication/v0.0.1";
@@ -40,6 +40,8 @@ export function adjudicateCandidates({ dataset, candidates, costRate } = {}) {
       oosSharpePerPeriod: sharpeRatio(oos, { annualize: false }),
       turnover: turnover(backtest.positions),
       maxDrawdownPct: maxDrawdownPct(backtest.returns),
+      psrZero: probabilisticSharpe(backtest.returns, 0),
+      robustness: segmentRobustness(backtest.returns),
       returns: backtest.returns
     };
   });
@@ -59,6 +61,8 @@ export function adjudicateCandidates({ dataset, candidates, costRate } = {}) {
       oosSharpePerPeriod: sharpeRatio(oos, { annualize: false }),
       turnover: turnover(backtest.positions),
       maxDrawdownPct: maxDrawdownPct(backtest.returns),
+      psrZero: probabilisticSharpe(backtest.returns, 0),
+      robustness: segmentRobustness(backtest.returns),
       returns: backtest.returns
     };
   });
@@ -73,8 +77,9 @@ export function adjudicateCandidates({ dataset, candidates, costRate } = {}) {
   const dsrBest = deflatedSharpe(bestProposal.returns, perPeriodSharpes, { effectiveTrials: effective.effectiveTrials });
 
   const strip = row => {
-    const { returns, ...rest } = row;
-    return rest;
+    const { returns, psrZero, robustness, ...rest } = row;
+    return { ...rest, psrZero: psrZero?.psr ?? null, psrN: psrZero?.n ?? null,
+      robustness: robustness ? { segments: robustness.k, positiveRatio: robustness.positiveRatio } : null };
   };
   return {
     adjudicationVersion: ADJUDICATION_VERSION,
@@ -116,23 +121,30 @@ export function adjudicateMultiMarket({ datasets, candidates } = {}) {
   for (const { label, rows } of perMarketRows) {
     for (const row of rows) {
       const entry = byId.get(row.proposalId) ?? { proposalId: row.proposalId, family: row.family, params: row.params, perMarket: [] };
-      entry.perMarket.push({ market: label, sharpePerPeriod: row.sharpePerPeriod, isSharpePerPeriod: row.isSharpePerPeriod, oosSharpePerPeriod: row.oosSharpePerPeriod });
+      entry.perMarket.push({ market: label, sharpePerPeriod: row.sharpePerPeriod, isSharpePerPeriod: row.isSharpePerPeriod, oosSharpePerPeriod: row.oosSharpePerPeriod, psrZero: row.psrZero ?? null, positiveRatio: row.robustness?.positiveRatio ?? null });
       byId.set(row.proposalId, entry);
     }
   }
   const candidatesConsistency = [...byId.values()].map(entry => {
     const signs = new Set(entry.perMarket.map(p => Math.sign(p.sharpePerPeriod ?? 0)));
     const profitableEverywhere = entry.perMarket.every(p => (p.isSharpePerPeriod ?? -Infinity) > 0 && (p.oosSharpePerPeriod ?? -Infinity) > 0);
-    return { ...entry, signConsistent: signs.size === 1, profitableEverywhere };
+    // R2 统计硬化：PSR(0) ≥ 0.95（真实 SR>0 概率）与分段稳健（正窗占比 ≥ 3/4）须跨市场全部达成。
+    // 注意：PSR(0) 未做选优折减——挑 best 的选优偏差看 DSR（主口径）。
+    const psrPass = entry.perMarket.length > 0 && entry.perMarket.every(p => (p.psrZero ?? 0) >= 0.95);
+    const robustPass = entry.perMarket.length > 0 && entry.perMarket.every(p => (p.positiveRatio ?? 0) >= 0.75);
+    return { ...entry, signConsistent: signs.size === 1, profitableEverywhere, psrPass, robustPass };
   });
   return {
     multiMarketVersion: MULTI_MARKET_VERSION,
+    metricsVersion: METRICS_VERSION,
     markets,
     candidatesConsistency,
     verdict: {
       signConsistent: candidatesConsistency.every(c => c.signConsistent),
       profitableEverywhere: candidatesConsistency.every(c => c.profitableEverywhere),
-      disclaimer: "方向一致 ≠ 统计显著性；样本量与 PSR/walk-forward 检验属 R2。"
+      psrPass: candidatesConsistency.length > 0 && candidatesConsistency.every(c => c.psrPass),
+      robustPass: candidatesConsistency.length > 0 && candidatesConsistency.every(c => c.robustPass),
+      disclaimer: "方向一致 ≠ 显著性；PSR(0) 未做选优折减（选优偏差看 DSR 主口径）；分段稳健为参数冻结下的时段一致性。"
     }
   };
 }

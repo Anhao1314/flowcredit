@@ -1,6 +1,7 @@
 {
-  "runDate": "2026-11-11T18:24:53.450Z",
+  "runDate": "2026-11-11T18:35:45.171Z",
   "multiMarketVersion": "quant-adjudication-multi/v0.0.1",
+  "metricsVersion": "eval-metrics/v0.0.4",
   "markets": [
     {
       "label": "BTC-USDT · 2y",
@@ -30,6 +31,12 @@
         "oosSharpePerPeriod": 0.08506145101828302,
         "turnover": 0.07772795216741404,
         "maxDrawdownPct": 25.92106955751177,
+        "psrZero": 0.7657889080437447,
+        "psrN": 669,
+        "robustness": {
+          "segments": 4,
+          "positiveRatio": 0.75
+        },
         "dsr": 0.633540739919293,
         "dsrNominal": null
       }
@@ -64,6 +71,12 @@
         "oosSharpePerPeriod": 0.06283788183713258,
         "turnover": 0.014947683109118086,
         "maxDrawdownPct": 24.088189921750114,
+        "psrZero": 0.9417213462833467,
+        "psrN": 669,
+        "robustness": {
+          "segments": 4,
+          "positiveRatio": 0.75
+        },
         "dsr": 0.8210784010697438,
         "dsrNominal": null
       }
@@ -84,17 +97,23 @@
           "market": "BTC-USDT · 2y",
           "sharpePerPeriod": 0.0027272066423119482,
           "isSharpePerPeriod": -0.028044858433556964,
-          "oosSharpePerPeriod": 0.04618326426813973
+          "oosSharpePerPeriod": 0.04618326426813973,
+          "psrZero": 0.5281136156458253,
+          "positiveRatio": 0.5
         },
         {
           "market": "ETH-USDT · 2y",
           "sharpePerPeriod": 0.059561862302100234,
           "isSharpePerPeriod": 0.05784439282779461,
-          "oosSharpePerPeriod": 0.06283788183713258
+          "oosSharpePerPeriod": 0.06283788183713258,
+          "psrZero": 0.9417213462833467,
+          "positiveRatio": 0.75
         }
       ],
       "signConsistent": true,
-      "profitableEverywhere": false
+      "profitableEverywhere": false,
+      "psrPass": false,
+      "robustPass": false
     },
     {
       "proposalId": "p-fcabb1cf103b2636",
@@ -110,17 +129,23 @@
           "market": "BTC-USDT · 2y",
           "sharpePerPeriod": 0.02689181439088455,
           "isSharpePerPeriod": 0.014065493963858304,
-          "oosSharpePerPeriod": 0.04969434238127256
+          "oosSharpePerPeriod": 0.04969434238127256,
+          "psrZero": 0.7583397267688176,
+          "positiveRatio": 0.75
         },
         {
           "market": "ETH-USDT · 2y",
           "sharpePerPeriod": 0.028404281963485482,
           "isSharpePerPeriod": 0.03936480174676494,
-          "oosSharpePerPeriod": 0.00453893518306259
+          "oosSharpePerPeriod": 0.00453893518306259,
+          "psrZero": 0.7719393627702815,
+          "positiveRatio": 0.75
         }
       ],
       "signConsistent": true,
-      "profitableEverywhere": true
+      "profitableEverywhere": true,
+      "psrPass": false,
+      "robustPass": true
     },
     {
       "proposalId": "p-e646ddf3f786a252",
@@ -134,22 +159,30 @@
           "market": "BTC-USDT · 2y",
           "sharpePerPeriod": 0.02760402679367485,
           "isSharpePerPeriod": -0.011761066754344653,
-          "oosSharpePerPeriod": 0.08506145101828302
+          "oosSharpePerPeriod": 0.08506145101828302,
+          "psrZero": 0.7657889080437447,
+          "positiveRatio": 0.75
         },
         {
           "market": "ETH-USDT · 2y",
           "sharpePerPeriod": 0.034466562720018384,
           "isSharpePerPeriod": 0.016536876622341233,
-          "oosSharpePerPeriod": 0.07709010586896989
+          "oosSharpePerPeriod": 0.07709010586896989,
+          "psrZero": 0.8185262663828788,
+          "positiveRatio": 0.75
         }
       ],
       "signConsistent": true,
-      "profitableEverywhere": false
+      "profitableEverywhere": false,
+      "psrPass": false,
+      "robustPass": true
     }
   ],
   "verdict": {
     "signConsistent": true,
     "profitableEverywhere": false,
-    "disclaimer": "方向一致 ≠ 统计显著性；样本量与 PSR/walk-forward 检验属 R2。"
+    "psrPass": false,
+    "robustPass": false,
+    "disclaimer": "方向一致 ≠ 显著性；PSR(0) 未做选优折减（选优偏差看 DSR 主口径）；分段稳健为参数冻结下的时段一致性。"
   }
 }

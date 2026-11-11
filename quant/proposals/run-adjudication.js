@@ -64,6 +64,7 @@ function main() {
     process.stdout.write(`${market.label}（cost ${market.costRate ? (market.costRate * 10000).toFixed(2) + "bps calibrated" : "frozen 7bps"}）: best=${market.best.proposalId} · pp-Sharpe ${market.best.sharpePerPeriod?.toFixed?.(4) ?? "n/a"} · DSR ${market.best.dsr?.toFixed?.(4) ?? "n/a"}\n`);
   }
   process.stdout.write(`一致性验收（R1）: 方向一致=${multi.verdict.signConsistent} · IS/OOS 全正=${multi.verdict.profitableEverywhere}\n`);
+  process.stdout.write(`统计硬化（R2）: PSR(0)≥0.95 跨市场=${multi.verdict.psrPass} · 分段正窗≥3/4 跨市场=${multi.verdict.robustPass}\n`);
   process.stdout.write(`报告：${MULTI_OUTPUT_PATH}\n下一步：人工 review 后，晋升 = 把候选写入 quant/strategy/rules-v002.js + RULES_VERSION 升级 + golden 重算 + 人工 review。\n`);
 }
 
