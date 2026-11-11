@@ -17,10 +17,10 @@
 
 import { createInterface } from "node:readline";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPaperSession, PAPER_ENGINE_VERSION } from "./engine-adapter.js";
+import { defaultPaperAuditDir } from "../agent/audit.js";
 
 /**
  * 行队列问答：readline 的 'line' 事件在无 pending question 时会把到达的行直接丢掉
@@ -113,7 +113,7 @@ async function main() {
     process.stdout.write(`fill ${fill.orderId} ${fill.date} ${fill.side} ${fill.units.toFixed(6)} @ ${fill.price} cost=${fill.cost.toFixed(2)}\n`);
   }
 
-  const auditDir = args.auditDir || join(tmpdir(), "fc-quant-paper-audit");
+  const auditDir = args.auditDir || defaultPaperAuditDir(); // 仓库外固定目录（重启不丢）
   mkdirSync(auditDir, { recursive: true, mode: 0o700 });
   const auditPath = join(auditDir, `paper-${args.rule}-${Date.now()}.jsonl`);
   writeFileSync(auditPath, engine.events.map(event => JSON.stringify(event)).join("\n") + "\n", { encoding: "utf8" });

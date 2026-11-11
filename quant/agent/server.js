@@ -162,7 +162,11 @@ export function createQuantConsoleServer(options = {}) {
     const resolvedRuleId = resolvePaperRuleId(ruleId || "T2-sma-cross-b");
     const startCapital = Number(capital) > 0 ? Number(capital) : paperConfig.capital;
     const id = `ps-${String(++paperSessionSeq).padStart(3, "0")}`;
-    const session = { id, ruleId: resolvedRuleId, engine: null, pending: new Map(), done: false, error: null, report: null, createdAt: nowMs() };
+    // 门禁快照（治理披露）：paper 是演练，不受晋升门禁阻塞，但必须如实记录
+    // 启动时的权威裁决状态——blocked 下演练不构成晋升依据（不变式 3/5）。
+    const gateAuth = registry.get("assess_frozen_dataset").execute({}).authoritative;
+    const session = { id, ruleId: resolvedRuleId, engine: null, pending: new Map(), done: false, error: null, report: null, createdAt: nowMs(),
+      gate: { guardStatus: gateAuth.guardStatus, decisionStatus: gateAuth.decisionStatus, evalRunId: gateAuth.evalRunId, rehearsal: true } };
     const approve = async order => {
       if (paperConfig.approvePolicy === "auto" && Array.isArray(paperConfig.autoApproveRuleIds) && paperConfig.autoApproveRuleIds.includes(resolvedRuleId)) {
         return { approved: true, approvedBy: "config-policy" };
@@ -182,6 +186,7 @@ export function createQuantConsoleServer(options = {}) {
     const pending = session.engine.orders.filter(order => order.status === "pending");
     return {
       id: session.id, ruleId: session.ruleId, done: session.done, error: session.error,
+      gate: session.gate ?? null,
       awaitingApproval: pending.length > 0,
       account, pending,
       orders: session.engine.orders.length, fills: session.engine.fills.length,

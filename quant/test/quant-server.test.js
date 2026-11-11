@@ -132,6 +132,8 @@ test("paper endpoint: reference session (200-point curves, fills) + audit sessio
   assert.ok(Math.abs(paperEnd - backtestEnd) / backtestEnd < 1e-4, `paper ${paperEnd} vs backtest ${backtestEnd}`);
   assert.ok(Array.isArray(sessions), "sessions must be an array");
   for (const session of sessions) {
+    assert.ok(session.gate && session.gate.guardStatus === "halt" && session.gate.decisionStatus === "blocked" && session.gate.rehearsal === true,
+      "每个演练会话必须携带门禁快照（rehearsal 披露）");
     assert.equal(session.chain.length, session.events, "chain length must equal event count");
     assert.equal(session.orders, session.chain.filter(e => e.type === "intent").length, "orders must count intent events");
     for (const event of session.chain) assert.ok(event.seq >= 1 && typeof event.type === "string");

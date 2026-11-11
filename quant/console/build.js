@@ -495,13 +495,13 @@ node quant/agent/cli.js repl --consent                            # 交互模式
         ${tile("Harness", Object.entries(payload.audit.byStatus).map(([key, count]) => key + " ×" + count).join(" · ") || "none", "含降级路径（fail-open 即 fail-honest）")}
         ${tile("Tool calls", Object.entries(payload.audit.byTool).map(([key, count]) => key + " ×" + count).join(" · ") || "none", "全部来自封闭注册表")}
         ${tile("Last activity", esc((payload.audit.lastTs || "n/a").slice(0, 19).replace("T", " ")), "UTC")}
-      </div>` : `<div class="kv"><div class="k">位置</div><div class="mono">系统临时目录 fc-quant-audit/agent-audit.jsonl（QUANT_AUDIT_DIR 可覆盖）</div><div class="k">说明</div><div>每次 agent 问答落一条仅元数据记录：问题/回答只存 SHA-256 前缀哈希，永不存明文。</div></div>`}
+      </div>` : `<div class="kv"><div class="k">位置</div><div class="mono">~/.flowcredit-quant/audit/agent-audit.jsonl（仓库外固定目录，QUANT_AUDIT_DIR 可覆盖）</div><div class="k">说明</div><div>每次 agent 问答落一条仅元数据记录：问题/回答只存 SHA-256 前缀哈希，永不存明文。</div></div>`}
     </div>
   </section>
 
   <section class="view" data-view="paper">
     ${viewHead("Paper", "纸上演练场——执行层的 rehearsal：本地确定性撮合（MOC）、每单人工批准、与回测逐点对等（二阶差异 &lt; 1e-4）。批准策略来自配置文件，freqtrade 式命令控制面。", badge("paper-engine/v0.1.0", "mono") + badge("无真实资金", "good"))}
-    ${banner("good", "✓", `<b>边界重申</b>：无真实资金 · <b>未批准永不成交</b>（终态 rejected）· agent 永不持有下单工具 · "聊天即交易"禁令原文保留。`)}
+    ${banner("good", "✓", `<b>边界重申</b>：无真实资金 · <b>未批准永不成交</b>（终态 rejected）· agent 永不持有下单工具 · "聊天即交易"禁令原文保留。<b>门禁关系</b>：晋升门禁只阻塞"晋升为可部署配置"，不阻塞无真实资金的演练；每个会话启动时如实记录门禁快照（halt/blocked 下演练不构成晋升依据）。`)}
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">REFERENCE · 真实快照 · 净口径含成本 · 全批准</div><h2>虚拟盘权益曲线 vs 回测（参考会话）</h2></div>${badge("DSR 选中规则", "accent")}</div>
       <div class="tiles">
@@ -525,6 +525,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
         <select id="live-rule" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px">${payload.rules.map(rule => `<option value="${esc(rule.ruleId)}"${rule.ruleId === payload.paper.reference.ruleId ? " selected" : ""}>${esc(rule.ruleId)}</option>`).join("")}</select>
         <button id="live-start" class="sendbtn" style="padding:8px 14px">Start session</button>
         <span id="live-account" class="badge badge-mono"></span>
+        <span id="live-gate" class="badge"></span>
       </div>
       <div id="live-pending" style="margin-top:12px"></div>
       <div id="live-fills"></div>
@@ -532,7 +533,7 @@ node quant/agent/cli.js repl --consent                            # 交互模式
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">INTERACTIVE SESSIONS · 人工批准审计链</div><h2>本机虚拟盘会话</h2></div><span id="paper-sessions-status" class="badge">…</span></div>
-      <div id="paper-sessions"><div class="kv"><div class="k">说明</div><div>审计会话由 runner CLI 写在仓库外（系统临时目录 fc-quant-paper-audit）。HTTP 模式下此处自动加载最新会话事件链；file:// 模式仅显示构建时快照。</div></div></div>
+      <div id="paper-sessions"><div class="kv"><div class="k">说明</div><div>审计会话由 runner CLI 写在仓库外固定目录 ~/.flowcredit-quant/paper-audit（重启不丢）。HTTP 模式下此处自动加载最新会话事件链；file:// 模式仅显示构建时快照。</div></div></div>
       <div id="paper-sessions-body"></div>
     </div>
   </section>
@@ -1119,6 +1120,12 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
           chatNote("成交 " + order.orderId + "（" + s.id + "）" + order.side + " " + order.deltaUnits.toFixed(4) + " units @ " + order.price + (order.approvedBy ? " · by " + order.approvedBy : ""), order.status === "filled" ? "fill" : "reject");
         }
       });
+      if (!paperSeen.sessionStart) paperSeen.sessionStart = {};
+      if (!paperSeen.sessionStart[s.id]) {
+        paperSeen.sessionStart[s.id] = true;
+        var g = s.gate;
+        if (g) chatNote("演练会话 " + s.id + " 启动 · 门禁快照 guard=" + g.guardStatus + "/decision=" + g.decisionStatus + "（rehearsal 不受晋升门禁约束）", "");
+      }
       if (s.done && !paperSeen.sessionDone[s.id]) {
         paperSeen.sessionDone[s.id] = true;
         chatNote("虚拟盘会话完成：" + s.id + " · fills " + s.report.fills + " · rejected " + s.report.rejected + " · totalReturn " + s.report.totalReturnPct.toFixed(2) + "% · finalEquity " + Math.round(s.report.finalEquity).toLocaleString(), "fill");
@@ -1197,6 +1204,11 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     status.textContent = s.error ? ("error: " + s.error) : s.done ? "completed" : (s.awaitingApproval ? "awaiting approval" : "running");
     status.className = "badge " + (s.error ? "badge-bad" : s.done ? "badge-good" : "badge-accent");
     account.textContent = "equity " + Math.round(s.account.equity).toLocaleString() + " · cash " + Math.round(s.account.cash).toLocaleString() + " · units " + s.account.units.toFixed(4);
+    var gate = s.gate;
+    var gateBadge = document.getElementById("live-gate");
+    if (gateBadge) gateBadge.innerHTML = gate
+      ? 'gate ' + gate.guardStatus + '/' + gate.decisionStatus + ' · rehearsal（演练不受晋升门禁约束）'
+      : '';
     var pendingHtml = s.pending.length
       ? s.pending.map(function(o) {
           return '<div class="callout" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>' + o.orderId + ' ' + o.side + ' ' + o.deltaUnits.toFixed(6) + ' units @ ' + o.price + ' <span class="badge badge-warn">人工批准待决</span></span>' +

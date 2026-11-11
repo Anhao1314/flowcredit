@@ -9,8 +9,8 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { defaultAuditDir, defaultPaperAuditDir } from "../agent/audit.js";
 
 const { runPipeline } = await import(join(urlDir(), "pipeline.js"));
 const { strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe, effectiveTrials, splitPoint, COST_MODEL_V002, METRICS_VERSION, METRICS_BASIS } = await import(join(urlDir(), "eval", "metrics.js"));
@@ -33,7 +33,7 @@ function latestEvalArtifact(quantDir) {
 
 export function readAuditSummary(auditDir) {
   try {
-    const file = join(auditDir || join(tmpdir(), "fc-quant-audit"), "agent-audit.jsonl");
+    const file = join(auditDir || defaultAuditDir(), "agent-audit.jsonl"); // 仓库外固定目录
     if (!existsSync(file)) return null;
     const lines = readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
     const byTool = {};
@@ -89,12 +89,12 @@ const formatNumber = (value, digits = 4) => (value === null || value === undefin
 
 /**
  * 读取虚拟盘审计会话（runner 写的 paper-*.jsonl，仅元事件链，无明文敏感）。
- * 输入：审计目录（默认系统临时目录 fc-quant-paper-audit）。
+ * 输入：审计目录（默认 ~/.flowcredit-quant/paper-audit）。
  * 输出：[{ file, ruleId, events, orders, fills, rejected, span }]（按文件修改时间倒序）。
  */
 export function readPaperSessions(auditDir) {
   try {
-    const dir = auditDir || join(tmpdir(), "fc-quant-paper-audit");
+    const dir = auditDir || defaultPaperAuditDir();
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
       .filter(name => name.startsWith("paper-") && name.endsWith(".jsonl"))

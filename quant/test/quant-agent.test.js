@@ -24,6 +24,7 @@ const { createToolRegistry } = await import(join(QUANT, "agent", "tools.js"));
 const { createScriptedTransport } = await import(join(QUANT, "agent", "scripted-model.js"));
 const { createQuantAssistant, MAX_STEPS_V002 } = await import(join(QUANT, "agent", "sidecar.js"));
 const { createAuditLogger } = await import(join(QUANT, "agent", "audit.js"));
+const { defaultPaperAuditDir } = await import(join(QUANT, "agent", "audit.js"));
 const { upsertEnvFile } = await import(join(QUANT, "agent", "set-key.js"));
 
 const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v001.json"), "utf8"));
@@ -226,6 +227,13 @@ test("usage from the model response is plumbed into the result", async () => {
   const assistant = createQuantAssistant({ client, registry, dataset, trials });
   const result = await assistant.askQuant({ question: "q", modelConsent: true });
   assert.deepEqual(result.usage, { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+});
+
+test("audit default dir: repo-external stable path (survives reboot; not tmpdir)", async () => {
+  const { defaultAuditDir } = await import(join(QUANT, "agent", "audit.js"));
+  const dir = defaultAuditDir();
+  assert.match(dir, /\.flowcredit-quant[/\\]audit$/, "默认审计目录必须是 ~/.flowcredit-quant/audit");
+  assert.match(defaultPaperAuditDir(), /\.flowcredit-quant[/\\]paper-audit$/, "演练审计目录同理");
 });
 
 test("audit log: metadata-only JSONL, hashes instead of plaintext, one line per ask", async () => {
