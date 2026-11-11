@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAgentClient } from "../agent/client.js";
+import { loadDotEnv } from "../agent/server.js";
 import { validateCandidateBatch, listFamilies, PROPOSALS_VERSION } from "./schema.js";
 import { listRules } from "../strategy/rules-v002.js";
 
@@ -109,6 +110,7 @@ export async function generateCandidates({ count = 4, consent = false, fromFile 
 
 /** 直接命令行运行（npm run propose -- --count 4 --consent / --from-file my.json）。 */
 if (process.argv[1] && process.argv[1].endsWith("generate.js")) {
+  loadDotEnv(join(HERE, "..", "..", ".env")); // 仓库根 .env（不覆盖已有 env；密钥经 client.js 读取）
   const argv = process.argv.slice(2);
   const args = {};
   for (let i = 0; i < argv.length; i += 1) {

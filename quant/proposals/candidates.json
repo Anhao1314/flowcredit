@@ -1,7 +1,7 @@
 {
   "proposalsVersion": "quant-proposals/v0.0.1",
-  "updatedAtUtc": "2026-11-11T18:03:30.534Z",
-  "source": "file:/tmp/propose-demo.json",
+  "updatedAtUtc": "2026-11-11T18:09:04.526Z",
+  "source": "model:kimi-k2.6",
   "candidates": [
     {
       "proposalId": "p-69c9f905705356af",
@@ -25,6 +25,16 @@
         "cooldownBars": 6
       },
       "rationale": "演示候选 B（中周期动量）",
+      "PROPOSALS_VERSION": "quant-proposals/v0.0.1"
+    },
+    {
+      "proposalId": "p-e646ddf3f786a252",
+      "family": "composite-percentile",
+      "params": {
+        "window": 50,
+        "percentile": 75
+      },
+      "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
       "PROPOSALS_VERSION": "quant-proposals/v0.0.1"
     }
   ]

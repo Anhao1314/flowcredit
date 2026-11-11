@@ -1,5 +1,5 @@
 {
-  "runDate": "2026-11-11T18:03:30.634Z",
+  "runDate": "2026-11-11T18:09:18.406Z",
   "adjudicationVersion": "quant-adjudication/v0.0.1",
   "datasetVersion": "quant-dataset/v0.0.2",
   "rulesVersion": "quant-rules/v0.0.2",
@@ -10,13 +10,13 @@
     "slippageBps": 5
   },
   "nTrials": {
-    "nominal": 8,
+    "nominal": 9,
     "registered": 6,
-    "proposed": 2,
-    "effective": 2.123096802804344,
+    "proposed": 3,
+    "effective": 2.193617621072279,
     "method": "A.3 等权平均非对角相关"
   },
-  "averageCorrelation": 0.6379432824789772,
+  "averageCorrelation": 0.6424798489679714,
   "candidates": [
     {
       "kind": "proposal",
@@ -55,6 +55,23 @@
       "oosSharpePerPeriod": 0.04709519798501618,
       "turnover": 0.09547738693467336,
       "maxDrawdownPct": 12.510354081141342
+    },
+    {
+      "kind": "proposal",
+      "proposalId": "p-e646ddf3f786a252",
+      "family": "composite-percentile",
+      "params": {
+        "window": 50,
+        "percentile": 75
+      },
+      "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
+      "nReturns": 199,
+      "sharpeAnnualized": 0.7094502084963155,
+      "sharpePerPeriod": 0.04469116236343271,
+      "isSharpePerPeriod": -0.09224907481447428,
+      "oosSharpePerPeriod": 0.12122664042930985,
+      "turnover": 0.07035175879396985,
+      "maxDrawdownPct": 6.462603780103889
     }
   ],
   "registered": [
@@ -165,23 +182,21 @@
   ],
   "best": {
     "kind": "proposal",
-    "proposalId": "p-69c9f905705356af",
-    "family": "sma-cross-hysteresis",
+    "proposalId": "p-e646ddf3f786a252",
+    "family": "composite-percentile",
     "params": {
-      "smaShort": 14,
-      "smaLong": 65,
-      "entryBandPct": 0.15,
-      "exitBandPct": -0.4
+      "window": 50,
+      "percentile": 75
     },
-    "rationale": "演示候选 A（更快交叉，带宽收窄）",
+    "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
     "nReturns": 199,
-    "sharpeAnnualized": 0.38085390404318253,
-    "sharpePerPeriod": 0.02399154085586471,
-    "isSharpePerPeriod": -0.043815734622940555,
-    "oosSharpePerPeriod": 0.08710240641473356,
-    "turnover": 0.020100502512562814,
-    "maxDrawdownPct": 19.345000217671256,
-    "dsr": 0.5662118548374244,
+    "sharpeAnnualized": 0.7094502084963155,
+    "sharpePerPeriod": 0.04469116236343271,
+    "isSharpePerPeriod": -0.09224907481447428,
+    "oosSharpePerPeriod": 0.12122664042930985,
+    "turnover": 0.07035175879396985,
+    "maxDrawdownPct": 6.462603780103889,
+    "dsr": 0.6838295526463012,
     "dsrNominal": null
   },
   "disclaimer": "裁决报告只是 review 材料：不注册、不晋升、不进入任何执行层；晋升 = 人工把候选写入 quant/strategy/rules-v002.js + 版本升级 + golden 重算 + 人工 review。"

@@ -127,6 +127,8 @@ LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立�
 
 控制台 Proposals 视图展示候选/裁决/晋升步骤；lint Zone PR：proposals 区禁直接 fetch/env/random（generate.js 为时钟岛）。
 
+**活体记录（2026-11-12，kimi-k2.6 真实提案）**：`--count 4 --consent` 产出 4 条（3 条与已库重复被去重、1 条入库：composite-percentile {window:50, percentile:75}）。全池裁决 N=9（6 注册+3 候选）、N_eff=2.19：kimi 候选 pp-Sharpe 0.0447 / OOS 0.1212 / DSR 0.6838，**超过在册 BEST T2（0.0416/0.6655）**——证据已呈现，晋升决定权留给人工 review。
+
 ## 运行
 
 ```sh
