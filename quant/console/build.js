@@ -14,14 +14,17 @@
  * 用法：npm run console（在 agent/ 目录）或 node quant/console/build.js
  */
 
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { computeConsolePayload } from "./payload.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const payload = await computeConsolePayload({ generatedAtUtc: new Date().toISOString() });
+// 注记层 markdown 渲染器：与 Node 单测共用同一实现（剥离 export 后内联进 HTML）。
+const markdownSource = readFileSync(join(HERE, "markdown.js"), "utf8").replace(/^export /gm, "");
+
+const payload = await computeConsolePayload({}); // 不传 generatedAtUtc：构建字节稳定（页脚显示冻结的 data-as-of）
 
 // ── HTML 生成（Kimi 桌面风：浅色底/白卡片/分段切换/居中空态/悬浮输入卡）──────
 const esc = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -431,9 +434,12 @@ node quant/agent/cli.js repl --consent                            # 交互模式
 
   <div class="footer">
     <div>Evidence-based demo · ${payload.datasets.v002.nature === "real_market_data" ? "real market snapshot + synthetic baseline" : "synthetic data"} · Not investment advice · 不构成任何策略结论</div>
-    <div>All numbers computed by deterministic pure functions · ${esc((payload.generatedAtUtc || "").slice(0, 19).replace("T", " "))} UTC</div>
+    <div>All numbers computed by deterministic pure functions · data as of ${esc((payload.datasets.v002.fetchedAtUtc || "").slice(0, 19).replace("T", " "))} UTC</div>
   </div>
 </main>
+<script>
+${markdownSource}
+</script>
 <script>
 var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
 (function(){
@@ -499,78 +505,6 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     var empty = document.getElementById("chat-empty");
     if (empty && empty.style.display !== "none") empty.style.display = "none";
     if (thread.style.display === "none") thread.style.display = "flex";
-  }
-  function formatInline(s) {
-    return s.replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>")
-      .replace(/\\x60([^\\x60]+)\\x60/g, "<code>$1</code>");
-  }
-  function splitRow(line) {
-    return line.trim().replace(/^\\|/, "").replace(/\\|$/, "").split("|").map(function(cell) { return cell.trim(); });
-  }
-  function buildTable(header, rows) {
-    var html = '<div class="md-table-wrap"><table><thead><tr>';
-    header.forEach(function(cell) { html += "<th>" + formatInline(cell) + "</th>"; });
-    html += "</tr></thead><tbody>";
-    rows.forEach(function(row) {
-      html += "<tr>";
-      for (var i = 0; i < header.length; i++) html += "<td>" + formatInline(row[i] || "") + "</td>";
-      html += "</tr>";
-    });
-    return html + "</tbody></table></div>";
-  }
-  function formatText(text) {
-    // 先整体转义，再做块级解析（围栏代码/表格/标题/有序无序列表）；不引入任何外部渲染库。
-    var esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    var lines = esc.split("\\n");
-    var out = [];
-    var i = 0;
-    var inCode = false;
-    var codeBuf = [];
-    while (i < lines.length) {
-      var line = lines[i];
-      if (/^\\s*\\x60\\x60\\x60/.test(line)) { // 围栏开关（三反引号围栏，语言标注忽略）
-        if (!inCode) { inCode = true; codeBuf = []; }
-        else { out.push('<div class="md-code"><code>' + codeBuf.join("\\n") + "</code></div>"); inCode = false; }
-        i += 1;
-        continue;
-      }
-      if (inCode) { codeBuf.push(line); i += 1; continue; }
-      if (/^\\s*\\|/.test(line) && i + 1 < lines.length && /^\\s*\\|[\\s:|-]+\\|?\\s*$/.test(lines[i + 1])) { // 表头+分隔行
-        var header = splitRow(line);
-        i += 2;
-        var rows = [];
-        while (i < lines.length && /^\\s*\\|/.test(lines[i])) { rows.push(splitRow(lines[i])); i += 1; }
-        out.push(buildTable(header, rows));
-        continue;
-      }
-      var heading = line.match(/^\\s*(#{1,4})\\s+(.*)$/);
-      if (heading) { out.push('<div class="md-h' + heading[1].length + '">' + formatInline(heading[2]) + "</div>"); i += 1; continue; }
-      if (/^\\s*[-*]\\s+/.test(line)) {
-        out.push('<div class="md-ul">');
-        while (i < lines.length && /^\\s*[-*]\\s+/.test(lines[i])) {
-          var item = lines[i].match(/^\\s*[-*]\\s+(.*)$/);
-          out.push('<div class="li"><span>' + formatInline(item[1]) + "</span></div>");
-          i += 1;
-        }
-        out.push("</div>");
-        continue;
-      }
-      if (/^\\s*\\d+[.、)]\\s+/.test(line)) {
-        out.push('<div class="md-ol">');
-        while (i < lines.length && /^\\s*\\d+[.、)]\\s+/.test(lines[i])) {
-          var numbered = lines[i].match(/^\\s*(\\d+)[.、)]\\s+(.*)$/);
-          out.push('<div class="oli"><span class="n">' + numbered[1] + ".</span><span>" + formatInline(numbered[2]) + "</span></div>");
-          i += 1;
-        }
-        out.push("</div>");
-        continue;
-      }
-      if (line.trim() === "") { out.push('<div style="height:6px"></div>'); i += 1; continue; }
-      out.push("<div>" + formatInline(line) + "</div>");
-      i += 1;
-    }
-    if (inCode && codeBuf.length) out.push('<div class="md-code"><code>' + codeBuf.join("\\n") + "</code></div>");
-    return out.join("");
   }
   // ── 可见历史（localStorage 历史列表 + 当前会话记录；只存已渲染的问答，不存 paper 卡片）──
   // 目的：刷新/重启后界面可恢复，且侧栏提供 Kimi 式历史会话列表。仅存本机浏览器。

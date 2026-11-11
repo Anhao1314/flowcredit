@@ -137,7 +137,8 @@ npm run eval                     # 离线评估 → ../quant/eval/results/
 - ❌ 不改动 `agent/src/` 的权威边界逻辑（原文保留：只读参考）
 
 ```sh
-npm run serve      # 在 agent/ 目录：控制台 + agent 问答 → http://127.0.0.1:8788/
+npm run serve                    # 在 agent/ 目录：控制台 + agent 问答 → http://127.0.0.1:8788/（默认端口）
+CONSOLE_PORT=8789 npm run serve  # 端口被占用时显式换端口（本机 8788 被系统进程占用，实际用 8789）
 npm run paper -- run --rule T2-sma-cross-b --auto-approve   # 虚拟盘（模拟撮合）
 ```
 
