@@ -137,6 +137,15 @@ LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立�
 - **多市场一致性裁决**（`adjudicateMultiMarket`，纯函数）：同批候选 × BTC/ETH 各自校准成本 → R1 验收指标：方向一致 ✓（已达成）、IS/OOS 全正 ✗（未达成，如实显示——方向一致 ≠ 显著性，R2 继续）。
 - 控制台 Overview 四数据集卡 + Proposals 视图 R1 验收横幅；测试 `quant-cost.test.js` 5 例。
 
+## R3 testnet 真实撮合适配（2026-11-12，R3 第一段）
+
+- `quant/paper/fetch-testnet.js`：Binance Spot **testnet** HTTP 面（fetch- 前缀 = 唯一触网口；HMAC-SHA256 签名零依赖；永不指向主网交易）。
+- `quant/paper/testnet-adapter.js`：BrokerAdapter 第二实现（paper-testnet-adapter/v0.1.0）。人工批准门禁不变——`submitOrder` 只落 pending，approve 之后才产生交易所签名调用（测试以计数器锁死）。日期用纯 civil-from-days 转换（Zone P 无时钟）。
+- `quant/paper/runner-testnet.js`：演练 CLI。**决策数据 = 仓库内冻结快照（point-in-time 可审计），执行 = testnet 实时撮合**——testnet 模拟市场历史仅 ~36 根日线（不足规则 warmup），这是设计而非缺陷。`realizedSlippageBps` 的 basis 如实标注为「执行 vs 快照」（含数据源与市场差异，不是纯滑点）。
+- 模式：`--dry`（无密钥、公共端点、记录"将会提交什么"）/ 真实提交（需在 https://testnet.binance.vision 用 GitHub 登录创建假资金密钥，写入仓库根 .env 的 `BINANCE_TESTNET_API_KEY/SECRET`）。
+- 审计：`~/.flowcredit-quant/paper-audit/testnet-*.jsonl`（决策/订单/成交/对账事件链）。
+- 活体记录（2026-11-12）：dry 演练对真实 testnet 跑通——决策快照 dataset-v003（730 根）、实时报价 73,614、六条规则当前均为空仓 → HOLD（真实决策，不造单）；审计落盘。dry 下单/成交路径由离线脚本测试覆盖（quant-testnet.test.js 7 例）。
+
 ## 运行
 
 ```sh

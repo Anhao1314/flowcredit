@@ -159,7 +159,7 @@ for (const path of walk(QUANT)) {
     //   运行时禁：Math.random、process.env、时钟（时间 = 数据棒日期；审计文件名时间戳仅 runner 用 Date.now，
     //   经由下方 zoneP 例外放行 runner）
     scanPaperImports(path, rel);
-    if (rel.endsWith("runner.js")) scan(path, [/\bMath\.random\b/], "zoneP-purity");
+    if (rel.endsWith("runner.js") || rel.endsWith("runner-testnet.js")) scan(path, [/\bMath\.random\b/], "zoneP-purity");
     else scan(path, [/\bMath\.random\b/, /\bprocess\.env\b/, /\bDate\.now\b/, /\bnew\s+Date\b/], "zoneP-purity");
   } else if (/^quant[/\\]proposals[/\\]/.test(rel)) {
     // Zone PR — 提案闭环区（LLM 提案 → 确定性裁决 → 人工晋升；候选永不写入权威注册表）：
@@ -180,9 +180,9 @@ for (const path of walk(QUANT)) {
   } else if (/^quant[/\\]test[/\\]/.test(rel)) {
     // 测试区：允许 fetch/HTTP 客户端（测试 HTTP 面）；仍禁 env/random/LLM SDK。
     scan(path, [/\bprocess\.env\b/, /\bMath\.random\b/], "zoneB-test");
-  } else if (/^quant[/\\]data[/\\]fetch-/.test(rel)) {
-    // Zone D：一次性抓取脚本是 agent 之外唯一的 fetch 豁免面。
-    scan(path, [/\bMath\.random\b/], "zoneD-purity");
+  } else if (/^quant[/\\](?:data|paper)[/\\]fetch-/.test(rel)) {
+    // Zone D：一次性抓取脚本是 agent 之外唯一的 fetch 豁免面（data 数据抓取 + paper testnet HTTP 面）。
+    scan(path, [/\bMath\.random\b/, /\bprocess\.env\b/], "zoneD-purity");
   } else {
     scan(path, ZONE_B_NET_ENV, "zoneB-net-env");
   }
