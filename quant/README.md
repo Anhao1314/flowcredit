@@ -146,6 +146,14 @@ LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立�
 - 审计：`~/.flowcredit-quant/paper-audit/testnet-*.jsonl`（决策/订单/成交/对账事件链）。
 - 活体记录（2026-11-12）：dry 演练对真实 testnet 跑通——决策快照 dataset-v003（730 根）、实时报价 73,614、六条规则当前均为空仓 → HOLD（真实决策，不造单）；审计落盘。dry 下单/成交路径由离线脚本测试覆盖（quant-testnet.test.js 7 例）。
 
+## W3 质检能力 MCP Server（2026-11-13，B2B 分发渠道）
+
+- `quant/agent/mcp-server.js`（quant-mcp/v0.1.0）：把封闭注册表 + 数字验货器 + 单候选裁决暴露为 **MCP server**（stdio，MCP 2025-06-18 规范；JSON-RPC 2.0 帧手工实现，零依赖）。
+- **零网络、零密钥、零时钟**：全部工具基于冻结数据 + 纯函数——任何 agent（Claude/内部 agent）可安全接入。
+- 工具清单（7 个，白名单测试锁定，**下单/交易类永不出现**）：assess_frozen_dataset / guard_check / trial_metrics / data_quality / signal_components / **verify_claims**（W2 数字验货器）/ **adjudicate_candidate**（单候选确定性裁决，病态参数 isError fail-closed）。
+- 运行：`npm run mcp`（stdio）；测试 quant-mcp.test.js 8 例（握手/白名单/验货/裁决/错误码/stdio 端到端）。
+- 活体记录（2026-11-13）：stdio JSON-RPC → verify_claims → 判定 fail（声称 12.34% vs 权威 28.5426%）。
+
 ## 运行
 
 ```sh

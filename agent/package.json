@@ -28,7 +28,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "check:syntax": "node scripts/check-syntax.js",
     "propose": "node ../quant/proposals/generate.js",
-    "adjudicate": "node ../quant/proposals/run-adjudication.js"
+    "adjudicate": "node ../quant/proposals/run-adjudication.js",
+    "mcp": "node ../quant/agent/mcp-server.js"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.2",

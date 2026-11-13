@@ -564,13 +564,14 @@ SR̂, SR₀ 均为未年化 per-period 口径；2026-11-07 公式核实、2026-1
         <tr><td class="mono">trial_metrics</td><td>6 条 trials 的净口径指标 + 选中者</td><td>trials[] + selected（含 DSR）</td></tr>
         <tr><td class="mono">data_quality</td><td>数据质量门禁复核</td><td>passed / findings / stats</td></tr>
       </tbody></table>
-      <div class="chips">${badge("自供数据 ✗", "bad")}${badge("下单交易 ✗", "bad")}${badge("写权威字段 ✗", "bad")}${badge("只读解释 ✓", "good")}</div>
+      <div class="chips">${badge("自供数据 ✗", "bad")}${badge("下单交易 ✗", "bad")}${badge("写权威字段 ✗", "bad")}${badge("只读解释 ✓", "good")}${badge("MCP server ✓ 零网络", "good")}</div>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">USAGE · CLI</div><h2>命令行用法</h2></div></div>
       <pre>node quant/agent/cli.js ask "当前数据集质量如何？"            # 确定性摘要，永不触网
 node --env-file=.env quant/agent/cli.js ask "解释 DSR" --consent  # 需 DEEPSEEK_API_KEY
-node quant/agent/cli.js repl --consent                            # 交互模式</pre>
+node quant/agent/cli.js repl --consent                            # 交互模式
+npm run mcp                                                       # 质检能力 MCP server（stdio；零网络零密钥）</pre>
     </div>
     <div class="card">
       <div class="card-head"><div><div class="eyebrow">AUDIT TAPE · 仅元数据（哈希不存明文）</div><h2>${payload.audit ? "问答审计统计" : "本机暂无审计记录"}</h2></div>${payload.audit ? badge(payload.audit.entries + " entries", "mono") : ""}</div>
