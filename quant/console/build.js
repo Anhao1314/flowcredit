@@ -38,7 +38,7 @@ function pipelineCard(ds) {
   const decisionTone = p.decisionStatus === "blocked" ? "bad" : "good";
   const ddTone = Number(p.signals.maxDrawdownPct) > 25 ? "warn" : "";
   const natureBadge = ds.nature === "real_market_data" ? badge("REAL · " + (ds.source || "").split(":")[0].toUpperCase(), "accent") : badge("SYNTHETIC", "muted");
-  return `<div class="card">
+  return `<div class="card boxed">
     <div class="card-head"><div><div class="eyebrow">${esc(ds.dataVersion)} · ${ds.rows} rows · ${esc(ds.span[0])} .. ${esc(ds.span[1])}</div><h2>${ds.nature === "real_market_data" ? "真实市场数据" : "合成夹具（对照）"}</h2></div>${natureBadge}</div>
     <div class="tiles">
       ${tile("Signal Score", fmt(p.signalScore), "三分量合成分 0-100")}
@@ -160,8 +160,9 @@ body[data-view="chat"] .topbar{display:none}
 .topbar h1{font-size:22px;font-weight:650}
 .topbar .sub{color:var(--muted);margin-top:4px;font-size:13px}
 .view{display:none}.view.active{display:block}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px}
-.card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.card{background:transparent;border:none;border-radius:0;padding:0;margin-bottom:32px}
+.card.boxed{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
 .card h2{font-size:16px;font-weight:600;margin-top:2px}
 .eyebrow{font-size:11px;color:var(--faint);letter-spacing:.6px;text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .metrics{display:flex;flex-wrap:wrap;gap:12px}
@@ -477,7 +478,7 @@ body[data-view="chat"] .footer{display:none}
   <section class="view" data-view="cases">
     ${viewHead("Cases", "质检台——把 AI 产出的研究报告送检：数字验货器逐条对照封闭注册表的确定性输出，不一致即标红；签字放行（送检人不得自签）。", badge("claim-verifier/v0.1.0", "mono") + badge("职责分离", "muted"))}
     <div class="grid2">
-      <div class="card">
+      <div class="card boxed">
         <div class="card-head"><div><div class="eyebrow">SUBMIT · 送检</div><h2>提交 AI 产物</h2></div></div>
         <div style="display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;gap:10px;align-items:center">
@@ -631,7 +632,7 @@ npm run mcp                                                       # 质检能力
         ${payload.paper.reference.fills.map(fill => `<tr><td class="mono">${fill.barIndex}</td><td class="mono">${esc(fill.date)}</td><td>${fill.side}</td><td class="num">${fmt(fill.units, 6)}</td><td class="num">${fmt(fill.price, 1)}</td><td class="num">${fmt(fill.cost, 2)}</td></tr>`).join("")}
       </tbody></table>
     </div>
-    <div class="card">
+    <div class="card boxed">
       <div class="card-head"><div><div class="eyebrow">LIVE SESSION · 命令控制面（freqtrade 式）</div><h2>虚拟盘会话控制</h2></div><span id="live-status" class="badge">idle</span></div>
       <div class="chips" style="margin-top:0;align-items:center">
         <select id="live-rule" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px">${payload.rules.map(rule => `<option value="${esc(rule.ruleId)}"${rule.ruleId === payload.paper.reference.ruleId ? " selected" : ""}>${esc(rule.ruleId)}</option>`).join("")}</select>
