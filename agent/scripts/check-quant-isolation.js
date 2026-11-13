@@ -181,6 +181,9 @@ for (const path of walk(QUANT)) {
     //   允许同源 fetch("/api/...") 与 Math.random（浏览器会话 id）；禁跨源 fetch、
     //   process.env、child_process、LLM SDK 与 Zone B 残留禁令。
     scan(path, [/\bprocess\.env\b/, /\bchild_process\b/, /\bfetch\s*\(\s*["'`](?:https?:)?\/\//, /\bnode:http\b/, /\bnode:https\b/], "zoneE-browser");
+  } else if (/^quant[/\\]knowledge[/\\]/.test(rel)) {
+    // Zone K — knowledge 层（semantic memory；纯函数+fs 读写，禁网络/env/random/时钟）
+    scan(path, [/\bfetch\s*\(/, /\bprocess\.env\b/, /\bMath\.random\b/, /\bDate\.now\b/, /\bnew\s+Date\b/, /\bchild_process\b/, /\bnode:http\b/], "zoneK-purity");
   } else if (/^quant[/\\]test[/\\]/.test(rel)) {
     // 测试区：允许 fetch/HTTP 客户端（测试 HTTP 面）；仍禁 env/random/LLM SDK。
     scan(path, [/\bprocess\.env\b/, /\bMath\.random\b/], "zoneB-test");

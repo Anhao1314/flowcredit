@@ -1,7 +1,7 @@
 {
   "proposalsVersion": "quant-proposals/v0.0.1",
-  "updatedAtUtc": "2026-11-11T18:09:04.526Z",
-  "source": "model:kimi-k2.6",
+  "updatedAtUtc": "2026-11-13T17:44:24.035Z",
+  "source": "model:deepseek-flash",
   "candidates": [
     {
       "proposalId": "p-69c9f905705356af",
@@ -35,6 +35,18 @@
         "percentile": 75
       },
       "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
+      "PROPOSALS_VERSION": "quant-proposals/v0.0.1"
+    },
+    {
+      "proposalId": "p-4446c60af172b4f6",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 15,
+        "smaLong": 80,
+        "entryBandPct": 0.2,
+        "exitBandPct": -0.8
+      },
+      "rationale": "Adds a slower trend filter with wider hysteresis bands to reduce whipsaw while remaining distinct from registered rules.",
       "PROPOSALS_VERSION": "quant-proposals/v0.0.1"
     }
   ]
