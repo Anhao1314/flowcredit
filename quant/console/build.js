@@ -343,6 +343,7 @@ body[data-view="chat"] .footer{display:none}
   <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
   <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
   <button class="nav-btn" data-view="proposals"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg><span>Proposals</span></button>
+  <button class="nav-btn" data-view="cases"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 5v4M16 5v4"/></svg><span>Cases</span></button>
   <button class="nav-btn" data-view="dsr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r=".5"/><circle cx="15" cy="15" r=".5"/></svg><span>DSR &amp; Promotion</span></button>
   <button class="nav-btn" data-view="quality"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v12c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9v-12"/><path d="M4.5 11.5c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9"/></svg><span>Data Quality</span></button>
   <button class="nav-btn" data-view="agent"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M9 12h7M9 16h7"/></svg><span>Agent &amp; Audit</span></button>
@@ -464,6 +465,32 @@ body[data-view="chat"] .footer{display:none}
         <tr><td>病态参数进入回测</td><td>${badge("禁止", "bad")}</td><td>schema 参数边界（窗口/带宽/周期）硬校验，越界即拒</td></tr>
         <tr><td>候选绕过 DSR 全池校正</td><td>${badge("禁止", "bad")}</td><td>trials 池 = 注册 6 条 + 全部候选，N 随候选增长（诚实口径）</td></tr>
       </tbody></table>
+    </div>
+  </section>
+
+  <section class="view" data-view="cases">
+    ${viewHead("Cases", "质检台——把 AI 产出的研究报告送检：数字验货器逐条对照封闭注册表的确定性输出，不一致即标红；签字放行（送检人不得自签）。", badge("claim-verifier/v0.1.0", "mono") + badge("职责分离", "muted"))}
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><div><div class="eyebrow">SUBMIT · 送检</div><h2>提交 AI 产物</h2></div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="font-size:12px;color:var(--muted)">AI 产物原文（研究报告/分析文本——数字验货器只认有关键词锚点的声明）</label>
+          <textarea id="case-artifact" rows="8" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" placeholder="例：机器判定复核——最大回撤 28.54%（超 25% 限额），signalScore=36.2481，数据 260 条日记录，选中 trial 的 DSR 为 0.55。"></textarea>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input id="case-submitter" placeholder="送检人 ID" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;width:180px">
+            <button id="case-submit" class="sendbtn" style="padding:8px 16px">送检</button>
+            <span id="case-submit-status" class="badge"></span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><div class="eyebrow">CASES · 案件列表</div><h2>本机案件</h2></div><button id="cases-refresh" class="sendbtn btn-ghost" style="padding:6px 14px">刷新</button></div>
+        <div id="cases-list"><div class="chat-hint">HTTP 模式下自动加载；file:// 模式无案件 API。</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="eyebrow">CASE DETAIL · 点案件行查看</div><h2 id="case-detail-title">质检报告</h2></div><span id="case-detail-status" class="badge"></span></div>
+      <div id="case-detail"><div class="chat-hint">尚未选择案件。</div></div>
     </div>
   </section>
 
@@ -633,7 +660,7 @@ ${markdownSource}
 <script>
 var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
 (function(){
-  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], proposals: ["Proposals", "提案闭环 · LLM 提案 → 确定性裁决 → 人工晋升"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
+  var titles = { overview: ["Overview", "双数据集权威快照 · 全部数字来自确定性纯函数"], rules: ["Rules & Trials", "6 条注册规则 · 净口径含成本模型"], dsr: ["DSR & Promotion", "防作弊校正 · 人工门禁"], quality: ["Data Quality", "真实快照门禁明细"], agent: ["Agent & Audit", "有界 agent · 仅元数据审计"], proposals: ["Proposals", "提案闭环 · LLM 提案 → 确定性裁决 → 人工晋升"], cases: ["Cases", "质检台 · AI 产物送检 → 逐条数字验货 → 签字放行"], chat: ["Chat", "与有界 agent 对话 · 数字来自工具，引用可反查"], paper: ["Paper", "虚拟盘 · 本地模拟撮合 · 人工批准门禁"] };
   var buttons = document.querySelectorAll("button[data-view]");
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener("click", function() {
@@ -1250,6 +1277,88 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   fetch("/api/paper").then(function(r){ return r.json(); }).then(function(body) {
     if (body && body.ok && body.paper) renderSessions(body.paper.sessions);
   }).catch(function() { /* file:// 模式：保留构建时快照 */ });
+
+  // ── 质检台（Cases）：送检 → 列表 → 质检报告 → 签字（职责分离）──────────────
+  var casesMode = "http"; // file:// 下降级提示
+  function casesFetch(path, options) {
+    return fetch(path, options);
+  }
+  function escAttr(value) { return String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+  async function loadCases() {
+    if (casesMode !== "http") return;
+    try {
+      const response = await casesFetch("/api/cases");
+      const body = await response.json();
+      if (!body.ok) throw new Error(body.error || "failed");
+      const box = document.getElementById("cases-list");
+      if (!body.cases.length) { box.innerHTML = '<div class="chat-hint">暂无案件——用左侧表单送检。</div>'; return; }
+      box.innerHTML = '<table class="data-table"><thead><tr><th>caseId</th><th>kind</th><th>送检人</th><th>状态</th><th>verdict</th><th>签字</th></tr></thead><tbody>' +
+        body.cases.map(entry => '<tr data-case="' + escAttr(entry.caseId) + '" style="cursor:pointer"><td class="mono">' + escAttr(entry.caseId) + '</td><td>' + escAttr(entry.kind) + '</td><td class="mono">' + escAttr(entry.submittedBy) + '</td><td><span class="badge ' + (entry.status === "RELEASED" ? "badge-good" : entry.status === "REJECTED" ? "badge-bad" : "badge-accent") + '">' + escAttr(entry.status || "") + '</span></td><td><span class="badge ' + (entry.verdict === "pass" ? "badge-good" : entry.verdict === "fail" ? "badge-bad" : "badge-mono") + '">' + escAttr(entry.verdict || "—") + '</span></td><td class="mono">' + escAttr(entry.status === "RELEASED" || entry.status === "REJECTED" ? (entry.signedBy || "—") : "待签") + '</td></tr>').join("") +
+        '</tbody></table>';
+      box.querySelectorAll("tr[data-case]").forEach(row => row.addEventListener("click", () => openCase(row.getAttribute("data-case"))));
+    } catch (error) { casesMode = "off"; document.getElementById("cases-list").innerHTML = '<div class="chat-hint">案件 API 不可用：' + escAttr(error.message) + '（file:// 或服务未启动）</div>'; }
+  }
+  async function openCase(caseId) {
+    const detail = document.getElementById("case-detail");
+    try {
+      const body = await (await casesFetch("/api/cases/" + encodeURIComponent(caseId))).json();
+      if (!body.ok) throw new Error(body.error || "failed");
+      document.getElementById("case-detail-title").textContent = "质检报告 · " + body.caseId;
+      const statusBadge = document.getElementById("case-detail-status");
+      statusBadge.textContent = body.values.status || "";
+      statusBadge.className = "badge " + (body.values.status === "RELEASED" ? "badge-good" : body.values.status === "REJECTED" ? "badge-bad" : "badge-accent");
+      const cr = body.values.claimReport;
+      const canSign = Array.isArray(body.next) && body.next.includes("await_sign");
+      let html = "";
+      if (cr) {
+        html += '<div class="tiles" style="margin-bottom:10px">' +
+          '<div class="tile ' + (cr.verdict === "pass" ? "tone-good" : "tone-bad") + '"><div class="tile-label">总判定</div><div class="tile-value">' + escAttr(cr.verdict.toUpperCase()) + '</div><div class="tile-sub">声明 ' + cr.claims.length + ' · 一致 ' + cr.matched + ' · 不一致 ' + cr.mismatched + ' · 无法复验 ' + cr.unverifiable + '</div></div></div>';
+        if (cr.claims.length) {
+          html += '<table class="data-table"><thead><tr><th>声明类型</th><th class="num">声称</th><th class="num">权威</th><th>判定</th><th>上下文</th></tr></thead><tbody>' +
+            cr.claims.map(claim => '<tr><td>' + escAttr(claim.label) + '</td><td class="num">' + escAttr(claim.claimed) + '</td><td class="num">' + escAttr(claim.expected === null ? "n/a" : claim.expected) + '</td><td><span class="badge ' + (claim.verdict === "match" ? "badge-good" : claim.verdict === "mismatch" ? "badge-bad" : "badge-mono") + '">' + escAttr(claim.verdict) + '</span></td><td style="color:var(--muted);font-size:11.5px">' + escAttr(claim.context) + '</td></tr>').join("") +
+            '</tbody></table>';
+        }
+      }
+      if (body.values.narrative) html += '<div class="callout" style="margin-top:10px">' + escAttr(body.values.narrative) + '</div>';
+      html += canSign
+        ? '<div style="display:flex;gap:10px;align-items:center;margin-top:12px"><input id="case-signer" placeholder="签字人 ID（≠送检人）" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;width:200px"><button id="case-release" class="sendbtn" style="padding:8px 14px">RELEASED（放行）</button><button id="case-reject" class="sendbtn btn-ghost" style="padding:8px 14px">REJECTED（拒绝）</button></div>'
+        : (body.values.status === "RELEASED" || body.values.status === "REJECTED" ? '<div class="chat-hint" style="margin-top:10px">已签字：' + escAttr((body.values.signature || {}).signedBy || "—") + '</div>' : '<div class="chat-hint" style="margin-top:10px">案件处理中/已完成，无需签字。</div>');
+      detail.innerHTML = html;
+      if (canSign) {
+        document.getElementById("case-release").addEventListener("click", () => signCase(caseId, "RELEASED"));
+        document.getElementById("case-reject").addEventListener("click", () => signCase(caseId, "REJECTED"));
+      }
+    } catch (error) { detail.innerHTML = '<div class="chat-hint">读取失败：' + escAttr(error.message) + '</div>'; }
+  }
+  async function signCase(caseId, decision) {
+    const signer = document.getElementById("case-signer").value.trim() || "anonymous";
+    try {
+      const body = await (await casesFetch("/api/cases/" + encodeURIComponent(caseId) + "/sign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signedBy: signer, decision }) })).json();
+      if (!body.ok) throw new Error(body.error || "failed");
+      loadCases();
+      openCase(caseId);
+    } catch (error) {
+      document.getElementById("case-detail").insertAdjacentHTML("beforeend", '<div class="chat-hint">签字失败：' + escAttr(error.message) + '</div>');
+    }
+  }
+  document.getElementById("case-submit").addEventListener("click", async () => {
+    const artifact = document.getElementById("case-artifact").value;
+    const submitter = document.getElementById("case-submitter").value.trim() || "anonymous";
+    const statusBadge = document.getElementById("case-submit-status");
+    try {
+      const body = await (await casesFetch("/api/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submission: { kind: "report", artifactText: artifact }, submittedBy: submitter }) })).json();
+      if (!body.ok) throw new Error(body.error || "failed");
+      statusBadge.textContent = "已受理 " + body.caseId;
+      statusBadge.className = "badge badge-good";
+      document.getElementById("case-artifact").value = "";
+      loadCases();
+    } catch (error) {
+      statusBadge.textContent = "送检失败：" + error.message;
+      statusBadge.className = "badge badge-bad";
+    }
+  });
+  document.getElementById("cases-refresh").addEventListener("click", () => { casesMode = "http"; loadCases(); });
+  loadCases();
 
   // ── Live session 控制面（命令 = 端点；freqtrade 式白名单命令）────────────────
   var liveTimer = null;

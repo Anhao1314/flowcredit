@@ -226,6 +226,32 @@ test("paper command surface: auth required when enabled, 404 outside whitelist",
   assert.equal(missing.status, 404);
 });
 
+test("cases API: claim verification + signature gate with separation of duties", async () => {
+  const server = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]) });
+  const base = addressOf(server);
+  const submit = async body => fetch(`${base}/api/cases`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const sign = async (caseId, body) => fetch(`${base}/api/cases/${caseId}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  // 错误数字的 AI 报告：验货 fail
+  const wrong = await (await submit({ submission: { kind: "report", artifactText: "最大回撤 12.34%，一切正常。" }, submittedBy: "analyst-1" })).json();
+  assert.equal(wrong.ok, true);
+  assert.equal(wrong.claimReport.verdict, "fail");
+  assert.equal(wrong.claimReport.mismatchedClaims[0].claimed, 12.34);
+  // 送检人自签 → 职责分离拒绝
+  const sign1 = await (await sign(wrong.caseId, { signedBy: "analyst-1", decision: "RELEASED" })).json();
+  assert.equal(sign1.status, "REJECTED");
+  assert.match(sign1.signature.reason, /职责分离/);
+  // 正确数字的报告：验货 pass，他人签字放行
+  const good = await (await submit({ submission: { kind: "report", artifactText: "最大回撤 28.54%，signalScore=36.2481，数据 260 条日记录。" }, submittedBy: "analyst-2" })).json();
+  assert.equal(good.claimReport.verdict, "pass");
+  const sign2 = await (await sign(good.caseId, { signedBy: "signer-1", decision: "RELEASED" })).json();
+  assert.equal(sign2.status, "RELEASED");
+  // 列表与 404
+  const list = await (await fetch(`${base}/api/cases`)).json();
+  assert.ok(list.cases.length >= 2);
+  assert.equal((await fetch(`${base}/api/cases/case-9999`)).status, 404);
+});
+
 test("loadDotEnv fills only missing env vars and never overrides", () => {
   const dir = mkdtempSyncSafe();
   const envPath = join(dir, ".env");

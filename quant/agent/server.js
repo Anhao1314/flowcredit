@@ -22,6 +22,8 @@ import { createQuantAssistant } from "./sidecar.js";
 import { createAuditLogger, defaultAuditDir } from "./audit.js";
 import { computeConsolePayload } from "../console/payload.js";
 import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/engine-adapter.js";
+import { createInspectionWorkflow, startInspection, signInspection } from "./workflow/inspection.js";
+import { MemorySaver } from "@langchain/langgraph";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
@@ -150,6 +152,24 @@ export function createQuantConsoleServer(options = {}) {
   })();
   const paperSessions = new Map();
   let paperSessionSeq = 0;
+
+  // ── 质检员 Agent（W1/W2）：案件 = LangGraph 状态机实例；检查点随进程（PoC 内存版）──
+  const inspectionGraph = createInspectionWorkflow({
+    dataset: loadFrozen().dataset, registry, client,
+    checkpointer: new MemorySaver()
+  });
+  const cases = new Map(); // caseId -> { caseId, kind, submittedBy, createdAtUtc, summary }
+  let caseSeq = 0;
+
+  function caseSummary(caseId) {
+    const entry = cases.get(caseId);
+    if (!entry) return null;
+    return { caseId, kind: entry.kind, submittedBy: entry.submittedBy, createdAtUtc: entry.createdAtUtc, ...entry.summary };
+  }
+
+  function caseStateSnapshot(caseId) {
+    return { caseId, ...caseSummary(caseId) };
+  }
 
   function resolvePaperRuleId(input) {
     for (const trial of trials.trials) {
@@ -290,6 +310,72 @@ export function createQuantConsoleServer(options = {}) {
         const session = paperSessions.get(paperSessionGet[1]);
         if (!session) return send(404, { ok: false, code: "NO_SUCH_SESSION", error: paperSessionGet[1] });
         return send(200, { ok: true, session: paperSessionSummary(session) });
+      }
+
+      // 案件 API（质检站）：送检 → 列表/详情 → 签字（职责分离在 workflow 内强制）。
+      if (req.method === "POST" && url.pathname === "/api/cases") {
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
+        const raw = await readBody(req, security.bodyLimit);
+        let body;
+        try { body = JSON.parse(raw || "{}"); } catch { return send(400, { ok: false, code: "INVALID_JSON", error: "request body must be valid JSON" }); }
+        const caseId = `case-${String(++caseSeq).padStart(4, "0")}`;
+        const submission = { ...(body.submission ?? body), submittedBy: typeof body.submittedBy === "string" && body.submittedBy ? body.submittedBy : "anonymous" };
+        const threadId = `${caseId}:${submission.submittedBy}`;
+        let result;
+        try {
+          result = await withTimeout(
+            startInspection(inspectionGraph, { caseId: threadId, submission, client, audit }),
+            security.askTimeoutMs, "CASE_TIMEOUT"
+          );
+        } catch (error) {
+          return send(500, { ok: false, code: error?.code || "CASE_FAILED", error: String(error?.message || error) });
+        }
+        cases.set(caseId, { caseId, threadId, kind: submission.kind ?? "strategy", submittedBy: submission.submittedBy, createdAtUtc: new Date(nowMs()).toISOString(), summary: { status: result.status ?? null, verdict: result.claimReport?.verdict ?? (result.adjudication ? "adjudicated" : null) } });
+        return send(200, { ok: true, caseId, status: result.status ?? null, claimReport: result.claimReport ?? null, adjudication: result.adjudication ? { best: result.adjudication.best, nTrials: result.adjudication.nTrials } : null, narrative: result.narrative ?? null, awaitingSignature: Array.isArray(result.__interrupt__) });
+      }
+      const casesListMatch = url.pathname === "/api/cases" && req.method === "GET";
+      if (casesListMatch) {
+        return send(200, { ok: true, cases: [...cases.values()].map(entry => caseSummary(entry.caseId)) }); // map 回调直传会把 entry 当 caseId——显式取键
+      }
+      const caseGetMatch = /^\/api\/cases\/(case-\d+)$/.exec(url.pathname);
+      if (req.method === "GET" && caseGetMatch) {
+        const entry = cases.get(caseGetMatch[1]);
+        if (!entry) return send(404, { ok: false, code: "NO_SUCH_CASE", error: caseGetMatch[1] });
+        const snapshot = await inspectionGraph.getState({ configurable: { thread_id: entry.threadId } });
+        return send(200, { ok: true, caseId: entry.caseId, ...caseSummary(entry.caseId), values: snapshot.values ?? {}, next: snapshot.next ?? [] });
+      }
+      const caseSignMatch = /^\/api\/cases\/(case-\d+)\/sign$/.exec(url.pathname);
+      if (req.method === "POST" && caseSignMatch) {
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
+        const [, caseId] = caseSignMatch;
+        const entry = cases.get(caseId);
+        if (!entry) return send(404, { ok: false, code: "NO_SUCH_CASE", error: caseId });
+        const raw = await readBody(req, security.bodyLimit);
+        let body;
+        try { body = JSON.parse(raw || "{}"); } catch { body = {}; }
+        const state = await inspectionGraph.getState({ configurable: { thread_id: entry.threadId } });
+        if (!(Array.isArray(state.next) && state.next.includes("await_sign"))) {
+          return send(409, { ok: false, code: "CASE_NOT_AWAITING_SIGNATURE", error: "案件不在签字门（当前 next: " + JSON.stringify(state.next) + "）" });
+        }
+        let result;
+        try {
+          result = await withTimeout(
+            signInspection(inspectionGraph, { caseId: entry.threadId, signedBy: typeof body.signedBy === "string" && body.signedBy ? body.signedBy : "anonymous", decision: body.decision === "RELEASED" ? "RELEASED" : "REJECTED", reason: typeof body.reason === "string" ? body.reason : null, client, audit }),
+            security.askTimeoutMs, "CASE_TIMEOUT"
+          );
+        } catch (error) {
+          return send(500, { ok: false, code: error?.code || "CASE_SIGN_FAILED", error: String(error?.message || error) });
+        }
+        entry.summary = { ...entry.summary, status: result.status ?? null, signedBy: result.signature?.signedBy ?? null };
+        return send(200, { ok: true, caseId, status: result.status ?? null, signature: result.signature ?? null, narrative: result.narrative ?? null });
       }
 
       // 问答端点：鉴权 → 限流 → body → askQuant。

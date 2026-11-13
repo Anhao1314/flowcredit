@@ -17,6 +17,7 @@ import { StateGraph, Annotation, MemorySaver, START, END, interrupt, Command } f
 import { validateCandidateBatch } from "../../proposals/schema.js";
 import { adjudicateCandidates } from "../../proposals/adjudicate.js";
 import { listRules } from "../../strategy/rules-v002.js";
+import { verifyText } from "./verify-claims.js";
 
 export const INSPECTION_WORKFLOW_VERSION = "quant-inspection-workflow/v0.1.0";
 
@@ -27,6 +28,8 @@ const InspectionState = Annotation.Root({
   candidate: lastValue(null),       // schema 校验后的候选（确定性）
   adjudication: lastValue(null),    // 确定性裁决报告（单一候选，全池口径）
   narrative: lastValue(null),       // LLM 注记层叙述（或确定性兜底）
+  artifactText: lastValue(null),    // report 类送检：AI 产物原文
+  claimReport: lastValue(null),     // report 类送检：逐条数字验货报告
   status: lastValue("RECEIVED"),    // RECEIVED→VERIFIED→REPORTED→AWAIT_SIGN→RELEASED|REJECTED
   signature: lastValue(null),       // { signedBy, decision, signedAtMs, reason? }
   error: lastValue(null)            // fail-closed 时的原因
@@ -41,6 +44,22 @@ function deterministicNarrative(adjudication, status) {
     `成本口径：${adjudication.costModel.effectiveSource === "calibrated" ? "校准" : "冻结"}（one-side ${Number(adjudication.costModel.effectiveOneSideRate * 10000).toFixed(2)}bps）。`,
     `当前案件状态：${status}。晋升决定权在人工签字人。`
   ].join("\n");
+}
+
+/** report 类案件的 LLM 叙述：数字只准来自验货报告；失败降级为确定性叙述。 */
+async function narrativeViaLLMReport(client, claimReport, status) {
+  if (!client || typeof client.chat !== "function" || !client.configured()) return null;
+  const prompt = [
+    "You are drafting a short quality-inspection summary for an AI-generated research artifact.",
+    "STRICT RULE: only reference the verification verdict and counts in the JSON; never invent numbers; Chinese; max 3 sentences.",
+    "JSON:",
+    JSON.stringify({ claims: claimReport.claims.length, matched: claimReport.matched, mismatched: claimReport.mismatched, unverifiable: claimReport.unverifiable, verdict: claimReport.verdict, caseStatus: status })
+  ].join("\n");
+  try {
+    const response = await client.chat({ messages: [{ role: "user", content: prompt }] });
+    const text = response.message?.content;
+    return typeof text === "string" && text.trim() ? text : null;
+  } catch { return null; }
 }
 
 /** LLM 注记节点：把裁决报告翻译成简短叙述（数字只准来自报告；失败降级）。 */
@@ -71,11 +90,17 @@ async function narrativeViaLLM(client, adjudication, status) {
  * 注入（invoke/config 时经 config.configurable 传入，LangGraph 顶层键会被丢弃——实验已验证）：
  *   dataset（冻结快照）、client（模型，可 null）、costRate（可选校准费率）、nowMs（审计时钟）、audit（审计器）。
  */
-export function createInspectionWorkflow({ dataset, client = null, costRate, audit = null, checkpointer = null } = {}) {
+export function createInspectionWorkflow({ dataset, registry = null, client = null, costRate, audit = null, checkpointer = null } = {}) {
   if (!dataset?.dataVersion || !Array.isArray(dataset.series)) throw new TypeError("frozen dataset required");
 
-  async function receive(state, cfg) {
+  async function receive(state) {
     const submission = state.submission;
+    if (submission?.kind === "report") {
+      if (typeof submission.artifactText !== "string" || !submission.artifactText.trim()) {
+        return { status: "REJECTED_INVALID", error: "report 送检必须携带 artifactText（AI 产物原文）" };
+      }
+      return { artifactText: submission.artifactText, status: "RECEIVED" };
+    }
     const batch = validateCandidateBatch([submission], listRules());
     if (!batch.ok || batch.candidates.length !== 1) {
       return { status: "REJECTED_INVALID", error: batch.errors?.join("; ") || "invalid submission" };
@@ -84,13 +109,42 @@ export function createInspectionWorkflow({ dataset, client = null, costRate, aud
   }
 
   async function verify(state) {
+    if (state.submission?.kind === "report") {
+      if (!registry) throw new TypeError("report 送检需要 registry（封闭注册表的确定性工具）");
+      const assessment = registry.get("assess_frozen_dataset").execute({}).authoritative;
+      const trialMetrics = registry.get("trial_metrics").execute({});
+      const quality = registry.get("data_quality").execute({});
+      const authoritative = {
+        signalScore: assessment.signalScore,
+        maxDrawdownPct: assessment.signals.maxDrawdownPct,
+        dsr: trialMetrics.selected.dsr,
+        sharpePerPeriod: trialMetrics.selected.sharpePerPeriod,
+        rows: quality.stats.rows
+      };
+      const claimReport = verifyText(state.artifactText, authoritative);
+      return { claimReport, status: "VERIFIED" };
+    }
     const report = adjudicateCandidates({ dataset, candidates: [state.candidate], costRate });
     return { adjudication: report, status: "VERIFIED" };
   }
 
   async function reportNode(state, cfg) {
     const configurable = cfg?.configurable ?? {};
-    const llmNarrative = await narrativeViaLLM(configurable.client, state.adjudication, state.status);
+    let llmNarrative = null;
+    if (state.submission?.kind === "report") {
+      const cr = state.claimReport;
+      const deterministic = [
+        `[质检报告 · 数字验货] 声明 ${cr.claims.length} 条：一致 ${cr.matched} · 不一致 ${cr.mismatched} · 无法复验 ${cr.unverifiable}`,
+        `总判定：${cr.verdict.toUpperCase()}${cr.mismatched ? "（存在与权威工具输出不一致的数字——详见逐条清单）" : ""}`
+      ].join("\n");
+      llmNarrative = await narrativeViaLLMReport(configurable.client, cr, state.status);
+      configurable.audit?.write?.({
+        kind: "inspection-narrative", narrativeSource: llmNarrative ? "llm" : "deterministic",
+        caseKind: "report", caseStatus: state.status, verdict: cr.verdict
+      });
+      return { narrative: llmNarrative ?? deterministic, status: "REPORTED" };
+    }
+    llmNarrative = await narrativeViaLLM(configurable.client, state.adjudication, state.status);
     const narrative = llmNarrative ?? deterministicNarrative(state.adjudication, state.status);
     configurable.audit?.write?.({
       kind: "inspection-narrative", narrativeSource: llmNarrative ? "llm" : "deterministic",
@@ -103,11 +157,13 @@ export function createInspectionWorkflow({ dataset, client = null, costRate, aud
     const configurable = cfg?.configurable ?? {};
     const resume = interrupt({
       requires: "human signature",
-      summary: {
-        proposalId: state.adjudication.best.proposalId, family: state.adjudication.best.family,
-        ppSharpe: state.adjudication.best.sharpePerPeriod, dsr: state.adjudication.best.dsr,
-        status: state.status
-      }
+      summary: state.submission?.kind === "report"
+        ? { kind: "report", claims: state.claimReport.claims.length, matched: state.claimReport.matched, mismatched: state.claimReport.mismatched, verdict: state.claimReport.verdict, status: state.status }
+        : {
+          proposalId: state.adjudication.best.proposalId, family: state.adjudication.best.family,
+          ppSharpe: state.adjudication.best.sharpePerPeriod, dsr: state.adjudication.best.dsr,
+          status: state.status
+        }
     });
     if (!resume || typeof resume !== "object" || !["RELEASED", "REJECTED"].includes(resume.decision)) {
       return { status: "REJECTED", signature: { ...resume, reason: "invalid sign-off payload" }, error: "invalid sign-off payload" };
