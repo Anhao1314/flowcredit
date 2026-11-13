@@ -23,6 +23,7 @@ import { createAgentClient } from "../agent/client.js";
 import { loadDotEnv } from "../agent/server.js";
 import { validateCandidateBatch, listFamilies, PROPOSALS_VERSION } from "./schema.js";
 import { listRules } from "../strategy/rules-v002.js";
+import { loadEntries, summarize, buildMemoryContext } from "../journal/journal.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const CANDIDATES_PATH = join(HERE, "candidates.json");
@@ -38,7 +39,7 @@ export function loadCandidates(path = CANDIDATES_PATH) {
   }
 }
 
-function buildPrompt(count, registered) {
+function buildPrompt(count, registered, memoryContext) {
   return [
     "You are proposing parameter candidates for deterministic backtesting in a quant governance pipeline.",
     "Families and REQUIRED param fields (values must respect these bounds):",
@@ -47,9 +48,11 @@ function buildPrompt(count, registered) {
     '- "composite-percentile": window int [20,80], percentile [50,95]',
     "Output STRICT JSON — an array of exactly " + count + " objects: {\"family\":\"...\",\"params\":{...},\"rationale\":\"one short sentence\"}.",
     "No markdown fences, no commentary, JSON only.",
+    memoryContext,
     "Already-registered rules (do NOT duplicate these params):",
-    JSON.stringify(registered.map(rule => ({ family: rule.family, params: rule.params })))
-  ].join("\n");
+    JSON.stringify(registered.map(rule => ({ family: rule.family, params: rule.params }))),
+    memoryContext ? "Prior research context (avoid repeating failures):\n" + memoryContext : ""
+  ].filter(Boolean).join("\n");
 }
 
 /** 从模型文本提取 JSON 数组（宽容定位但严格解析——解析失败即失败，不猜测）。 */
@@ -78,7 +81,9 @@ export async function generateCandidates({ count = 4, consent = false, fromFile 
     }
     const client = createAgentClient({ transport, apiKey, model, baseUrl });
     if (!client.configured()) return { ok: false, code: "HARNESS_UNCONFIGURED", added: 0, rejected: [], error: "DEEPSEEK_API_KEY is not configured" };
-    const response = await client.chat({ messages: [{ role: "user", content: buildPrompt(count, registered) }] });
+    const journalPath = join(HERE, "..", "journal", "entries.jsonl");
+    const memoryContext = buildMemoryContext(summarize(loadEntries(journalPath)));
+    const response = await client.chat({ messages: [{ role: "user", content: buildPrompt(count, registered) + "\n\n" + memoryContext }] });
     rawList = extractJsonArray(response.message?.content ?? "");
     source = "model:" + client.model;
   }

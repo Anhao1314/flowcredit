@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { adjudicateCandidates, adjudicateMultiMarket } from "./adjudicate.js";
+import { appendEntry } from "../journal/journal.js";
 import { PROPOSALS_VERSION } from "./schema.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +60,21 @@ function main() {
   const report = adjudicateCandidates({ dataset: first.dataset, candidates: candidates.candidates, costRate: first.costRate });
   const artifact = { runDate: new Date().toISOString(), market: first.label, symbol: first.dataset.symbol, ...report };
   writeFileSync(OUTPUT_PATH, JSON.stringify(artifact, null, 2) + "\n", "utf8");
+  // 自动写 journal entries（episodic memory：每次裁决记录一条）
+  const journalDir = join(QUANT, "journal");
+  const journalPath = join(journalDir, "entries.jsonl");
+  const journalNow = new Date().toISOString();
+  for (const candidate of report.candidates) {
+    try {
+      appendEntry(journalPath, {
+        timestamp: journalNow, type: "adjudication", kind: "strategy",
+        subject: { proposalId: candidate.proposalId, family: candidate.family, params: candidate.params, market: adjudicationDataset?.symbol ?? "BTC-USDT" },
+        outcome: { verdict: candidate.sharpePerPeriod > 0 ? "pass" : "fail", reason: `pp-Sharpe ${candidate.sharpePerPeriod?.toFixed?.(4) ?? "n/a"} · DSR ${candidate.dsr?.toFixed?.(4) ?? "n/a"}`, metrics: { ppSharpe: candidate.sharpePerPeriod, dsr: candidate.dsr, psr: candidate.psrZero } },
+        context: { market: adjudicationDataset?.symbol ?? "BTC-USDT", dataVersion: report.datasetVersion, model: "n/a" },
+        tags: [candidate.kind, candidate.family, candidate.sharpePerPeriod > 0 ? "positive" : "negative"]
+      }, journalNow);
+    } catch (e) { process.stderr.write(`journal write failed: ${e.message}\n`); }
+  }
 
   for (const market of multi.markets) {
     process.stdout.write(`${market.label}（cost ${market.costRate ? (market.costRate * 10000).toFixed(2) + "bps calibrated" : "frozen 7bps"}）: best=${market.best.proposalId} · pp-Sharpe ${market.best.sharpePerPeriod?.toFixed?.(4) ?? "n/a"} · DSR ${market.best.dsr?.toFixed?.(4) ?? "n/a"}\n`);
