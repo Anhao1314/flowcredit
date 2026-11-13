@@ -111,7 +111,7 @@ export function createBinanceTestnetAdapter({ symbol = "BTCUSDT", http, dry = fa
       const server = await http.publicGet("/api/v3/time");
       const response = await http.signedPost("/api/v3/order", {
         symbol, side: order.side, type: "MARKET", quantity: Number(order.deltaUnits.toFixed(6)),
-        timestamp: Number(server.serverTime), receiveWindow: 5000
+        timestamp: Number(server.serverTime)
       });
       order.exchangeOrderId = response.orderId ?? null;
       const executedQty = Number(response.executedQty || 0);
