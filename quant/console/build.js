@@ -99,8 +99,8 @@ const html = `<!DOCTYPE html>
   --accent:#3b82f6; --accent-soft:#eef3ff;
   --good:#34a853; --bad:#e5484d; --warn:#f5a623;
   --radius:16px;
-  --shadow:0 1px 2px rgba(0,0,0,.04);
-  --shadow-lg:0 14px 44px rgba(0,0,0,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.03);
+  --shadow-lg:0 10px 30px rgba(0,0,0,.06);
   --track:#e9e9ec; --hover:rgba(0,0,0,.045); --user-bubble:#f1f1f3;
 }
 /* 深色：跟随系统；:root.dark 供手动预览/未来主题切换复用 */
@@ -130,7 +130,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .segmented{display:flex;background:var(--track);border-radius:12px;padding:3px;gap:3px;margin:0 4px 8px}
 .seg-btn{flex:1;border:none;background:transparent;color:var(--muted);font-size:12.5px;font-weight:500;padding:7px 10px;border-radius:9px;cursor:pointer}
 .seg-btn.active{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.09);font-weight:600}
-.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13.5px}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:10px 10px;border-radius:12px;cursor:pointer;font-size:13.5px}
 .nav-btn:hover{background:var(--hover)}
 .nav-btn.active{background:var(--track);font-weight:550}
 .nav-btn svg{width:17px;height:17px;stroke:var(--muted);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
@@ -160,7 +160,7 @@ body[data-view="chat"] .topbar{display:none}
 .topbar h1{font-size:22px;font-weight:650}
 .topbar .sub{color:var(--muted);margin-top:4px;font-size:13px}
 .view{display:none}.view.active{display:block}
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px}
 .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
 .card h2{font-size:16px;font-weight:600;margin-top:2px}
 .eyebrow{font-size:11px;color:var(--faint);letter-spacing:.6px;text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -180,7 +180,7 @@ body[data-view="chat"] .topbar{display:none}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{text-align:left;color:var(--muted);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border)}
-.tbl td{padding:9px 10px;border-bottom:1px solid var(--border)}
+.tbl td{padding:12px 10px;border-bottom:1px solid var(--border)}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr.selected td{background:var(--accent-soft)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
@@ -252,12 +252,18 @@ details.card[open] summary{border-bottom:1px solid var(--border)}
 details.card .card-body{padding:16px 22px}
 .data-table{width:100%;border-collapse:collapse;font-size:13px}
 .data-table th{text-align:left;color:var(--muted);font-weight:550;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
-.data-table td{padding:11px 12px;border-bottom:1px solid var(--border)}
+.data-table td{padding:13px 12px;border-bottom:1px solid var(--border)}
 .data-table tbody tr:last-child td{border-bottom:none}
 .data-table tbody tr:hover td{background:var(--card2)}
 .data-table tr.selected td{background:var(--accent-soft)}
 .data-table td.num{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
 .data-table th.num{text-align:right}
+/* ── 线性空态插画（Kimi 空态语言：灰细线条 + 蓝色文字链接）────────────────── */
+.empty-illu{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 0 6px}
+.empty-illu svg{width:88px;height:72px}
+.empty-illu .t{color:var(--muted);font-size:13px}
+.empty-illu .a{color:var(--accent);font-size:13px;cursor:pointer}
+.empty-illu .a:hover{text-decoration:underline}
 /* ── Chat（Kimi 式：居中空态 + 悬浮输入卡 + 快捷芯片）────────────────── */
 .chat-shell{flex:1;display:flex;flex-direction:column;height:calc(100vh - 32px)}
 body[data-view="chat"] main{padding:16px 24px}
@@ -288,7 +294,7 @@ body[data-view="chat"] .footer{display:none}
 .msg table{border-collapse:collapse;font-size:12.5px;margin:0;width:100%}
 .msg th{border-bottom:1px solid var(--border);text-align:left;padding:4px 9px;font-weight:600;color:var(--muted);white-space:nowrap}
 .msg td{border-bottom:1px solid var(--border);padding:4px 9px;vertical-align:top}
-.composer{background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow-lg);padding:12px 14px 10px;margin:8px auto 0;width:100%;max-width:820px}
+.composer{background:var(--card);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow-lg);padding:12px 16px 10px;margin:8px auto 0;width:100%;max-width:820px}
 .composer textarea{width:100%;border:none;outline:none;resize:none;background:transparent;color:var(--text);font:inherit;font-size:14px;min-height:46px}
 .composer textarea::placeholder{color:var(--faint)}
 .composer-row{display:flex;align-items:center;gap:10px;margin-top:6px}
@@ -506,7 +512,7 @@ body[data-view="chat"] .footer{display:none}
       </div>
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">CASES · 案件列表</div><h2>本机案件</h2></div><button id="cases-refresh" class="sendbtn btn-ghost" style="padding:6px 14px">刷新</button></div>
-        <div id="cases-list"><div class="chat-hint">HTTP 模式下自动加载；file:// 模式无案件 API。</div></div>
+        <div id="cases-list"><div class="empty-illu"><svg viewBox="0 0 88 72" fill="none" stroke="#c9c9cf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="60" height="52" rx="6"/><path d="M14 22h60M24 6v8M64 6v8"/><circle cx="30" cy="36" r="9"/><path d="M30 32v4l3 2"/><path d="M48 34h18M48 42h14"/></svg><div class="t">暂无案件——把 AI 产出的研究报告粘贴到左侧送检</div><div class="a" id="cases-empty-hint">数字验货器将逐条比对确定性输出</div></div></div>
       </div>
     </div>
     <div class="card">
@@ -1313,7 +1319,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       const body = await response.json();
       if (!body.ok) throw new Error(body.error || "failed");
       const box = document.getElementById("cases-list");
-      if (!body.cases.length) { box.innerHTML = '<div class="chat-hint">暂无案件——用左侧表单送检。</div>'; return; }
+      if (!body.cases.length) { box.innerHTML = '<div class="empty-illu"><svg viewBox="0 0 88 72" fill="none" stroke="#c9c9cf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="60" height="52" rx="6"/><path d="M14 22h60M24 6v8M64 6v8"/><circle cx="30" cy="36" r="9"/><path d="M30 32v4l3 2"/><path d="M48 34h18M48 42h14"/></svg><div class="t">暂无案件——用左侧表单送检。</div></div>'; return; }
       box.innerHTML = '<table class="data-table"><thead><tr><th>caseId</th><th>kind</th><th>送检人</th><th>状态</th><th>verdict</th><th>签字</th></tr></thead><tbody>' +
         body.cases.map(entry => '<tr data-case="' + escAttr(entry.caseId) + '" style="cursor:pointer"><td class="mono">' + escAttr(entry.caseId) + '</td><td>' + escAttr(entry.kind) + '</td><td class="mono">' + escAttr(entry.submittedBy) + '</td><td><span class="badge ' + (entry.status === "RELEASED" ? "badge-good" : entry.status === "REJECTED" ? "badge-bad" : "badge-accent") + '">' + escAttr(entry.status || "") + '</span></td><td><span class="badge ' + (entry.verdict === "pass" ? "badge-good" : entry.verdict === "fail" ? "badge-bad" : "badge-mono") + '">' + escAttr(entry.verdict || "—") + '</span></td><td class="mono">' + escAttr(entry.status === "RELEASED" || entry.status === "REJECTED" ? (entry.signedBy || "—") : "待签") + '</td></tr>').join("") +
         '</tbody></table>';
