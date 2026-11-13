@@ -28,6 +28,7 @@ const payload = await computeConsolePayload({}); // 不传 generatedAtUtc：构�
 
 // ── HTML 生成（Kimi 桌面风：浅色底/白卡片/分段切换/居中空态/悬浮输入卡）──────
 const esc = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escAttrN = value => String(value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const fmt = (value, digits = 4) => (value === null || value === undefined) ? "n/a" : Number(value).toFixed(digits);
 const badge = (text, kind) => `<span class="badge badge-${kind}">${esc(text)}</span>`;
 const metricCard = (label, value, sub, kind = "") => `<div class="metric ${kind}"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div>${sub ? `<div class="metric-sub">${esc(sub)}</div>` : ""}</div>`;
@@ -46,7 +47,7 @@ function pipelineCard(ds) {
       ${tile("Decision", p.decisionStatus.toUpperCase(), p.guardStatus === "halt" ? "机器先于人说不" : "eligible for review", decisionTone)}
       ${tile("Max Drawdown", fmt(p.signals.maxDrawdownPct, 2) + "%", "冻结限额 25%", ddTone)}
     </div>
-    <div class="chips">${badge("evalRunId " + p.evalRunId, "mono")}${badge("fp " + p.signalFingerprint, "mono")}${badge("权威输出 · 可反查", "muted")}</div>
+    <div class="chips"><span class="badge badge-mono id-chip" data-search="${escAttrN(p.evalRunId)}" title="全局反查 →">${escAttrN("evalRunId " + p.evalRunId)}</span><span class="badge badge-mono id-chip" data-search="${escAttrN(p.signalFingerprint)}" title="全局反查 →">${escAttrN("fp " + p.signalFingerprint)}</span>${badge("权威输出 · 可反查", "muted")}</div>
   </div>`;
 }
 
@@ -359,6 +360,26 @@ body[data-view="chat"] .footer{display:none}
 .retry-row{display:flex}
 .retry-chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:6px 14px;font-size:12.5px;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
 .retry-chip:hover{background:var(--card2)}
+/* ── 全局搜索（侧栏）：索引视图/数据集/指纹/试验/提案/案件；指纹反查 ────── */
+.side-search{position:relative;margin:0 4px 8px}
+.side-search input{width:100%;height:32px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:12.5px;padding:0 30px;outline:none;transition:border-color .15s}
+.side-search input::placeholder{color:var(--faint)}
+.side-search input:focus{border-color:var(--border-strong)}
+.side-search .s-icon{position:absolute;left:9px;top:8px;width:15px;height:15px;stroke:var(--faint);fill:none;stroke-width:1.6;stroke-linecap:round;pointer-events:none}
+.side-search .kbd{position:absolute;right:8px;top:7px;font-size:10px;color:var(--faint);pointer-events:none}
+.side-search-panel{position:absolute;top:38px;left:0;width:300px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);max-height:420px;overflow:auto;z-index:80;display:none;padding:6px}
+.side-search-panel.show{display:block}
+.search-group{font-size:10.5px;color:var(--faint);padding:7px 10px 3px;font-weight:600;letter-spacing:.2px}
+.search-item{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:8px;cursor:pointer;font:inherit;color:var(--text)}
+.search-item:hover{background:var(--hover)}
+.search-item .l{font-size:12.5px;font-weight:550;word-break:break-all}
+.search-item .l .mono{font-size:11.5px}
+.search-item .s{font-size:11px;color:var(--muted);margin-top:1px;line-height:1.45}
+.search-empty{font-size:12px;color:var(--faint);padding:10px}
+.id-chip{cursor:pointer;transition:border-color .15s,color .15s}
+.id-chip:hover{border-color:var(--accent);color:var(--accent)}
+@keyframes searchFlash{0%{background:var(--accent-soft)}100%{background:transparent}}
+.search-flash{animation:searchFlash 1.8s ease-out 1;border-radius:12px}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}.sidebar{width:200px}}
 </style>
 </head>
@@ -368,6 +389,12 @@ body[data-view="chat"] .footer{display:none}
   <div class="segmented">
     <button class="seg-btn active" data-view="chat">Chat</button>
     <button class="seg-btn" data-view="paper">Paper</button>
+  </div>
+  <div class="side-search">
+    <svg class="s-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="global-search" type="text" placeholder="搜索 指纹 / 案件 / 规则…" autocomplete="off" spellcheck="false">
+    <span class="kbd">/</span>
+    <div class="side-search-panel" id="search-panel"></div>
   </div>
   <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘⇧K</span></button>
   <div class="sidebar-group">仪表盘</div>
@@ -793,6 +820,110 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     (root || document).querySelectorAll("table.data-table").forEach(function(t) { enhanceTable(t); });
   }
   enhanceAllTables(document);
+
+  // ── 全局搜索 + 指纹反查（纯前端索引：DATA + 动态 cases；展示层只导航不判定）──
+  var searchIndex = [];
+  var searchCaseSeen = {};
+  function buildSearchIndex() {
+    searchIndex = [];
+    Object.keys(titles).forEach(function(v) {
+      searchIndex.push({ cat: "视图", label: titles[v][0], sub: titles[v][1], view: v, text: (titles[v][0] + " " + v).toLowerCase(), anchorText: null });
+    });
+    Object.keys(DATA.datasets || {}).forEach(function(k) {
+      var ds = DATA.datasets[k]; var p = ds.pipeline || {};
+      searchIndex.push({ cat: "数据集", label: k + " · " + ds.dataVersion, sub: (ds.symbol ? ds.symbol + " · " : "") + ds.rows + " rows · " + (ds.nature === "real_market_data" ? "真实市场数据" : "合成夹具"), view: "overview", text: (k + " " + ds.dataVersion + " " + (ds.symbol || "")).toLowerCase(), anchorText: ds.dataVersion });
+      if (p.evalRunId) searchIndex.push({ cat: "指纹", label: p.evalRunId, sub: "evalRunId · " + k, view: "overview", text: p.evalRunId, anchorText: p.evalRunId });
+      if (p.signalFingerprint) searchIndex.push({ cat: "指纹", label: p.signalFingerprint, sub: "signalFingerprint · " + k, view: "overview", text: p.signalFingerprint, anchorText: p.signalFingerprint });
+    });
+    (DATA.trials && DATA.trials.v002 && DATA.trials.v002.rows || []).forEach(function(r) {
+      searchIndex.push({ cat: "试验", label: r.trialId, sub: (r.ruleId || "legacy") + " · pp-Sharpe " + r.sharpePerPeriod, view: "rules", text: (r.trialId + " " + (r.ruleId || "")).toLowerCase(), anchorText: r.trialId });
+    });
+    (DATA.proposals && DATA.proposals.candidates || []).forEach(function(c) {
+      searchIndex.push({ cat: "提案", label: c.proposalId, sub: c.family + " · " + (c.rationale || "").slice(0, 40), view: "proposals", text: (c.proposalId + " " + c.family + " " + (c.rationale || "")).toLowerCase(), anchorText: c.proposalId });
+    });
+  }
+  buildSearchIndex();
+  function addCasesToSearchIndex(cases) {
+    (cases || []).forEach(function(entry) {
+      if (searchCaseSeen[entry.caseId]) return;
+      searchCaseSeen[entry.caseId] = true;
+      searchIndex.push({ cat: "案件", label: entry.caseId, sub: (entry.kind || "") + " · " + (entry.status || "") + " · 送检人 " + (entry.submittedBy || ""), view: "cases", text: (entry.caseId + " " + (entry.kind || "") + " " + (entry.submittedBy || "")).toLowerCase(), anchorText: entry.caseId });
+    });
+  }
+  var searchInput = document.getElementById("global-search");
+  var searchPanel = document.getElementById("search-panel");
+  function searchEscape(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function renderSearchPanel() {
+    var q = (searchInput.value || "").trim().toLowerCase();
+    if (!q) { searchPanel.classList.remove("show"); searchPanel.innerHTML = ""; return; }
+    var hits = searchIndex.filter(function(item) { return (item.text + " " + item.label.toLowerCase() + " " + (item.sub || "").toLowerCase()).indexOf(q) !== -1; }).slice(0, 24);
+    if (!hits.length) { searchPanel.innerHTML = '<div class="search-empty">无匹配——支持指纹 / trialId / 提案 ID / 案件 ID / 视图名</div>'; searchPanel.classList.add("show"); return; }
+    var html = "", lastCat = null;
+    hits.forEach(function(item, i) {
+      if (item.cat !== lastCat) { html += '<div class="search-group">' + searchEscape(item.cat) + '</div>'; lastCat = item.cat; }
+      var label = searchEscape(item.label);
+      var li = label.toLowerCase().indexOf(q);
+      if (li !== -1) label = searchEscape(item.label.slice(0, li)) + '<b style="color:var(--accent)">' + searchEscape(item.label.slice(li, li + q.length)) + '</b>' + searchEscape(item.label.slice(li + q.length));
+      html += '<button class="search-item" data-idx="' + i + '"><div class="l' + (item.cat === "指纹" || item.cat === "案件" || item.cat === "提案" || item.cat === "试验" ? " mono" : "") + '">' + label + '</div>' + (item.sub ? '<div class="s">' + searchEscape(item.sub) + '</div>' : '') + '</button>';
+    });
+    searchPanel.innerHTML = html;
+    searchPanel.classList.add("show");
+    searchPanel._hits = hits;
+  }
+  function flashAnchor(el) {
+    if (!el) return;
+    el.classList.remove("search-flash");
+    void el.offsetWidth; // 重置动画
+    el.classList.add("search-flash");
+  }
+  function navigateToResult(item) {
+    var nav = document.querySelector('button[data-view="' + item.view + '"]');
+    if (nav) nav.click();
+    searchPanel.classList.remove("show");
+    searchInput.blur();
+    if (item.anchorText) {
+      setTimeout(function() {
+        var sec = document.querySelector('section.view[data-view="' + item.view + '"]');
+        if (!sec) return;
+        var target = null;
+        var all = sec.querySelectorAll("*");
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].children.length === 0 && all[i].textContent && all[i].textContent.indexOf(item.anchorText) !== -1) { target = all[i]; break; }
+        }
+        if (target) {
+          var box = target.closest(".card,.tile,.gate,.banner,.step") || target.closest("tr") || target;
+          box.scrollIntoView({ behavior: "smooth", block: "center" });
+          flashAnchor(box);
+        }
+      }, 80);
+    }
+  }
+  searchInput.addEventListener("input", renderSearchPanel);
+  searchInput.addEventListener("focus", renderSearchPanel);
+  searchPanel.addEventListener("click", function(e) {
+    var item = e.target.closest(".search-item");
+    if (!item || !searchPanel._hits) return;
+    navigateToResult(searchPanel._hits[parseInt(item.getAttribute("data-idx"), 10)]);
+  });
+  document.addEventListener("click", function(e) {
+    if (!searchPanel.contains(e.target) && e.target !== searchInput && !searchPanel.classList.contains("show")) return;
+    if (!searchPanel.contains(e.target) && e.target !== searchInput) searchPanel.classList.remove("show");
+  });
+  document.addEventListener("keydown", function(e) {
+    var t = e.target;
+    var typing = t && (t.matches && t.matches("input,textarea,select") || (t.isContentEditable));
+    if (e.key === "/" && !typing) { e.preventDefault(); searchInput.focus(); searchInput.select(); }
+    if (e.key === "Escape" && document.activeElement === searchInput) { searchInput.value = ""; searchInput.blur(); searchPanel.classList.remove("show"); }
+  });
+  // 指纹反查：任意 [data-search] 芯片点击 → 预填全局搜索
+  document.addEventListener("click", function(e) {
+    var chip = e.target.closest("[data-search]");
+    if (!chip) return;
+    e.stopPropagation();
+    searchInput.value = chip.getAttribute("data-search");
+    searchInput.focus();
+    renderSearchPanel();
+  });
 
   // ── Chat（仅 HTTP serve 模式可用；file:// 下自动禁用并提示）──────────────
   var thread = document.getElementById("chat-thread");
@@ -1417,6 +1548,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       const response = await casesFetch("/api/cases");
       const body = await response.json();
       if (!body.ok) throw new Error(body.error || "failed");
+      addCasesToSearchIndex(body.cases);
       const box = document.getElementById("cases-list");
       if (!body.cases.length) { box.innerHTML = '<div class="empty-illu"><svg viewBox="0 0 88 72" fill="none" stroke="#c9c9cf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="60" height="52" rx="6"/><path d="M14 22h60M24 6v8M64 6v8"/><circle cx="30" cy="36" r="9"/><path d="M30 32v4l3 2"/><path d="M48 34h18M48 42h14"/></svg><div class="t">暂无案件——用左侧表单送检。</div></div>'; return; }
       box.innerHTML = '<table class="data-table"><thead><tr><th>caseId</th><th>kind</th><th>送检人</th><th>状态</th><th>verdict</th><th>签字</th></tr></thead><tbody>' +
