@@ -39,7 +39,7 @@ export function createAgentClient(options = {}) {
       const response = await transport(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, tools: tools.length ? tools : undefined, tool_choice: tools.length ? "auto" : undefined }),
+        body: JSON.stringify({ model, messages, tools: tools.length ? tools : undefined, tool_choice: tools.length ? "auto" : undefined, max_tokens: 800 }),
         signal: controller.signal
       });
       if (!response.ok) {
@@ -118,6 +118,7 @@ export function createAgentClient(options = {}) {
           tools: tools.length ? tools : undefined,
           tool_choice: tools.length ? "auto" : undefined,
           stream: true,
+        max_tokens: 800,
           stream_options: { include_usage: true }
         }),
         signal: controller.signal
