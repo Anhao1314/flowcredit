@@ -227,7 +227,10 @@ test("paper command surface: auth required when enabled, 404 outside whitelist",
 });
 
 test("cases API: claim verification + signature gate with separation of duties", async () => {
-  const server = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]) });
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const casesDir = await mkdtemp(join(tmpdir(), "quant-cases-test-")); // 隔离：不与其他测试/活体实例共享案件库
+  const server = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]), env: { CONSOLE_CASES_DIR: casesDir } });
   const base = addressOf(server);
   const submit = async body => fetch(`${base}/api/cases`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const sign = async (caseId, body) => fetch(`${base}/api/cases/${caseId}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -250,6 +253,34 @@ test("cases API: claim verification + signature gate with separation of duties",
   const list = await (await fetch(`${base}/api/cases`)).json();
   assert.ok(list.cases.length >= 2);
   assert.equal((await fetch(`${base}/api/cases/case-9999`)).status, 404);
+});
+
+test("W4 restart survival: case paused at signature gate survives process restart", async () => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const casesDir = await mkdtemp(join(tmpdir(), "quant-w4-restart-"));
+  const env = { CONSOLE_CASES_DIR: casesDir };
+
+  // 进程 1：送检（报告含错误数字 → 验货 fail → 停在签字门）后关闭
+  const server1 = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]), env });
+  const base1 = addressOf(server1);
+  const started = await (await fetch(`${base1}/api/cases`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submission: { kind: "report", artifactText: "最大回撤 12.34%，一切正常。" }, submittedBy: "analyst-9" }) })).json();
+  assert.equal(started.ok, true);
+  assert.equal(started.claimReport.verdict, "fail");
+  await new Promise(resolve => server1.close(resolve));
+
+  // 进程 2：从磁盘回载检查点与索引 → 签字门仍可恢复
+  const server2 = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]), env });
+  const base2 = addressOf(server2);
+  const listed = await (await fetch(`${base2}/api/cases`)).json();
+  assert.equal(listed.cases.length, 1, "案件索引跨重启保留");
+  const signResponse = await fetch(`${base2}/api/cases/${started.caseId}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signedBy: "signer-9", decision: "REJECTED", reason: "重启后复核：数字不一致" }) });
+  const sign = await signResponse.json();
+  assert.equal(sign.ok, true, `重启后签字必须可恢复：${JSON.stringify(sign)}`);
+  assert.equal(sign.status, "REJECTED");
+  const detail = await (await fetch(`${base2}/api/cases/${started.caseId}`)).json();
+  assert.equal(detail.values.status, "REJECTED");
+  await new Promise(resolve => server2.close(resolve));
 });
 
 test("loadDotEnv fills only missing env vars and never overrides", () => {

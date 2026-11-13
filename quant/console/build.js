@@ -474,8 +474,29 @@ body[data-view="chat"] .footer{display:none}
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">SUBMIT · 送检</div><h2>提交 AI 产物</h2></div></div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <label style="font-size:12px;color:var(--muted)">AI 产物原文（研究报告/分析文本——数字验货器只认有关键词锚点的声明）</label>
-          <textarea id="case-artifact" rows="8" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" placeholder="例：机器判定复核——最大回撤 28.54%（超 25% 限额），signalScore=36.2481，数据 260 条日记录，选中 trial 的 DSR 为 0.55。"></textarea>
+          <div style="display:flex;gap:10px;align-items:center">
+            <label style="font-size:12px;color:var(--muted)">送检类型</label>
+            <select id="case-kind" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px">
+              <option value="report">研究报告（数字验货）</option>
+              <option value="strategy">策略候选（确定性裁决）</option>
+            </select>
+          </div>
+          <div id="case-fields-report">
+            <label style="font-size:12px;color:var(--muted)">AI 产物原文（研究报告/分析文本——数字验货器只认有关键词锚点的声明）</label>
+            <textarea id="case-artifact" rows="7" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" placeholder="例：机器判定复核——最大回撤 28.54%（超 25% 限额），signalScore=36.2481，数据 260 条日记录，选中 trial 的 DSR 为 0.55。"></textarea>
+          </div>
+          <div id="case-fields-strategy" style="display:none">
+            <div style="display:flex;gap:10px;margin-bottom:8px">
+              <select id="case-family" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px">
+                <option value="sma-cross-hysteresis">sma-cross-hysteresis</option>
+                <option value="momentum-cooldown">momentum-cooldown</option>
+                <option value="composite-percentile">composite-percentile</option>
+              </select>
+              <input id="case-rationale" placeholder="提案理由（可选）" style="flex:1;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px">
+            </div>
+            <label style="font-size:12px;color:var(--muted)">params（JSON——参数边界由 schema 硬校验）</label>
+            <textarea id="case-params" rows="4" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" placeholder='{"smaShort":14,"smaLong":65,"entryBandPct":0.15,"exitBandPct":-0.4}'></textarea>
+          </div>
           <div style="display:flex;gap:10px;align-items:center">
             <input id="case-submitter" placeholder="送检人 ID" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;width:180px">
             <button id="case-submit" class="sendbtn" style="padding:8px 16px">送检</button>
@@ -1309,8 +1330,17 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       statusBadge.textContent = body.values.status || "";
       statusBadge.className = "badge " + (body.values.status === "RELEASED" ? "badge-good" : body.values.status === "REJECTED" ? "badge-bad" : "badge-accent");
       const cr = body.values.claimReport;
+      const adj = body.values.adjudication;
       const canSign = Array.isArray(body.next) && body.next.includes("await_sign");
       let html = "";
+      if (adj) {
+        html += '<div class="tiles" style="margin-bottom:10px">' +
+          '<div class="tile tone-accent"><div class="tile-label">BEST proposal</div><div class="tile-value" style="font-size:16px">' + escAttr(adj.best.proposalId) + '</div><div class="tile-sub">' + escAttr(adj.best.family) + '</div></div>' +
+          '<div class="tile"><div class="tile-label">pp-Sharpe</div><div class="tile-value">' + escAttr(adj.best.sharpePerPeriod === null ? "n/a" : Number(adj.best.sharpePerPeriod).toFixed(4)) + '</div><div class="tile-sub">未年化净口径</div></div>' +
+          '<div class="tile tone-good"><div class="tile-label">DSR（全池）</div><div class="tile-value">' + escAttr(adj.best.dsr === null ? "n/a" : Number(adj.best.dsr).toFixed(4)) + '</div><div class="tile-sub">N ' + adj.nTrials.nominal + ' · N_eff ' + (adj.nTrials.effective === null ? "n/a" : Number(adj.nTrials.effective).toFixed(2)) + '</div></div>' +
+          '<div class="tile"><div class="tile-label">成本口径</div><div class="tile-value" style="font-size:14px">' + escAttr(adj.costModel.effectiveSource === "calibrated" ? "校准" : "冻结") + '</div><div class="tile-sub">one-side ' + (Number(adj.costModel.effectiveOneSideRate) * 10000).toFixed(2) + 'bps</div></div>' +
+          '</div>';
+      }
       if (cr) {
         html += '<div class="tiles" style="margin-bottom:10px">' +
           '<div class="tile ' + (cr.verdict === "pass" ? "tone-good" : "tone-bad") + '"><div class="tile-label">总判定</div><div class="tile-value">' + escAttr(cr.verdict.toUpperCase()) + '</div><div class="tile-sub">声明 ' + cr.claims.length + ' · 一致 ' + cr.matched + ' · 不一致 ' + cr.mismatched + ' · 无法复验 ' + cr.unverifiable + '</div></div></div>';
@@ -1342,17 +1372,34 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       document.getElementById("case-detail").insertAdjacentHTML("beforeend", '<div class="chat-hint">签字失败：' + escAttr(error.message) + '</div>');
     }
   }
+  document.getElementById("case-kind").addEventListener("change", event => {
+    const kind = event.target.value;
+    document.getElementById("case-fields-report").style.display = kind === "report" ? "" : "none";
+    document.getElementById("case-fields-strategy").style.display = kind === "strategy" ? "" : "none";
+  });
   document.getElementById("case-submit").addEventListener("click", async () => {
-    const artifact = document.getElementById("case-artifact").value;
+    const kind = document.getElementById("case-kind").value;
     const submitter = document.getElementById("case-submitter").value.trim() || "anonymous";
     const statusBadge = document.getElementById("case-submit-status");
+    let submission;
     try {
-      const body = await (await casesFetch("/api/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submission: { kind: "report", artifactText: artifact }, submittedBy: submitter }) })).json();
+      if (kind === "strategy") {
+        const family = document.getElementById("case-family").value;
+        const params = JSON.parse(document.getElementById("case-params").value || "{}");
+        const rationale = document.getElementById("case-rationale").value.trim();
+        submission = { kind: "strategy", family, params, ...(rationale ? { rationale } : {}) };
+      } else {
+        submission = { kind: "report", artifactText: document.getElementById("case-artifact").value };
+      }
+    } catch (error) { statusBadge.textContent = "参数 JSON 解析失败：" + error.message; statusBadge.className = "badge badge-bad"; return; }
+    try {
+      const body = await (await casesFetch("/api/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submission, submittedBy: submitter }) })).json();
       if (!body.ok) throw new Error(body.error || "failed");
       statusBadge.textContent = "已受理 " + body.caseId;
       statusBadge.className = "badge badge-good";
       document.getElementById("case-artifact").value = "";
       loadCases();
+      openCase(body.caseId);
     } catch (error) {
       statusBadge.textContent = "送检失败：" + error.message;
       statusBadge.className = "badge badge-bad";

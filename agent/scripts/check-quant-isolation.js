@@ -123,7 +123,7 @@ const QUANT_AGENT_DIR = join(QUANT, "agent");
 const ZONE_C_IMPORT_ALLOWED = new Set(["node:fs", "node:readline", "node:path", "node:url", "node:crypto", "node:os", "node:http"]);
 // W1 转正（2026-11-13，用户批准）：@langchain/langgraph + @langchain/core 作为确定性编排框架
 // 进入 agent 层——仅限状态机/检查点/人工中断编排；LLM 自主规划与自由多 agent 编排仍禁。
-const ZONE_C_IMPORT_PREFIX_ALLOWED = ["@langchain/langgraph", "@langchain/core"];
+const ZONE_C_IMPORT_PREFIX_ALLOWED = ["@langchain/langgraph", "@langchain/core", "@langchain/langgraph-checkpoint"];
 const ZONE_C_RUNTIME = [/\bMath\.random\b/, /\bnew\s+Date\b/, /\bDate\.now\b/];
 
 function scanZoneCImports(path, rel) {

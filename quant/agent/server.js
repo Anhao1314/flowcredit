@@ -19,11 +19,11 @@ import { fileURLToPath } from "node:url";
 import { createAgentClient, AGENT_VERSION } from "./client.js";
 import { createToolRegistry } from "./tools.js";
 import { createQuantAssistant } from "./sidecar.js";
-import { createAuditLogger, defaultAuditDir } from "./audit.js";
+import { createAuditLogger, defaultAuditDir, AUDIT_BASE_DIR } from "./audit.js";
 import { computeConsolePayload } from "../console/payload.js";
 import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/engine-adapter.js";
 import { createInspectionWorkflow, startInspection, signInspection } from "./workflow/inspection.js";
-import { MemorySaver } from "@langchain/langgraph";
+import { JsonFileSaver, loadCaseIndex, saveCaseIndex, nextCaseSeq } from "./workflow/case-store.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
@@ -153,13 +153,20 @@ export function createQuantConsoleServer(options = {}) {
   const paperSessions = new Map();
   let paperSessionSeq = 0;
 
+  // 案件档案持久化（W4）：检查点 + 索引落盘，重启后签字门可恢复（CONSOLE_CASES_DIR 可覆盖）
+  const casesDir = env.CONSOLE_CASES_DIR || join(AUDIT_BASE_DIR, "cases");
+  const casesFile = join(casesDir, "checkpoints.json");
+  const indexFile = join(casesDir, "index.json");
   // ── 质检员 Agent（W1/W2）：案件 = LangGraph 状态机实例；检查点随进程（PoC 内存版）──
   const inspectionGraph = createInspectionWorkflow({
     dataset: loadFrozen().dataset, registry, client,
-    checkpointer: new MemorySaver()
+    checkpointer: new JsonFileSaver(casesFile)
   });
-  const cases = new Map(); // caseId -> { caseId, kind, submittedBy, createdAtUtc, summary }
-  let caseSeq = 0;
+  // 案件档案持久化（W4）：检查点 + 索引落盘，重启后签字门可恢复（CONSOLE_CASES_DIR 可覆盖）
+  const cases = new Map(); // caseId -> { caseId, threadId, kind, submittedBy, createdAtUtc, summary }
+  const existingCases = loadCaseIndex(indexFile);
+  for (const entry of existingCases) cases.set(entry.caseId, entry);
+  let caseSeq = nextCaseSeq([...cases.values()]);
 
   function caseSummary(caseId) {
     const entry = cases.get(caseId);
@@ -334,7 +341,9 @@ export function createQuantConsoleServer(options = {}) {
         } catch (error) {
           return send(500, { ok: false, code: error?.code || "CASE_FAILED", error: String(error?.message || error) });
         }
-        cases.set(caseId, { caseId, threadId, kind: submission.kind ?? "strategy", submittedBy: submission.submittedBy, createdAtUtc: new Date(nowMs()).toISOString(), summary: { status: result.status ?? null, verdict: result.claimReport?.verdict ?? (result.adjudication ? "adjudicated" : null) } });
+        const caseEntry = { caseId, threadId, kind: submission.kind ?? "strategy", submittedBy: submission.submittedBy, createdAtUtc: new Date(nowMs()).toISOString(), summary: { status: result.status ?? null, verdict: result.claimReport?.verdict ?? (result.adjudication ? "adjudicated" : null) } };
+        cases.set(caseId, caseEntry);
+        saveCaseIndex(indexFile, [...cases.values()]);
         return send(200, { ok: true, caseId, status: result.status ?? null, claimReport: result.claimReport ?? null, adjudication: result.adjudication ? { best: result.adjudication.best, nTrials: result.adjudication.nTrials } : null, narrative: result.narrative ?? null, awaitingSignature: Array.isArray(result.__interrupt__) });
       }
       const casesListMatch = url.pathname === "/api/cases" && req.method === "GET";
@@ -375,6 +384,7 @@ export function createQuantConsoleServer(options = {}) {
           return send(500, { ok: false, code: error?.code || "CASE_SIGN_FAILED", error: String(error?.message || error) });
         }
         entry.summary = { ...entry.summary, status: result.status ?? null, signedBy: result.signature?.signedBy ?? null };
+        saveCaseIndex(indexFile, [...cases.values()]);
         return send(200, { ok: true, caseId, status: result.status ?? null, signature: result.signature ?? null, narrative: result.narrative ?? null });
       }
 
