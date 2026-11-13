@@ -264,6 +264,21 @@ details.card .card-body{padding:16px 20px}
 .data-table td.num{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px}
 .data-table th.num{text-align:right}
 .data-table td.mono,.tbl td.mono{white-space:nowrap}
+/* ── 表格交互：排序表头 + 筛选工具栏 ─────────────────────────────────────── */
+.tbl-toolbar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.tbl-search{flex:0 1 240px;height:32px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:12.5px;padding:0 12px;outline:none;transition:border-color .15s}
+.tbl-search::placeholder{color:var(--faint)}
+.tbl-search:focus{border-color:var(--border-strong)}
+.tbl-count{font-size:11.5px;color:var(--faint)}
+.data-table th.sortable{cursor:pointer;user-select:none;transition:color .15s}
+.data-table th.sortable:hover{color:var(--text)}
+.data-table th.sortable::after{content:"";display:inline-block;margin-left:5px;vertical-align:1px;border-left:3.5px solid transparent;border-right:3.5px solid transparent;border-top:4px solid var(--faint);opacity:.35}
+.data-table th.sortable:hover::after{opacity:.8}
+.data-table th.sortable[data-dir="asc"]::after{border-top:none;border-bottom:4px solid var(--accent);opacity:1}
+.data-table th.sortable[data-dir="desc"]::after{border-top:4px solid var(--accent);opacity:1}
+.data-table tbody tr.row-last td{border-bottom:none}
+.tbl-nomatch{display:none;font-size:12px;color:var(--faint);padding:14px 12px}
+.tbl-nomatch.show{display:block}
 /* ── 线性空态插画（Kimi 空态语言：灰细线条 + 蓝色文字链接）────────────────── */
 .empty-illu{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 0 6px}
 .empty-illu svg{width:88px;height:72px}
@@ -712,6 +727,72 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     });
   }
   document.body.setAttribute("data-view", "chat");
+
+  // ── 表格交互：表头点击排序 + 工具栏实时筛选（纯前端，不动权威数据）──────
+  function sortValue(cell) {
+    var raw = (cell.getAttribute("data-sort") ?? cell.textContent).trim();
+    var num = parseFloat(raw.replace(/[,%\s]/g, ""));
+    return isNaN(num) ? raw.toLowerCase() : num;
+  }
+  function enhanceTable(table) {
+    if (!table || !table.tHead || table.dataset.enhanced) return;
+    table.dataset.enhanced = "1";
+    var tbody = table.tBodies[0];
+    if (!tbody || !tbody.rows.length) return;
+    var origRows = Array.prototype.slice.call(tbody.rows);
+    // 工具栏 + 筛选
+    var input = null, nomatch = null;
+    var toolbar = document.createElement("div");
+    toolbar.className = "tbl-toolbar";
+    input = document.createElement("input");
+    input.type = "search"; input.className = "tbl-search";
+    input.placeholder = "筛选…"; input.setAttribute("aria-label", "筛选表格行");
+    var count = document.createElement("span");
+    count.className = "tbl-count";
+    toolbar.appendChild(input); toolbar.appendChild(count);
+    table.parentNode.insertBefore(toolbar, table);
+    nomatch = document.createElement("div");
+    nomatch.className = "tbl-nomatch";
+    nomatch.textContent = "无匹配行";
+    table.parentNode.insertBefore(nomatch, table);
+    function reapply() {
+      var q = (input.value || "").trim().toLowerCase();
+      var visible = 0, lastVisible = null;
+      Array.prototype.forEach.call(tbody.rows, function(row) {
+        var hit = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.style.display = hit ? "" : "none";
+        row.classList.remove("row-last");
+        if (hit) { visible++; lastVisible = row; }
+      });
+      if (lastVisible) lastVisible.classList.add("row-last");
+      nomatch.classList.toggle("show", visible === 0);
+      count.textContent = visible === origRows.length ? "" : visible + " / " + origRows.length;
+    }
+    input.addEventListener("input", reapply);
+    // 排序（点击切换 asc/desc；data-sort 优先，其次数值化文本，最后字符串）
+    Array.prototype.forEach.call(table.tHead.rows[0].cells, function(th, ci) {
+      th.classList.add("sortable");
+      th.setAttribute("title", "点击排序");
+      th.addEventListener("click", function() {
+        var dir = th.getAttribute("data-dir") === "asc" ? "desc" : "asc";
+        Array.prototype.forEach.call(table.tHead.rows[0].cells, function(o) { o.removeAttribute("data-dir"); });
+        th.setAttribute("data-dir", dir);
+        var rows = Array.prototype.slice.call(tbody.rows);
+        rows.sort(function(a, b) {
+          var va = sortValue(a.cells[ci]), vb = sortValue(b.cells[ci]);
+          var cmp = (typeof va === "number" && typeof vb === "number") ? va - vb : String(va).localeCompare(String(vb), "zh");
+          return dir === "asc" ? cmp : -cmp;
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
+        reapply();
+      });
+    });
+    reapply();
+  }
+  function enhanceAllTables(root) {
+    (root || document).querySelectorAll("table.data-table").forEach(function(t) { enhanceTable(t); });
+  }
+  enhanceAllTables(document);
 
   // ── Chat（仅 HTTP serve 模式可用；file:// 下自动禁用并提示）──────────────
   var thread = document.getElementById("chat-thread");
@@ -1342,6 +1423,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         body.cases.map(entry => '<tr data-case="' + escAttr(entry.caseId) + '" style="cursor:pointer"><td class="mono">' + escAttr(entry.caseId) + '</td><td>' + escAttr(entry.kind) + '</td><td class="mono">' + escAttr(entry.submittedBy) + '</td><td><span class="badge ' + (entry.status === "RELEASED" ? "badge-good" : entry.status === "REJECTED" ? "badge-bad" : "badge-accent") + '">' + escAttr(entry.status || "") + '</span></td><td><span class="badge ' + (entry.verdict === "pass" ? "badge-good" : entry.verdict === "fail" ? "badge-bad" : "badge-mono") + '">' + escAttr(entry.verdict || "—") + '</span></td><td class="mono">' + escAttr(entry.status === "RELEASED" || entry.status === "REJECTED" ? (entry.signedBy || "—") : "待签") + '</td></tr>').join("") +
         '</tbody></table>';
       box.querySelectorAll("tr[data-case]").forEach(row => row.addEventListener("click", () => openCase(row.getAttribute("data-case"))));
+      enhanceAllTables(box);
     } catch (error) { casesMode = "off"; document.getElementById("cases-list").innerHTML = '<div class="chat-hint">案件 API 不可用：' + escAttr(error.message) + '（file:// 或服务未启动）</div>'; }
   }
   async function openCase(caseId) {
