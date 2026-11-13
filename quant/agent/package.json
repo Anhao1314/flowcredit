@@ -1,0 +1,10 @@
+{
+  "name": "quant-agent-layer",
+  "private": true,
+  "type": "module",
+  "description": "quant/ agent 层运行时包锚点（LangGraph 确定性编排；依赖经 lint Zone C 白名单锁定）",
+  "dependencies": {
+    "@langchain/core": "1.3.5",
+    "@langchain/langgraph": "1.7.2"
+  }
+}

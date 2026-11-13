@@ -39,7 +39,7 @@
     "ajv-formats": "3.0.1"
   },
   "devDependencies": {
-    "typescript": "5.9.2",
-    "@types/node": "26.5.0"
+    "@types/node": "26.5.0",
+    "typescript": "5.9.2"
   }
 }

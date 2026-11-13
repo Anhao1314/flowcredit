@@ -159,7 +159,7 @@ npm run eval                     # 离线评估 → ../quant/eval/results/
 ## 禁入清单 v4（虚拟盘修订，修订点逐条标注）
 
 - ✅~~❌~~ **修订（0.2）**：允许 `quant/agent/` 内存在**有界对话 agent**——单问工具轮次 ≤4、封闭注册表、无 planner/任务图/自我反思；权威层之外的其他形态（自主多步规划、多 Agent 编排）仍禁止
-- ❌ 不引入 LangChain / AutoGen / CrewAI / 任何 agent 框架（含 @deepseek-ai SDK 包——agent 仅用 REST 直连，lint 强制；隔离实验区 Zone LX 除外）
+- ❌~~⏸~~ **修订（W1，2026-11-13，用户批准 LangGraph 转正）**：不引入 AutoGen / CrewAI / @deepseek-ai SDK 等 agent 框架（不变）；**@langchain/langgraph + @langchain/core 作为确定性编排框架获准进入 agent 层**——仅用于确定性 SOP 图编排（状态机/检查点/人工中断），LLM 自主规划与自由多 agent 编排仍禁（lint Zone C 白名单锁定；lab-langgraph 转正为生产依赖）
 - ❌ 不让任何 LLM 输出写入 `signal/` 或 `risk/` 读取的字段（agent 输出只进注记层，测试锁死）
 - ✅~~❌~~ **修订（F2）**：允许 **本地 HTTP 服务**（`quant/agent/server.js`）——仅限静态控制台 + 只读数据端点 + agent 问答端点（JSON `/api/agent/ask` 与 SSE 流式 `/api/agent/ask/stream`，P1：同一门禁/限流/鉴权，断连与超时取消上游模型调用；delta 只是注记层文本，最终采用 done.answer）；默认绑定 127.0.0.1、可选 Bearer 鉴权（≥16 字符）、限流 30/min、body 64KB、fail-safe 默认
 - ✅~~❌~~ **修订（4a）**：允许 **虚拟盘**（`quant/paper/`）——仅限①本地确定性模拟撮合、②官方 paper/testnet 账户（4b）；**无任何真实资金**；下单意图只能来自冻结规则，**每笔订单必须人工批准**（未批准 = 永不成交，测试锁定）；**agent 永不持有下单工具**（治理测试锁定）。**"聊天即交易"禁令原文保留**：agent 与控制台均无下单能力；真实资金、自动交易、实盘仍然禁止

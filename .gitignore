@@ -15,3 +15,4 @@ Thumbs.db
 *.pfx
 credentials*
 secrets*
+node_modules/
