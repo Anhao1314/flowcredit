@@ -308,7 +308,10 @@ body[data-view="chat"] .footer{display:none}
 .chat-shell.has-messages .quick-chips{display:none}
 .quick-chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:7px 14px;font-size:12.5px;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
 .quick-chip:hover{background:var(--card2)}
-.sendbtn{background:var(--text);border:none;color:var(--bg);border-radius:999px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
+.sendbtn{background:var(--text);border:none;color:var(--bg);transition:opacity .15s}
+.sendbtn:hover{opacity:.85}
+.sendbtn:active{opacity:.7}
+.sendbtn{border-radius:999px;padding:10px 18px;font-size:13px;cursor:pointer;font-weight:600}
 .sendbtn:disabled{opacity:.45;cursor:not-allowed}
 .sendbtn.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border);font-weight:400}
 .approval-card{border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:16px;background:var(--card);padding:12px 14px;max-width:78%;box-shadow:var(--shadow)}
@@ -345,7 +348,7 @@ body[data-view="chat"] .footer{display:none}
     <button class="seg-btn active" data-view="chat">Chat</button>
     <button class="seg-btn" data-view="paper">Paper</button>
   </div>
-  <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘K</span></button>
+  <button class="nav-btn" id="new-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg><span>新建会话</span><span class="kbd">⌘⇧K</span></button>
   <div class="sidebar-group">仪表盘</div>
   <button class="nav-btn" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></button>
   <button class="nav-btn" data-view="rules"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Rules &amp; Trials</span></button>
@@ -513,7 +516,7 @@ body[data-view="chat"] .footer{display:none}
       </div>
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">CASES · 案件列表</div><h2>本机案件</h2></div><button id="cases-refresh" class="sendbtn btn-ghost" style="padding:6px 14px">刷新</button></div>
-        <div id="cases-list"><div class="empty-illu"><svg viewBox="0 0 88 72" fill="none" stroke="#c9c9cf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="60" height="52" rx="6"/><path d="M14 22h60M24 6v8M64 6v8"/><circle cx="30" cy="36" r="9"/><path d="M30 32v4l3 2"/><path d="M48 34h18M48 42h14"/></svg><div class="t">暂无案件——把 AI 产出的研究报告粘贴到左侧送检</div><div class="a" id="cases-empty-hint">数字验货器将逐条比对确定性输出</div></div></div>
+        <div id="cases-list"><div class="empty-illu"><svg viewBox="0 0 88 72" fill="none" stroke="#c9c9cf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="60" height="52" rx="6"/><path d="M14 22h60M24 6v8M64 6v8"/><circle cx="30" cy="36" r="9"/><path d="M30 32v4l3 2"/><path d="M48 34h18M48 42h14"/></svg><div class="t">暂无案件——把 AI 产出的研究报告粘贴到左侧送检</div><div class="t" style="font-size:12px">数字验货器将逐条对照确定性输出</div></div></div>
       </div>
     </div>
     <div class="card">
@@ -1131,7 +1134,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
   }
   document.getElementById("new-chat").addEventListener("click", startNewChat);
   document.addEventListener("keydown", function(e) {
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === "k" || e.key === "K")) {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
       startNewChat();
     }
@@ -1400,7 +1403,8 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       }
     } catch (error) { statusBadge.textContent = "参数 JSON 解析失败：" + error.message; statusBadge.className = "badge badge-bad"; return; }
     try {
-      const body = await (await casesFetch("/api/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submission, submittedBy: submitter }) })).json();
+      const response = await casesFetch("/api/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submission, submittedBy: submitter }) });
+      const body = await response.json();
       if (!body.ok) throw new Error(body.error || "failed");
       statusBadge.textContent = "已受理 " + body.caseId;
       statusBadge.className = "badge badge-good";

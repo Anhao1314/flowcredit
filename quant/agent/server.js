@@ -344,7 +344,8 @@ export function createQuantConsoleServer(options = {}) {
         const caseEntry = { caseId, threadId, kind: submission.kind ?? "strategy", submittedBy: submission.submittedBy, createdAtUtc: new Date(nowMs()).toISOString(), summary: { status: result.status ?? null, verdict: result.claimReport?.verdict ?? (result.adjudication ? "adjudicated" : null) } };
         cases.set(caseId, caseEntry);
         saveCaseIndex(indexFile, [...cases.values()]);
-        return send(200, { ok: true, caseId, status: result.status ?? null, claimReport: result.claimReport ?? null, adjudication: result.adjudication ? { best: result.adjudication.best, nTrials: result.adjudication.nTrials } : null, narrative: result.narrative ?? null, awaitingSignature: Array.isArray(result.__interrupt__) });
+        const rejectedInvalid = result.status === "REJECTED_INVALID";
+        return send(rejectedInvalid ? 400 : 200, { ok: !rejectedInvalid, caseId, status: result.status ?? null, error: rejectedInvalid ? result.error : undefined, claimReport: result.claimReport ?? null, adjudication: result.adjudication ? { best: result.adjudication.best, nTrials: result.adjudication.nTrials } : null, narrative: result.narrative ?? null, awaitingSignature: Array.isArray(result.__interrupt__) });
       }
       const casesListMatch = url.pathname === "/api/cases" && req.method === "GET";
       if (casesListMatch) {
