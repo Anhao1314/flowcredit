@@ -152,12 +152,16 @@ excluded from `assessmentFingerprint`, and safe for v1 clients to ignore.
 classified — `basis: "declared_only"` (no connector attestations exist), tier counts
 (`reported` / `documented` / `attested` / `independently_verified` / `simulation`),
 `downgradedCount`, per-record reasons, and notes. Declared `system_api` / `cross_verified` /
-`cryptographic` evidence is downgraded to `attested` until a connector attestation exists;
-independently verified evidence is always 0 today. The numeric evidence-quality score is
+`cryptographic` evidence is downgraded to `attested` until a registered connector attestation is
+verified. The default registry contains only the CSV import connector (tier `documented`), so
+`independentlyVerified` is 0 unless a `rest_pull` / `third_party` connector is explicitly
+registered; `basis` becomes `connector_attested` only then. The numeric evidence-quality score is
 unchanged (risk_result v0.2.1) and still uses declared levels — the status layer discloses the
 gap rather than silently re-scoring. `evidenceStatus` is excluded from `assessmentFingerprint`.
 The internal extraction path (`POST /fc/ai/v0.3/extract`) additionally returns `grounding`:
 model-extracted fields without support in the supplied text are dropped before validation.
+The internal CSV import path (`POST /fc/ai/v0.3/import/csv`) returns an intake draft plus its
+`digest` and `evidenceStatus` (CSV evidence is `documented` tier, attested by `csv-import-v1`).
 
 Errors use the same versioned envelope:
 

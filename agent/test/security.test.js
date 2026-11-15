@@ -32,6 +32,7 @@ test("fixed-window rate limiter resets deterministically", () => {
 test("mutating Agent endpoints are protected and host defaults to loopback", () => {
   assert.equal(isProtectedApi("POST", "/api/v1/assess"), true);
   assert.equal(isProtectedApi("POST", "/fc/ai/v0.3/assess"), true);
+  assert.equal(isProtectedApi("POST", "/fc/ai/v0.3/import/csv"), true);
   assert.equal(isProtectedApi("GET", "/fc/ai/v0.3/schema"), false);
   // v0.4.0 收敛：v0.1/v0.2/v0.2.1 路由已删除，不再进入受保护面
   assert.equal(isProtectedApi("POST", "/fc/ai/run"), false);

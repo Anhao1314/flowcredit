@@ -23,6 +23,8 @@ import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft
 import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { groundExtractedDraft } from "./grounding.js";
+import { createConnectorRegistry } from "./connectors/contract.js";
+import { createCsvConnector, buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { RunRecord } from "../core/run-record.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -32,6 +34,8 @@ const BODY_LIMIT = 64 * 1024;
 const sessions = new SessionStore();
 const logger = new SafeLogger(join(RUNTIME_ROOT, "logs"));
 const brain = new HarnessBrain({});
+// 连接器注册表：默认只注册 CSV（documented 级）；REST/第三方连接器需显式注册。
+const connectors = createConnectorRegistry([createCsvConnector()]);
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -214,7 +218,7 @@ async function buildV03Assessment(body, requestId, context) {
   const requiredActions = buildRequiredActionsV03(validation, result, evidenceCoverage);
   // 证据分级：声明级 vs 独立验证（当前无连接器 → independentlyVerified 恒为 0）。
   // 说明：该字段不参与 assessmentFingerprint（与模型注记同理），保持 v0.2.1 确定性身份稳定。
-  const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence);
+  const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence, { connectors });
   const sessionId = typeof body.sessionId === "string" && body.sessionId.length <= 80 ? body.sessionId : requestId;
   sessions.set(`v03:${sessionId}`, { version: "v0.3.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
 
@@ -439,7 +443,7 @@ async function route(req, res, requestId, context = {}) {
     // 原文 grounding：模型抽取的字段必须能在用户原文中找到依据，否则丢弃。
     const grounded = groundExtractedDraft(body.text.trim(), cleaned.draft);
     const validation = validateDraftV03(grounded.draft);
-    const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence);
+    const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence, { connectors });
     const confidence = extracted?.fieldConfidence && typeof extracted.fieldConfidence === "object"
       ? Object.fromEntries(Object.entries(extracted.fieldConfidence).filter(([key]) => Object.hasOwn(validation.draft, key)))
       : {};
@@ -451,6 +455,23 @@ async function route(req, res, requestId, context = {}) {
       missingInputs: validation.missingInputs, missingByGroup: validation.missingByGroup,
       warnings: [...validation.warnings, ...(primaryWindowDerived ? ["Primary scoring window was derived from the latest explicitly supplied monthly period."] : []), ...(Array.isArray(extracted?.warnings) ? extracted.warnings.slice(0, 10).map(String) : []), ...grounded.report.warnings],
       ignoredInputs: [...new Set([...cleaned.ignoredInputs, ...validation.ignoredInputs])], model: MODEL
+    }, requestId);
+  }
+  if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/import/csv") {
+    const body = await readJson(req);
+    if (typeof body.csv !== "string" || !body.csv.trim()) return sendJson(res, 400, { ok: false, code: "CSV_REQUIRED", error: "csv (text) is required" }, requestId);
+    if (typeof body.label !== "string" || !body.label.trim()) return sendJson(res, 400, { ok: false, code: "LABEL_REQUIRED", error: "label is required" }, requestId);
+    const imported = buildMonthlyDraftFromCsv(body.csv, {
+      label: body.label.trim(),
+      subjectId: typeof body.subjectId === "string" ? body.subjectId : undefined,
+      verifiedAt: new Date().toISOString(), // server clock island：导入时间即 attestation 时间
+      reference: `import:${requestId}`
+    });
+    if (!imported.ok) return sendJson(res, 400, { ok: false, code: "CSV_IMPORT_INVALID", error: "CSV import failed validation", errors: imported.errors }, requestId);
+    return sendJson(res, 200, {
+      ok: true, productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021,
+      draft: imported.draft, digest: imported.digest, warnings: imported.warnings,
+      evidenceStatus: summarizeEvidenceStatus(imported.draft.evidence, { connectors })
     }, requestId);
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/assess") {

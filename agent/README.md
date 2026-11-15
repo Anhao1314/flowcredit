@@ -40,9 +40,12 @@ supplied evidence / free text
   `modelConsent: true` (via `/fc/ai/v0.3/extract` or `POST /api/v1/chat`'s parser path).
 - Model extraction is **grounded** against the supplied text: fields without support are dropped
   before validation and reported in `grounding.warnings`.
-- Assessments report `evidenceStatus`: `basis: "declared_only"`, no independently verified
-  evidence until connectors exist; declared `system_api` / `cross_verified` / `cryptographic`
-  records are downgraded to `attested` with reasons. The numeric evidence score is unchanged.
+- Assessments report `evidenceStatus`: `basis: "declared_only"` by default; declared
+  `system_api` / `cross_verified` / `cryptographic` records are downgraded to `attested` unless a
+  registered connector attestation verifies. The default registry contains only the CSV import
+  connector (`documented` tier); `rest_pull` / `third_party` connectors must be registered
+  explicitly, and only then does `basis` become `connector_attested`. The numeric evidence score
+  is unchanged.
 - Persistent logs are metadata-only JSONL; raw cases, prompts and credentials are never logged.
 - Container runs as non-root (`USER node`); runtime dirs are the only writable mounts.
 

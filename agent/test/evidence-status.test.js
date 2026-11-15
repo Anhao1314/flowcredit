@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyEvidenceRecord, summarizeEvidenceStatus } from "../src/evidence-status.js";
+import { defineConnector, createConnectorRegistry } from "../src/connectors/contract.js";
 
 const rec = (overrides = {}) => ({ field: "revenueUsd", sourceDomain: "billing", verification: "self_reported", ...overrides });
 
@@ -55,4 +56,55 @@ test("empty evidence: explicit notes, zero counts", () => {
   const summary = summarizeEvidenceStatus([]);
   assert.equal(summary.counts.reported, 0);
   assert.ok(summary.notes.some(note => /No field-level evidence/.test(note)));
+});
+
+test("connector attestation: valid signature → independently_verified, basis connector_attested", () => {
+  const connector = defineConnector({
+    id: "rest-billing-v1", version: "1.0.0", kind: "rest_pull",
+    sourceDomain: "billing", tier: "independently_verified", maxAgeDays: 30,
+    verify: ({ attestation, record }) => attestation.digest === record.referenceHash ? { ok: true } : { ok: false, reason: "digest mismatch" }
+  });
+  const registry = createConnectorRegistry([connector]);
+  const record = {
+    field: "revenueUsd", sourceDomain: "billing", verification: "system_api",
+    referenceHash: "sha256:abc",
+    attestation: { connector: "rest-billing-v1", verifiedAt: "2026-11-10T00:00:00Z", reference: "req-1", digest: "sha256:abc" }
+  };
+  const summary = summarizeEvidenceStatus([record], { connectors: registry, nowMs: Date.parse("2026-11-16T00:00:00Z") });
+  assert.equal(summary.basis, "connector_attested");
+  assert.equal(summary.independentlyVerified, 1);
+  assert.equal(summary.counts.independently_verified, 1);
+  assert.equal(summary.records[0].attested, true);
+  assert.equal(summary.records[0].downgraded, false);
+  assert.equal(summary.records[0].connector, "rest-billing-v1");
+  assert.match(summary.notes.join(" "), /attested by registered connector/);
+});
+
+test("connector attestation: unknown / expired / digest mismatch fall back to declared", () => {
+  const connector = defineConnector({
+    id: "rest-billing-v1", version: "1.0.0", kind: "rest_pull",
+    sourceDomain: "billing", tier: "independently_verified", maxAgeDays: 30,
+    verify: ({ attestation, record }) => attestation.digest === record.referenceHash ? { ok: true } : { ok: false, reason: "digest mismatch" }
+  });
+  const registry = createConnectorRegistry([connector]);
+  const base = {
+    field: "revenueUsd", sourceDomain: "billing", verification: "system_api",
+    referenceHash: "sha256:abc",
+    attestation: { connector: "rest-billing-v1", verifiedAt: "2026-11-10T00:00:00Z", reference: "req-1", digest: "sha256:abc" }
+  };
+  const nowMs = Date.parse("2026-11-16T00:00:00Z");
+
+  const unknown = summarizeEvidenceStatus([{ ...base, attestation: { ...base.attestation, connector: "unknown-connector" } }], { connectors: registry, nowMs });
+  assert.equal(unknown.basis, "declared_only");
+  assert.equal(unknown.records[0].tier, "attested");
+  assert.equal(unknown.records[0].downgraded, true);
+  assert.match(unknown.records[0].attestationError, /unknown connector/);
+
+  const expired = summarizeEvidenceStatus([base], { connectors: registry, nowMs: Date.parse("2026-12-20T00:00:00Z") });
+  assert.equal(expired.independentlyVerified, 0);
+  assert.match(expired.records[0].attestationError, /older than/);
+
+  const mismatch = summarizeEvidenceStatus([{ ...base, attestation: { ...base.attestation, digest: "sha256:def" } }], { connectors: registry, nowMs });
+  assert.equal(mismatch.independentlyVerified, 0);
+  assert.match(mismatch.records[0].attestationError, /digest/);
 });

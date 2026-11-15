@@ -105,6 +105,40 @@ test("HTTP validation uses documented status codes", async () => {
   });
 });
 
+test("CSV import endpoint: builds monthly draft + documented evidence status", async () => {
+  await withServer(async base => {
+    const header = "period,input_tokens_m,output_tokens_m,valid_rate_pct,gpu_model,gpu_hours,revenue_usd,compute_spend_usd,repayment_rate_pct,overdue_30_pct,paying_customers,top5_concentration_pct,data_coverage_pct";
+    const rows = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"].map((period, index) =>
+      [period, 64 + index, 16, 96.5, "h100-equivalent", 4200, 100000 + index * 1000, 58000, 94.3, 3, 168, 36, 100].join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const response = await fetch(`${base}/fc/ai/v0.3/import/csv`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Acme Inference", csv })
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.draft.label, "Acme Inference");
+    assert.equal(body.draft.monthlySeries.length, 6);
+    assert.equal(body.draft.periodStart, "2026-03-01");
+    assert.equal(body.draft.periodEnd, "2026-08-31");
+    assert.match(body.digest, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(body.evidenceStatus.basis, "declared_only");
+    assert.equal(body.evidenceStatus.counts.documented, 3);
+    assert.equal(body.evidenceStatus.independentlyVerified, 0);
+
+    const bad = await fetch(`${base}/fc/ai/v0.3/import/csv`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: "Acme", csv: "period,revenue_usd\n2026-03,1" })
+    });
+    assert.equal(bad.status, 400);
+    const badBody = await bad.json();
+    assert.equal(badBody.code, "CSV_IMPORT_INVALID");
+    assert.ok(Array.isArray(badBody.errors) && badBody.errors.length > 0);
+  });
+});
+
 test("Bearer authentication protects mutating Agent APIs while health and schema stay public", async () => {
   const env = { ...process.env, AUTH_ENABLED: "true", FLOWCREDIT_API_KEY: "test-secret-key-12345", RATE_LIMIT_MAX_REQUESTS: "20" };
   await withServer(async base => {
