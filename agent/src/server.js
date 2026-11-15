@@ -19,7 +19,7 @@ import {
   finchAssessmentFingerprint, finchInputFingerprint, finchRequestFingerprint, finchSchemas, isFinchContractRequest,
   isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, PUBLIC_SCHEMA_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
-import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
+import { NL_DRAFT_PARSER_VERSION, NL_DRAFT_FIELDS, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { groundExtractedDraft } from "./grounding.js";
@@ -243,7 +243,9 @@ async function handleV03Assessment(req, requestId, context) {
     // Finch A2A 兼容：listing 契约以 {"prompt":"..."} 调用；assess 端点直接接受并走 chat 路径。
     // 这是 prompt 单字段输入的兼容层，不改变 draft 评估契约。
     if (publicMode && typeof body.prompt === "string" && body.draft === undefined) {
-      const chat = await buildChatPayload({ prompt: body.prompt }, requestId, context);
+      const chatBody = { prompt: body.prompt };
+      if (typeof body.sessionId === "string" && body.sessionId) chatBody.sessionId = body.sessionId;
+      const chat = await buildChatPayload(chatBody, requestId, context);
       return { status: chat.status, body: chat.body, requestId, timestamp: new Date().toISOString() };
     }
     if (contractMode || publicMode) {
@@ -276,7 +278,7 @@ async function handleV03Assessment(req, requestId, context) {
 //   - effective draft: the extracted facts plus the deterministic server-derived metadata that the
 //     shared sanitizer adds (assessmentMode, modelTier, normalizationProfileId, peerProfileId).
 //     It stays internal and is all the runtime ever sees.
-const CHAT_REQUEST_FIELDS = Object.freeze(["prompt"]);
+const CHAT_REQUEST_FIELDS = Object.freeze(["prompt", "sessionId"]);
 const CHAT_PROMPT_MAX_CHARS = INTAKE_SCHEMA_V03.maxTextLength;
 
 function validateChatRequest(value) {
@@ -292,7 +294,11 @@ function validateChatRequest(value) {
   else if (typeof prompt !== "string") errors.push({ path: "/prompt", keyword: "type", message: "must be string" });
   else if (!prompt.trim()) errors.push({ path: "/prompt", keyword: "minLength", message: "must not be empty or whitespace only" });
   else if (prompt.length > CHAT_PROMPT_MAX_CHARS) errors.push({ path: "/prompt", keyword: "maxLength", message: `must NOT have more than ${CHAT_PROMPT_MAX_CHARS} characters` });
-  return errors.length ? { valid: false, errors } : { valid: true, prompt: prompt.trim() };
+  const sessionId = value.sessionId;
+  if (sessionId !== undefined && (typeof sessionId !== "string" || !sessionId.trim() || sessionId.length > 80)) {
+    errors.push({ path: "/sessionId", keyword: "type", message: "must be a non-empty string of at most 80 characters" });
+  }
+  return errors.length ? { valid: false, errors } : { valid: true, prompt: prompt.trim(), sessionId: typeof sessionId === "string" ? sessionId.trim() : null };
 }
 
 function responseMeta(body) {
@@ -305,14 +311,110 @@ function responseMeta(body) {
   };
 }
 
+const CHAT_JSON_EXAMPLE = JSON.stringify({
+  taskType: "inference", gpuModel: "h100-equivalent",
+  periodStart: "2026-08-01", periodEnd: "2026-08-31",
+  inputTokensM: 64, outputTokensM: 16, validRatePct: 94,
+  gpuHours: 4200, revenueUsd: 100000, computeSpendUsd: 58000,
+  repaymentRatePct: 96, overdue30Pct: 2, payingCustomers: 168, top5ConcentrationPct: 36,
+  operatingHistoryDays: 720, dataCoveragePct: 100,
+  monthlySeries: [
+    { period: "2026-03", rawTokensM: 72, validRatePct: 92, revenueUsd: 94000, computeSpendUsd: 55000 },
+    { period: "2026-04", rawTokensM: 75, validRatePct: 93, revenueUsd: 96000, computeSpendUsd: 56000 },
+    { period: "2026-05", rawTokensM: 77, validRatePct: 93, revenueUsd: 97000, computeSpendUsd: 56500 },
+    { period: "2026-06", rawTokensM: 79, validRatePct: 94, revenueUsd: 99000, computeSpendUsd: 57500 },
+    { period: "2026-07", rawTokensM: 81, validRatePct: 94, revenueUsd: 101000, computeSpendUsd: 59000 },
+    { period: "2026-08", rawTokensM: 80, validRatePct: 94, revenueUsd: 100000, computeSpendUsd: 58000 }
+  ],
+  R: [64, 65, 63, 67, 68, 66, 70, 71],
+  C: [62, 63, 62, 65, 66, 65, 68, 69]
+});
+
+function isHelpIntent(prompt) {
+  const text = String(prompt || "").trim();
+  if (!text || text.length > 160) return false;
+  if (/\d/.test(text) || /评估|风险|assess|risk|revenue|收入|逾期|回款|现金流/i.test(text)) return false;
+  return /^(?:你好|您好|hi|hello|hey|help)\b/i.test(text)
+    || /你能做什么|你会什么|怎么用|如何使用|what can you do|how does this work|what is this/i.test(text);
+}
+
+function isInferenceContext(prompt, draft) {
+  if (draft.taskType === "inference" || draft.gpuModel || draft.gpuHours != null || draft.inputTokensM != null) return true;
+  return /\bAI\b|推理|inference|大模型|GPU|token|算力/i.test(prompt);
+}
+
+function helpMessage(english) {
+  const fields = NL_DRAFT_FIELDS.join(", ");
+  if (english) {
+    return [
+      "FlowCredit assesses AI inference / GPU compute operators as counterparties. The intake is deterministic: no model call, no invented values.",
+      "",
+      "Send either a plain-language description or a JSON object with exact keys.",
+      `JSON example: ${CHAT_JSON_EXAMPLE}`,
+      "",
+      `Supported keys: ${fields}.`,
+      "Missing fields are reported, never estimated. Data you provide is declared/self-reported; this alpha cannot independently verify it.",
+      "Outside AI inference / GPU compute operators? This intake cannot represent that business yet."
+    ].join("\n");
+  }
+  return [
+    "FlowCredit 评估 AI 推理 / GPU 算力运营商的交易对手风险。intake 是确定性的：不调用模型、不编造缺失值。",
+    "",
+    "你可以直接描述业务，或发送一个使用精确字段名的 JSON 对象。",
+    `JSON 示例：${CHAT_JSON_EXAMPLE}`,
+    "",
+    `支持的字段：${fields}。`,
+    "缺失字段会如实列出，绝不估算。你提供的数据属于申报/自报口径，本 alpha 无法独立核验。",
+    "如果你的业务不是 AI 推理 / GPU 算力运营商，当前 intake 无法表达，请勿强行套用模板。"
+  ].join("\n");
+}
+
+function scopeMessage(english, extraction) {
+  const found = extraction.matchedFields.length
+    ? `已识别 ${extraction.matchedFields.length} 个字段（${extraction.matchedFields.join(", ")}），但业务类型不在评估范围。`
+    : "没有识别到可评估的 AI 推理业务字段。";
+  if (english) {
+    return [
+      "This agent only assesses AI inference / GPU compute operators. The business you described is outside the current intake schema, so I will not force it into a template or invent fields.",
+      "If this is an AI inference operator, send GPU/token/revenue facts or a JSON object with exact keys. Reply \"help\" for the supported field list and template."
+    ].join("\n");
+  }
+  return [
+    "FlowCredit 目前只评估 AI 推理 / GPU 算力运营商。你描述的业务不在当前 intake schema 内，我不会把它硬套进模板或编造字段。",
+    found,
+    "如果这是 AI 推理服务商，请提供 GPU/Token/收入等事实，或发送使用精确字段名的 JSON 对象。发送“help”可查看支持的字段和模板。"
+  ].join("\n");
+}
+
+function buildChatGuidance(prompt, extraction) {
+  const english = !/[\u4e00-\u9fff]/.test(prompt);
+  if (isHelpIntent(prompt)) return { status: "help", message: helpMessage(english) };
+  if (!isInferenceContext(prompt, extraction.draft)) return { status: "unsupported-scope", message: scopeMessage(english, extraction) };
+  return null;
+}
+
 async function buildChatPayload(body, requestId, context) {
   const request = validateChatRequest(body);
   if (!request.valid) {
     return { status: 400, body: { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit chat input schema.", errorDetails: request.errors } };
   }
   const extraction = extractNaturalLanguageDraft(request.prompt);
-  const effectiveDraft = sanitizeExtractedDraftV03(extraction.draft).draft;
   const draftId = `nl-${requestId}`;
+  const sessionKey = request.sessionId ? `chat:${request.sessionId}` : null;
+  const carried = sessionKey ? sessions.get(sessionKey) : null;
+  const combinedDraft = { ...(carried && carried.draft ? carried.draft : {}), ...extraction.draft };
+  const guidance = buildChatGuidance(request.prompt, { ...extraction, draft: combinedDraft });
+  if (guidance) {
+    return { status: 200, body: {
+      status: guidance.status, message: guidance.message, answer: guidance.message,
+      presentation: { kind: guidance.status, supportedFields: NL_DRAFT_FIELDS.slice() },
+      parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
+      extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
+      missingInputs: [], missingByGroup: {}, requiredActions: [],
+      assessment: null, sessionId: request.sessionId || null
+    } };
+  }
+  const effectiveDraft = sanitizeExtractedDraftV03(combinedDraft).draft;
   const assessment = await withTimeout(
     buildV03Assessment({ draft: effectiveDraft, draftId, modelConsent: false }, requestId, context),
     context.security.invocationTimeoutMs
@@ -321,6 +423,7 @@ async function buildChatPayload(body, requestId, context) {
     return { status: assessment.status, body: { ...assessment.body, draftId, extractedDraft: extraction.draft, parserVersion: NL_DRAFT_PARSER_VERSION } };
   }
   const result = assessment.body;
+  if (sessionKey) sessions.set(sessionKey, { draft: combinedDraft });
   const status = result.decisionStatus === "insufficient-evidence" ? "insufficient-evidence" : "assessed";
   const presentationInput = {
     extractedDraft: extraction.draft, assessment: result,
@@ -336,7 +439,7 @@ async function buildChatPayload(body, requestId, context) {
     TAI: result.TAI, CCI: result.CCI, riskGrade: result.riskGrade, verdict: result.verdict,
     evidenceStrength: result.evidenceStrength, suggestedCreditBand: result.suggestedCreditBand,
     missingInputs: result.missingInputs, missingByGroup: result.missingByGroup, requiredActions: result.requiredActions,
-    sessionId: result.sessionId, assessmentId: result.assessmentId
+    sessionId: request.sessionId || result.sessionId, assessmentId: result.assessmentId
   };
   return { status: 200, body: data };
 }

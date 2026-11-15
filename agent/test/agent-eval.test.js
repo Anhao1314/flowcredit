@@ -53,12 +53,12 @@ test("deterministic extractor scores all 18 cases and keeps known failures visib
     assert.ok(limitation.wrongValues.length > 0 || limitation.unsupported.length > 0);
   }
   const metrics = artifact.deterministicExtractor.metrics;
-  assert.deepEqual([metrics.fieldPrecision.numerator, metrics.fieldPrecision.denominator], [63, 65]);
-  assert.deepEqual([metrics.fieldRecall.numerator, metrics.fieldRecall.denominator], [63, 66]);
+  assert.deepEqual([metrics.fieldPrecision.numerator, metrics.fieldPrecision.denominator], [65, 67]);
+  assert.deepEqual([metrics.fieldRecall.numerator, metrics.fieldRecall.denominator], [65, 68]);
   assert.deepEqual([metrics.casePassRate.numerator, metrics.casePassRate.denominator], [16, 18]);
   assert.deepEqual([metrics.schemaPassRate.numerator, metrics.schemaPassRate.denominator], [18, 18]);
   const subset = artifact.deterministicExtractor.documentedContractSubset;
-  assert.deepEqual([subset.fieldPrecision.numerator, subset.fieldPrecision.denominator], [57, 57]);
+  assert.deepEqual([subset.fieldPrecision.numerator, subset.fieldPrecision.denominator], [59, 59]);
   assert.match(subset.definition, /NOT the full evaluation/);
 });
 

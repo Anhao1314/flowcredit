@@ -47,7 +47,7 @@ Public deployments must set `AUTH_ENABLED=true` and a strong `FLOWCREDIT_API_KEY
 
 The current store is in memory. Multi-instance production deployment requires shared storage.
 
-## Natural Language Endpoint (v0.1)
+## Natural Language Endpoint (v0.2)
 
 ```text
 POST /api/v1/chat
@@ -57,28 +57,150 @@ Content-Type: application/json
 { "prompt": "请帮我评估一家 AI 推理服务商的交易对手风险。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。" }
 ```
 
-`/api/v1/chat` shares the authentication, rate-limit, canonical envelope and timeout policy of `/api/v1/assess`. `prompt` is the only accepted property: it must be a non-empty string of at most 10,000 characters, and unknown properties are rejected rather than silently accepted.
+`/api/v1/chat` shares the authentication, rate-limit, canonical envelope and timeout policy of `/api/v1/assess`. `prompt` is required and must be a non-empty string of at most 10,000 characters. `sessionId` is optional (1–80 characters) and carries the previously extracted draft into a follow-up; the same `sessionId` must be sent back. Unknown properties are rejected rather than silently accepted. `draftId` is a per-invocation identifier, not a resume handle.
 
 The endpoint is a deterministic adapter, not a model call:
 
-1. a whitelist parser reads only what the text states explicitly (`taskType`, `gpuModel`, `gpuHours`, `revenueUsd`, `computeSpendUsd`, `repaymentRatePct`, `overdue30Pct`, `payingCustomers`, `top5ConcentrationPct`);
-2. the shared intake sanitizer and validator add server-derived metadata, canonicalize values such as `H100` to `h100-equivalent`, and validate the draft (that metadata — `assessmentMode`, `modelTier`, `normalizationProfileId`, `peerProfileId` — stays internal and never appears in `extractedDraft`);
-3. the same deterministic `flowcredit.risk_result/v0.2.1` runtime used by `/api/v1/assess` produces the assessment.
+1. **JSON mode** — if the prompt contains a JSON object (bare or fenced), exact keys are mapped onto the whitelist. Numbers may be JSON numbers or numeric strings; `monthlySeries`, `R` and `C` arrays are accepted. Unknown keys are ignored.
+2. **Text mode** — a whitelist parser reads only what the text states explicitly, including Chinese and English labels, token units (`万`, `百万`, `M`), date ranges, `回款率`, and total-vs-segment money. Unit prices such as `US$2.2 per GPU-hour` are rejected, never treated as totals.
+3. **Help / scope** — a greeting returns `data.status = help` with the supported field list and template; a business outside AI inference / GPU compute returns `data.status = unsupported-scope`. Neither runs an assessment.
+4. The shared intake sanitizer and validator add server-derived metadata, canonicalize values such as `H100` to `h100-equivalent`, and validate the draft (that metadata — `assessmentMode`, `modelTier`, `normalizationProfileId`, `peerProfileId` — stays internal and never appears in `extractedDraft`).
+5. The same deterministic `flowcredit.risk_result/v0.2.1` runtime used by `/api/v1/assess` produces the assessment.
 
 Unstated fields are never interpolated, estimated or filled in, and no model provider is contacted. Authoritative fields (`TAI`, `CCI`, `riskGrade`, `decisionStatus`, `readinessStatus`, `verdict`, limits) can only be produced by the runtime.
+
+### Supported fields (parser v0.2)
+
+| Field | Unit / format | Notes |
+| --- | --- | --- |
+| `taskType` | `inference` | Only AI inference / GPU compute operators are supported |
+| `gpuModel` | `h100-equivalent` or `mixed` | `H100` normalizes to `h100-equivalent` |
+| `gpuHours` | hours | Non-negative number |
+| `revenueUsd` | USD | Total revenue; segment labels are deprioritized |
+| `computeSpendUsd` | USD | Total compute spend; per-unit prices rejected |
+| `repaymentRatePct` | % | `还款率` and `回款率` are both accepted |
+| `overdue30Pct` | % | 30-day overdue rate |
+| `payingCustomers` | integer | Whole number |
+| `top5ConcentrationPct` | % | Top-5 customer revenue share |
+| `inputTokensM` / `outputTokensM` | million tokens | `8000 万` → `80` |
+| `validRatePct` | % | Valid token rate |
+| `periodStart` / `periodEnd` | `YYYY-MM-DD` | Primary scoring window: one natural month or 27–31 days |
+| `operatingHistoryDays` | days | Integer |
+| `dataCoveragePct` | % | 0–100 |
+| `monthlySeries` | array | Each row: `period` (`YYYY-MM`), `rawTokensM`, `validRatePct`, `revenueUsd`, `computeSpendUsd` |
+| `R` / `C` | numeric arrays | Declared vs credible activity series, same length (≥6), same units; used for deviation and volatility |
+
+### Text template
+
+```text
+某 AI 推理服务商，评估周期 2026-08-01 至 2026-08-31，输入 token 64 百万、输出 token 16 百万、有效率 94%，H100 GPU 4200 小时，月收入 100000 美元，算力支出 58000 美元，回款率 96%，30 天逾期率 2%，付费客户 168，前五大客户占比 36%，经营历史 720 天，数据覆盖率 100%。
+```
+
+### JSON template
+
+A JSON object in the prompt is the most reliable input. This example produces `TAI`, `CCI` and `riskGrade`; the decision remains `insufficient-evidence` until field-level evidence is supplied.
+
+```json
+{
+  "taskType": "inference",
+  "gpuModel": "h100-equivalent",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-08-31",
+  "inputTokensM": 64,
+  "outputTokensM": 16,
+  "validRatePct": 94,
+  "gpuHours": 4200,
+  "revenueUsd": 100000,
+  "computeSpendUsd": 58000,
+  "repaymentRatePct": 96,
+  "overdue30Pct": 2,
+  "payingCustomers": 168,
+  "top5ConcentrationPct": 36,
+  "operatingHistoryDays": 720,
+  "dataCoveragePct": 100,
+  "monthlySeries": [
+    {
+      "period": "2026-03",
+      "rawTokensM": 72,
+      "validRatePct": 92,
+      "revenueUsd": 94000,
+      "computeSpendUsd": 55000
+    },
+    {
+      "period": "2026-04",
+      "rawTokensM": 75,
+      "validRatePct": 93,
+      "revenueUsd": 96000,
+      "computeSpendUsd": 56000
+    },
+    {
+      "period": "2026-05",
+      "rawTokensM": 77,
+      "validRatePct": 93,
+      "revenueUsd": 97000,
+      "computeSpendUsd": 56500
+    },
+    {
+      "period": "2026-06",
+      "rawTokensM": 79,
+      "validRatePct": 94,
+      "revenueUsd": 99000,
+      "computeSpendUsd": 57500
+    },
+    {
+      "period": "2026-07",
+      "rawTokensM": 81,
+      "validRatePct": 94,
+      "revenueUsd": 101000,
+      "computeSpendUsd": 59000
+    },
+    {
+      "period": "2026-08",
+      "rawTokensM": 80,
+      "validRatePct": 94,
+      "revenueUsd": 100000,
+      "computeSpendUsd": 58000
+    }
+  ],
+  "R": [
+    64,
+    65,
+    63,
+    67,
+    68,
+    66,
+    70,
+    71
+  ],
+  "C": [
+    62,
+    63,
+    62,
+    65,
+    66,
+    65,
+    68,
+    69
+  ]
+}
+```
+
+### Multi-turn and `draftId`
+
+Send the same `sessionId` on each turn; the server merges the new fields over the stored draft for 30 minutes. `draftId` identifies one invocation and is **not** a resume handle. A follow-up that states only `回款率 90%` updates that field while keeping the earlier ones.
 
 Response fields under `data.*`:
 
 | Field | Meaning |
 | --- | --- |
-| `status` | `assessed`, or `insufficient-evidence` when the runtime cannot rate the supplied evidence |
+| `status` | `assessed`, `insufficient-evidence`, `help`, or `unsupported-scope` |
 | `message` | deterministic template text suitable for a chat surface; it explains no score |
 | `extractedDraft` | exactly the whitelisted fields read from the prompt (`taskType` included when the text states an inference business); it is omitted when the prompt states no whitelisted field |
 | `parsedFields` | which whitelisted fields the prompt stated |
 | `assessment` | the complete deterministic payload that `/api/v1/assess` returns under `data`, with identical field names |
 | `readinessStatus`, `decisionStatus`, `missingInputs`, `missingByGroup`, `requiredActions` | echoed from the runtime for convenient consumption |
 
-Insufficient information is a business result, not a client or server error: it returns HTTP 200 with `data.status = insufficient-evidence`. `TAI`, `CCI` and `riskGrade` are omitted whenever the runtime cannot compute them, exactly as in the assessment response.
+Insufficient information is a business result, not a client or server error: it returns HTTP 200 with `data.status = insufficient-evidence`. `help` and `unsupported-scope` also return HTTP 200 with a deterministic `answer`. `TAI`, `CCI` and `riskGrade` are omitted whenever the runtime cannot compute them, exactly as in the assessment response.
 
 ## Representative Request
 

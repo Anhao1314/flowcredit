@@ -17,7 +17,7 @@ function keysOf(value) { return Object.keys(value); }
 test("TEST 1 official Chinese case extracts exactly the nine supported fields", () => {
   const { draft, matchedFields, warnings } = extractNaturalLanguageDraft(OFFICIAL_CN);
   assert.deepEqual(draft, EXPECTED_OFFICIAL);
-  assert.deepEqual(matchedFields, NL_DRAFT_FIELDS.slice());
+  assert.deepEqual(matchedFields, Object.keys(EXPECTED_OFFICIAL));
   assert.deepEqual(warnings, []);
 });
 

@@ -20,7 +20,7 @@ Diagnosis (live service `external-alpha-v0.1.1`):
 ### Fix 1 — prompt compatibility on the public assess endpoint
 
 `POST /api/v1/assess` now accepts `{"prompt": "..."}` (prompt-only) and routes it through the same
-deterministic chat pipeline (`nl-draft-v0.1` parser). Extra fields are ignored for this path.
+deterministic chat pipeline (`nl-draft-v0.2` parser). Extra fields are ignored for this path.
 The response is the canonical v1.1 envelope with the chat payload under `data`, including a new
 plain-text `data.answer` alias (alongside `data.message`) for A2A adapters that look for an answer field.
 
@@ -37,6 +37,29 @@ plain-text `data.answer` alias (alongside `data.message`) for A2A adapters that 
 - `evidenceStatus` can now reach `independently_verified` **only** when a `rest_pull` / `third_party`
   connector is explicitly registered and its attestation verifies. Default deployment registers only
   CSV, so `basis` remains `declared_only` and `independentlyVerified` remains 0.
+
+## Parser v0.2 update (2026-11-16)
+
+Buyer feedback from Finch showed that the prompt path could not complete an intake: exact JSON keys
+were ignored, totals were confused with unit prices and segments, and four statuses were returned for
+empty or out-of-scope input. Parser v0.2 addresses that:
+
+- **JSON mode**: bare or fenced JSON objects are parsed by key, including `monthlySeries`, `R` and `C`.
+- **Text coverage**: token fields (`inputTokensM`, `outputTokensM`, `validRatePct`), period, operating
+  history and data coverage; `回款率` is accepted alongside `还款率`; English number-before-label
+  percentages work.
+- **Numeric safety**: total revenue/spend outrank segment labels; `US$2.2 per GPU-hour` is rejected;
+  grouped numbers no longer borrow a value across a comma (`overdue30Pct 2, payingCustomers 168`).
+- **Guidance**: greetings return `status=help` with the supported field list and a complete template;
+  non-inference businesses return `status=unsupported-scope` instead of a fake assessment.
+- **Multi-turn**: `sessionId` carries the merged draft for 30 minutes; `draftId` remains an
+  invocation identifier and is not a resume handle.
+- **Docs**: the supported 19-field list, text/JSON templates, R/C definition and response statuses are
+  published in [`docs/public-api-v1.md`](../public-api-v1.md).
+
+A local console mode `Finch` (sidebar) now mirrors the Direct API dialog: it sends only `{ prompt }`
+to `/api/v1/assess` through a loopback proxy and shows the buyer-visible answer plus local diagnostics
+(`parsedFields`, `missing`, `draftId`, latency). It is a test surface, not a new public endpoint.
 
 ## Operator actions (required for the Finch dialog to work)
 

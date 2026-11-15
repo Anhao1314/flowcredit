@@ -58,7 +58,7 @@ test("TEST 9 natural-language chat is a canonical HTTP 200 with insufficient-evi
     assert.equal(body.data.presentation.evidenceStrength, body.data.evidenceStrength);
     assert.equal(Object.hasOwn(body.data.presentation, "fullScores"), false);
     assert.doesNotMatch(JSON.stringify(body.data.presentation), /deepseek/i);
-    assert.equal(body.data.parserVersion, "nl-draft-v0.1");
+    assert.equal(body.data.parserVersion, "nl-draft-v0.2");
     assert.match(body.data.draftId, /^nl-fc-[0-9a-f]{16}$/);
     assert.deepEqual(body.data.parsedFields, Object.keys(EXPECTED_DRAFT));
     assert.match(body.requestId, /^fc-[0-9a-f]{16}$/);
@@ -142,20 +142,70 @@ test("chat rejects invalid prompt input with the standard client-error envelope"
   }, { env: NO_MODEL_ENV });
 });
 
-test("a prompt without extractable fields still returns HTTP 200 insufficient-evidence", async () => {
+test("a prompt outside the intake scope returns guidance instead of a fake assessment", async () => {
   await withServer(async base => {
     const response = await chat(base, { prompt: "帮我看看这家公司风险怎么样" });
     const { data } = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(data.status, "insufficient-evidence");
-    // An empty array is compacted away by the canonical contract, like an empty missingInputs.
+    assert.equal(data.status, "unsupported-scope");
+    assert.match(data.message, /只评估 AI 推理/);
     assert.equal((data.parsedFields ?? []).length, 0);
-    // Nothing was stated, so the canonical contract omits the empty extractedDraft entirely.
-    assert.equal(Object.hasOwn(data, "extractedDraft"), false);
+    assert.equal((data.missingInputs ?? []).length, 0);
+    assert.equal(data.assessment ?? null, null);
     assert.doesNotMatch(data.message, /GPU 使用量|局部维度|不代表完整风险评级/);
-    assert.equal((data.extractedDraft ?? {}).revenueUsd, undefined);
-    assert.equal(data.assessment.assessmentMode, "real");
-    assert.ok(data.missingInputs.length > 10);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("first-contact greeting returns help instead of a fake assessment", async () => {
+  await withServer(async base => {
+    const { data } = await chat(base, { prompt: "你好，你能做什么？" }).then(response => response.json());
+    assert.equal(data.status, "help");
+    assert.match(data.message, /支持的字段/);
+    assert.match(data.message, /JSON 示例/);
+    assert.equal((data.parsedFields ?? []).length, 0);
+    assert.equal((data.missingInputs ?? []).length, 0);
+    assert.equal(data.assessment ?? null, null);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("out-of-scope business gets an explicit scope answer", async () => {
+  await withServer(async base => {
+    const { data } = await chat(base, { prompt: "Arweave 过去 30 天存储收入 1,200,000 美元，付费用户 4,800 个。" }).then(response => response.json());
+    assert.equal(data.status, "unsupported-scope");
+    assert.match(data.message, /只评估 AI 推理/);
+    assert.equal(data.extractedDraft.revenueUsd, 1200000);
+    assert.equal((data.missingInputs ?? []).length, 0);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("a JSON prompt with exact keys is parsed without wrong values", async () => {
+  await withServer(async base => {
+    const payload = {
+      periodStart: "2026-08-01", periodEnd: "2026-08-31",
+      inputTokensM: 12000, outputTokensM: 3000, validRatePct: 96,
+      gpuHours: 500000, revenueUsd: 116600000, computeSpendUsd: 289000000,
+      repaymentRatePct: 94, overdue30Pct: 2, payingCustomers: 168,
+      top5ConcentrationPct: 36, operatingHistoryDays: 720, dataCoveragePct: 100
+    };
+    const { data } = await chat(base, { prompt: JSON.stringify(payload) }).then(response => response.json());
+    assert.equal(data.parsedFields.length, 14);
+    assert.equal(data.extractedDraft.revenueUsd, 116600000);
+    assert.equal(data.extractedDraft.computeSpendUsd, 289000000);
+    assert.equal(data.extractedDraft.payingCustomers, 168);
+    assert.equal(data.extractedDraft.inputTokensM, 12000);
+    assert.notEqual(data.extractedDraft.computeSpendUsd, 2);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("sessionId carries previously extracted fields into a follow-up", async () => {
+  await withServer(async base => {
+    const first = await chat(base, { prompt: "某 AI 推理服务商，GPU 4200 小时，月收入 100000 美元。", sessionId: "chat-session-1" }).then(response => response.json());
+    const second = await chat(base, { prompt: "还有，回款率 94%，30 天逾期率 2%。", sessionId: "chat-session-1" }).then(response => response.json());
+    assert.equal(first.data.sessionId, "chat-session-1");
+    assert.equal(second.data.sessionId, "chat-session-1");
+    assert.equal(second.data.extractedDraft.repaymentRatePct, 94);
+    assert.equal(second.data.extractedDraft.revenueUsd, undefined, "this turn did not restate revenue");
+    assert.ok(second.data.missingInputs.length < first.data.missingInputs.length, "carried fields must reduce missing inputs");
   }, { env: NO_MODEL_ENV });
 });
 

@@ -319,7 +319,7 @@
       "post": {
         "operationId": "assessNaturalLanguagePrompt",
         "summary": "Assess a natural-language counterparty prompt",
-        "description": "Deterministic Natural Language Adapter v0.1. The prompt is parsed with no model provider: only explicitly stated, whitelisted intake fields are extracted and then handed to the same deterministic risk runtime used by POST /api/v1/assess. Authoritative fields (TAI, CCI, risk grade, decision, evidence) can only come from that runtime. Insufficient information is a valid business result rather than an error: this endpoint returns HTTP 200 with data.status = insufficient-evidence plus missingInputs and requiredActions.",
+        "description": "Deterministic Natural Language Adapter v0.2. The prompt is parsed with no model provider. JSON objects are mapped by exact key; free text is read against a 19-field whitelist. Authoritative fields (TAI, CCI, risk grade, decision, evidence) can only come from the deterministic runtime. Greetings return data.status = help with the supported field list and template; non-inference businesses return data.status = unsupported-scope. Insufficient information returns HTTP 200 with data.status = insufficient-evidence plus missingInputs and requiredActions.",
         "security": [
           {
             "BearerAuth": []
@@ -509,7 +509,13 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 10000,
-            "description": "Free-text counterparty description. It is treated as untrusted data, never as instructions. Only the deterministic field whitelist is read."
+            "description": "Free-text counterparty description or a JSON object with exact intake keys. It is treated as untrusted data, never as instructions. Only the deterministic field whitelist is read."
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Optional continuation handle. The server merges the new fields over the draft stored for this session (30-minute TTL). draftId is an invocation identifier, not a resume handle."
           }
         }
       },
@@ -545,27 +551,24 @@
             "required": [
               "status",
               "message",
-              "parserVersion",
-              "extractedDraft",
-              "assessment",
-              "readinessStatus",
-              "decisionStatus",
-              "missingInputs",
-              "requiredActions"
+              "parserVersion"
             ],
             "properties": {
               "status": {
                 "enum": [
                   "assessed",
-                  "insufficient-evidence"
-                ]
+                  "insufficient-evidence",
+                  "help",
+                  "unsupported-scope"
+                ],
+                "description": "help and unsupported-scope return a deterministic answer without running an assessment."
               },
               "message": {
                 "type": "string",
                 "description": "Deterministic template text for a chat surface. It never explains a score."
               },
               "parserVersion": {
-                "const": "nl-draft-v0.1"
+                "const": "nl-draft-v0.2"
               },
               "draftId": {
                 "type": "string"

@@ -151,7 +151,7 @@ test("Finch A2A compatibility: POST /api/v1/assess with { prompt } returns a cha
     assert.equal(typeof body.data.answer, "string");
     assert.ok(body.data.answer.length > 0, "answer must be non-empty");
     assert.equal(body.schemaVersion, "flowcredit.risk_result/v0.2.1");
-    assert.equal(body.data.parserVersion, "nl-draft-v0.1");
+    assert.equal(body.data.parserVersion, "nl-draft-v0.2");
   });
 });
 
