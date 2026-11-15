@@ -245,6 +245,7 @@ npm run adjudicate     # 确定性裁决
 | API 与规则 | [公共 API](docs/public-api-v1.md) · [风险规则 v0.2.1](docs/flowcredit-rules-v0.2.1.md) · [intake v0.3](docs/flowcredit-intake-v0.3.md) |
 | Finch | [契约](docs/finch/CONTRACT.md) · [提交包](docs/finch/SUBMISSION.md) · [上架文案](docs/finch/LISTING.md) · [交接指南](docs/finch/FINCH_HANDOFF_GUIDE.md) |
 | 发布 | [external-alpha-v0.2.2](docs/releases/external-alpha-v0.2.2.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
+| 产品 | [Enterprise PRD v0.1 — AI Compute Risk Monitor](docs/product/enterprise-prd-v0.1.md) |
 | 量化 | [量化栈](quant/README.md) · [研究记忆](quant/research-memory/README.md) · [许可](quant/data/LICENSING.md) |
 | 参与 | [贡献指南](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [变更日志](CHANGELOG.md) · [归档](docs/archive) |
 

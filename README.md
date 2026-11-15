@@ -245,6 +245,7 @@ npm run adjudicate     # deterministic adjudication
 | API & rules | [Public API](docs/public-api-v1.md) · [risk rules v0.2.1](docs/flowcredit-rules-v0.2.1.md) · [intake v0.3](docs/flowcredit-intake-v0.3.md) |
 | Finch | [Contract](docs/finch/CONTRACT.md) · [Submission](docs/finch/SUBMISSION.md) · [Listing copy](docs/finch/LISTING.md) · [Handoff guide](docs/finch/FINCH_HANDOFF_GUIDE.md) |
 | Releases | [external-alpha-v0.2.2](docs/releases/external-alpha-v0.2.2.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
+| Product | [Enterprise PRD v0.1 — AI Compute Risk Monitor](docs/product/enterprise-prd-v0.1.md) |
 | Quant | [Quant stack](quant/README.md) · [Research memory](quant/research-memory/README.md) · [Licensing](quant/data/LICENSING.md) |
 | Contributions | [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Archive](docs/archive) |
 
