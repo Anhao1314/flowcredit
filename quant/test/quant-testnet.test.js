@@ -18,6 +18,7 @@ const QUANT = join(HERE, "..");
 const { createTestnetHttp, hmacSignature, TESTNET_BASE_URL } = await import(join(QUANT, "paper", "fetch-testnet.js"));
 const { createBinanceTestnetAdapter, runTestnetRehearsal, isoDateFromMs } = await import(join(QUANT, "paper", "testnet-adapter.js"));
 const { assertBrokerAdapter, BROKER_ADAPTER_VERSION } = await import(join(QUANT, "paper", "adapter.js"));
+const { COST_ONE_SIDE_RATE_V002 } = await import(join(QUANT, "eval", "metrics.js"));
 
 test("hmacSignature: known-answer vector (deterministic signing)", () => {
   const expected = createHmac("sha256", "secret-key").update("symbol=BTCUSDT&timestamp=123").digest("hex");
@@ -92,6 +93,38 @@ test("rehearsal: uptrend klines → rule targets 1 → BUY pending → auto-appr
   assert.equal(report.realizedSlippageBps, expectedSlippage, "执行价 vs 决策价 → realizedSlippageBps 反哺成本校准");
   assert.ok(report.barsConfirmed >= 62);
   assert.ok(report.span[0] && report.span[1]);
+});
+
+test("accounting: real-submit BUY then SELL leaves cash = capital − both-side costs", async () => {
+  const http = {
+    publicGet: async path => {
+      if (path === "/api/v3/ticker/bookTicker") return { bidPrice: "99999", askPrice: "100001" };
+      if (path === "/api/v3/time") return { serverTime: 1731283200000 };
+      throw new Error(`unexpected publicGet ${path}`);
+    },
+    signedGet: async () => ({}),
+    signedPost: async (path, params) => {
+      const qty = Number(params.quantity);
+      return { orderId: 1, executedQty: String(qty), cummulativeQuoteQty: String(qty * 100000) };
+    }
+  };
+  const adapter = createBinanceTestnetAdapter({ http, dry: false, quoteBase: 100000 });
+  await adapter.getQuote();
+  const unitCost = 0.1 * 100000 * COST_ONE_SIDE_RATE_V002;
+
+  const buy = adapter.submitOrder({ side: "BUY", deltaUnits: 0.1, reason: "accounting-test-buy" });
+  await adapter.approveOrder(buy.orderId, { approvedBy: "operator" });
+  const afterBuy = adapter.getAccount();
+  assert.ok(Math.abs(afterBuy.cash - (100000 - 10000 - unitCost)) < 1e-9, `BUY cash wrong: ${afterBuy.cash}`);
+  assert.ok(Math.abs(afterBuy.units - 0.1) < 1e-12);
+
+  const sell = adapter.submitOrder({ side: "SELL", deltaUnits: 0.1, reason: "accounting-test-sell" });
+  await adapter.approveOrder(sell.orderId, { approvedBy: "operator" });
+  const afterSell = adapter.getAccount();
+  assert.equal(afterSell.units, 0);
+  // 两次单边成本后应剩 100000 − 2×unitCost；旧实现会把 SELL 费用加回，导致 cash = 100000
+  assert.ok(Math.abs(afterSell.cash - (100000 - unitCost * 2)) < 1e-9, `SELL cash wrong: ${afterSell.cash}`);
+  assert.ok(Math.abs(afterSell.equity - (100000 - unitCost * 2)) < 1e-9);
 });
 
 test("rehearsal: HOLD path produces no order and zero signed calls", async () => {

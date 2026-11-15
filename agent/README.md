@@ -1,90 +1,125 @@
 # FlowCredit Agent Sidecar
 
-FlowCredit risk-assessment service for trusted local use or deployment behind an HTTPS reverse proxy or managed gateway. Reviewable source lives in `agent/`; local credentials, sessions, dependencies, and logs remain in the repository-external runtime directory configured by `FC_RUNTIME_ROOT`.
+Deterministic credit-risk assessment service with an **optional, non-authoritative** language-model layer.
+Finch Direct API integration lives here; the deterministic engine owns every score, grade and decision status.
 
-Shared transport, closed tool-registry, TTL-session and run-governance primitives live in [`core/`](core/README.md). Credit HTTP requests and quant agent runs use a common audit envelope; quant LangGraph checkpoints use versioned atomic files. Product adapters remain outside core, and quant never imports credit business logic from `agent/src`.
+**Status:** repository release `external-alpha-v0.2.1` · agent `0.4.1` · public API `flowcredit.api/v1.1`
+**Engine:** `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1`
 
-The configured default model is `deepseek-v4-flash`.
+Shared primitives (model gateway, tool registry, run records, audit events, checkpoints, sessions) live in
+[`core/`](core/README.md). Product adapters stay outside core.
 
-Current release baseline: `external-alpha-v0.1.1` (Finch Direct API compatibility patch; historical frozen baseline remains `external-alpha-v0.1`). See the [External Alpha deployment guide](../docs/external-alpha-deployment.md), the [v0.1.1 patch notes](../docs/releases/external-alpha-v0.1.1.md) and the [v0.1 release notes](../docs/releases/external-alpha-v0.1.md).
+## Architecture
+
+```
+supplied evidence / free text
+        │
+        ├─ modelConsent=false ──► field whitelist + sanitize ──► schema validation (intake v0.3.1)
+        │                                                              │
+        └─ modelConsent=true ───► optional REST model layer            │ invalid → HTTP 400
+              (extraction / explanation only; never a score)           │
+                                                                       ▼
+                                              deterministic engine (risk_result v0.2.1)
+                                                                       │
+                                                                       ▼
+                                        canonical envelope (data.* + optional meta)
+```
+
+- The model can add **annotation text** (`modelAnalysis`, `modelReview`) and, on the intake path, an
+  extraction draft. It cannot write TAI, CCI, risk grade, PD, expected loss, limit or decision status.
+- No model key? The deterministic path, `/ready` and `/health` keep working.
+- The model has **no tools** on the credit path: the deterministic result is computed first and supplied
+  to the model as context.
 
 ## Safety boundary
 
-- The v0.3.1 intake product uses the unchanged v0.2.1 `flowcredit.risk_result/v0.2.1` engine. Deterministic assessment remains available when DeepSeek extraction or explanation is unavailable. Earlier engines remain available for compatibility.
-- v0.2.1 calculates AI Token Activity Index before applying a 40% Token contribution to CCI.
-- v0.2 and v0.2.1 never emit an automatic approval, calibrated PD, expected loss, or numeric limit.
-- DeepSeek Harness is pinned to `0.1.2-rc.1`; its profile advertises only versioned FlowCredit normalization, computation, and validation tools.
-- No shell, file, web, transaction, subagent, or editor tool is exposed to the model.
-- The site mount is read-only. Live results stay in memory and never update `assets/js/ai-ledger.js`.
-- Persistent logs are metadata-only JSONL. Harness session content is directed to container-temporary storage.
-- Guided and JSON intake are deterministic by default. Raw descriptive text reaches DeepSeek only with explicit `modelConsent=true`.
+- Reserved result fields are stripped before validation; schema validation fails closed.
+- `assessmentFingerprint` excludes request metadata (`meta`) and model annotations.
+- Guided/JSON intake is deterministic by default; raw free text reaches the model only with
+  `modelConsent: true` (via `/fc/ai/v0.3/extract` or `POST /api/v1/chat`'s parser path).
+- Persistent logs are metadata-only JSONL; raw cases, prompts and credentials are never logged.
+- Container runs as non-root (`USER node`); runtime dirs are the only writable mounts.
 
-## First run
+## Quick start
 
-System Node is not required for Docker operation.
+Node:
 
 ```sh
-git clone https://github.com/Anhao1314/flowcredit.git
-cd flowcredit/agent
-cp .env.example .env
-node scripts/set-key.js
-docker compose up --build -d
+cd agent
+npm ci
+cp .env.example .env          # optional: set DEEPSEEK_API_KEY for model assistance
+npm test                      # 107 tests
+npm run serve                 # http://127.0.0.1:8787
 ```
 
-Open `http://127.0.0.1:8787/` after the health check passes. If Node is not installed locally, set `FLOWCREDIT_API_KEY` directly in the untracked `.env` file instead of using `scripts/set-key.js`.
+Docker:
 
-Without a configured key, deterministic assessment, presets, page serving, and grounded fallback answers still work. `/health` reports Harness as unconfigured.
+```sh
+cd agent
+cp .env.example .env
+docker compose up --build -d
+curl -f http://127.0.0.1:8787/ready
+```
 
-For Docker configuration, copy `.env.example` to `.env`. The default Compose host publication is `127.0.0.1`; `PUBLISH_HOST=0.0.0.0` must only be used with `AUTH_ENABLED=true` and an HTTPS reverse proxy or managed gateway.
-
-`HOST` and `PORT` configure a direct Node process. Docker uses `CONTAINER_HOST` for the container interface and `PUBLISH_HOST` for host exposure because a container must listen on its internal interface to receive a published port.
+The key can be written with `node scripts/set-key.js` (repo-root `.env`, mode 600, gitignored).
 
 ## API
 
 ```sh
 curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8787/ready
 curl http://127.0.0.1:8787/api/v1
+curl http://127.0.0.1:8787/api/v1/schema        # machine-readable input/output JSON Schemas
+
 curl -X POST http://127.0.0.1:8787/api/v1/assess \
   -H 'Authorization: Bearer replace_with_a_long_random_secret' \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: partner-assessment-001' \
   --data-binary @contracts/finch-test-input.json
-curl -X POST http://127.0.0.1:8787/fc/ai/run \
-  -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
-curl -X POST http://127.0.0.1:8787/fc/ai/assess \
-  -H 'Content-Type: application/json' -d '{"input":{"address":"0x0000000000000000000000000000000000000000"}}'
-curl -X POST http://127.0.0.1:8787/fc/ai/v0.2/run \
-  -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
-curl -X POST http://127.0.0.1:8787/fc/ai/v0.2.1/run \
-  -H 'Content-Type: application/json' -d '{"subject":"healthy"}'
+
+curl -X POST http://127.0.0.1:8787/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Operator report: 2026-08 revenue 100000 USD, GPU hours 4200 ..."}'
+
+# internal compatibility surface
+curl http://127.0.0.1:8787/fc/ai/v0.3/config
 curl http://127.0.0.1:8787/fc/ai/v0.3/schema
-curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess \
-  -H 'Authorization: Bearer replace_with_a_long_random_secret' \
-  -H 'Content-Type: application/json' -d '{"draft":{"label":"Example","inputTokensM":10,"outputTokensM":8,"validRatePct":90}}'
+curl -X POST http://127.0.0.1:8787/fc/ai/v0.3/assess -H 'Content-Type: application/json' \
+  -d '{"draft":{"label":"Example","inputTokensM":10,"outputTokensM":8,"validRatePct":90}}'
 ```
 
-When `AUTH_ENABLED=true`, every mutating `/fc/ai/*` POST and `POST /api/v1/assess` requires `Authorization: Bearer <FLOWCREDIT_API_KEY>`. `GET /api/v1`, `GET /health`, `GET /ready`, and versioned config/schema routes remain public. Rate limiting applies to mutating Agent APIs and returns HTTP 429 with a structured error. Local browser development normally uses `AUTH_ENABLED=false` because a static page must not contain the API secret.
+Legacy v0.1/v0.2/v0.2.1 routes were removed in v0.4.0. `GET /api/v1`, `/health`, `/ready` and
+`GET /api/v1/schema` are anonymous; mutating endpoints require a Bearer token when
+`AUTH_ENABLED=true`. Rate limiting returns HTTP 429; `Idempotency-Key` replays an identical
+invocation or returns HTTP 409 on reuse with a different payload.
 
-The recommended external invocation is `POST /api/v1/assess`. It always returns the canonical `flowcredit.api/v1` envelope without a custom header; consumers should read only `data.*`. The Finch-specific `POST /fc/ai/v0.3/assess` plus `X-FlowCredit-Contract-Version: flowcredit.finch-assess/v0.1` remains a compatibility adapter. Send `Idempotency-Key` to replay a prior identical single-instance invocation or receive HTTP 409 when the key is reused with a different payload. Full schemas and fixtures are in [`contracts/`](contracts/); see [`docs/public-api-v1.md`](../docs/public-api-v1.md).
+`INVOCATION_TIMEOUT_MS` defaults to 30s (range 1–120s). `TRUST_PROXY` defaults to `false`.
+The idempotency store is single-instance memory, bounded by `IDEMPOTENCY_TTL_MS` /
+`IDEMPOTENCY_MAX_ENTRIES`.
 
-`INVOCATION_TIMEOUT_MS` defaults to 30 seconds and must remain between 1 and 120 seconds. `TRUST_PROXY` defaults to false; never trust arbitrary `X-Forwarded-For` headers. The Pilot idempotency store is memory-only, bounded by `IDEMPOTENCY_TTL_MS` and `IDEMPOTENCY_MAX_ENTRIES`.
+## Model layer (optional)
 
-Set `"requireModel": true` on POST requests when a missing or failed model must return an HTTP error instead of a deterministic degraded result.
+OpenAI-compatible REST, configured by env:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DEEPSEEK_API_KEY` | empty | Enables extraction/explanation; empty = deterministic only |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Any OpenAI-compatible endpoint |
+| `DEEPSEEK_MODEL` (or `FC_MODEL`) | `deepseek-v4-flash` | Model name |
+
+The DSH SDK was removed in v0.4.1; do not reintroduce `@deepseek-ai/*` dependencies.
 
 ## CLI
 
 ```sh
 node src/cli.js run-preset healthy
 node src/cli.js assess --file case.json
-node src/cli.js assess --text 'address 0x0000000000000000000000000000000000000000'
+node src/cli.js assess --text '{"label":"Example","inputTokensM":10,"outputTokensM":8,"validRatePct":90}'
 node src/cli.js assess --stdin < case.json
 node src/cli.js health
-node src/cli.js ask healthy 'What evidence is decisive?'
-node src/cli.js run-preset --rule v0.2 healthy
-node src/cli.js assess --rule v0.2 --file case.json
-node src/cli.js run-preset --rule v0.2.1 healthy
-node src/cli.js assess --rule v0.2.1 --file case.json
 ```
+
+The CLI computes locally with the v0.2.1 engine; it does not call the model.
 
 ## Operations
 
@@ -96,18 +131,15 @@ docker compose restart
 docker compose down
 ```
 
-Logs are written under the repository-external `FC_RUNTIME_ROOT` path, rotate at 10 MB or daily, and expire after 30 days. They contain hashes and runtime metadata, not raw cases, questions, addresses, or credentials.
+Logs: metadata-only JSONL under `FC_RUNTIME_ROOT`, rotate at 10 MB / daily, expire after 30 days.
 
-After a Harness upgrade, update all pinned `0.1.2-rc.1` values together, rebuild, and run `npm test` plus the browser smoke test before deployment.
-
-Contract verification:
+## Verification
 
 ```sh
-npm run test:public-api
+npm run check                  # syntax + typecheck + 107 tests
 npm run validate:public-api
-npm run test:finch-contract
 npm run validate:finch-contract
 npm run smoke:external-alpha
-npm run verify:release
+npm run verify:release          # run in a tree without .env (the gate rejects .env by design)
 npm run verify:finch-submission
 ```

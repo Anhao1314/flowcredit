@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1.1}
+        FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.2.1}
     container_name: flowcredit-agent
     init: true
     restart: unless-stopped
@@ -11,13 +11,13 @@ services:
       - "${PUBLISH_HOST:-127.0.0.1}:${PORT:-8787}:${PORT:-8787}"
     volumes:
       - ${FC_SITE_ROOT:-..}:/site:ro
-      - ${FC_RUNTIME_ROOT:-../../fc-agent/runtime}/dsh-home:/runtime/dsh-home
+      # 运行目录以镜像内非 root 用户（node, uid 1000）写入；Linux 宿主机需保证目录可写
       - ${FC_RUNTIME_ROOT:-../../fc-agent/runtime}/logs:/runtime/logs
       - ${FC_RUNTIME_ROOT:-../../fc-agent/runtime}/workspace:/runtime/workspace
     environment:
       HOST: ${CONTAINER_HOST:-0.0.0.0}
       PORT: ${PORT:-8787}
-      FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.1.1}
+      FLOWCREDIT_RELEASE_VERSION: ${FLOWCREDIT_RELEASE_VERSION:-external-alpha-v0.2.1}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       FLOWCREDIT_API_KEY: ${FLOWCREDIT_API_KEY:-}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
@@ -29,7 +29,6 @@ services:
       FC_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      DSH_TELEMETRY_MODE: DISABLED
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s

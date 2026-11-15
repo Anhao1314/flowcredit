@@ -120,7 +120,10 @@ export function createBinanceTestnetAdapter({ symbol = "BTCUSDT", http, dry = fa
       const avgPrice = cumQuote / executedQty;
       const signedUnits = order.side === "BUY" ? executedQty : -executedQty;
       const cost = executedQty * avgPrice * COST_ONE_SIDE_RATE_V002; // 本地账面成本口径；真实费用以交易所记录为准
-      state.cash -= (order.side === "BUY" ? executedQty * avgPrice : -(executedQty * avgPrice)) + (order.side === "BUY" ? cost : -cost);
+      // 记账：BUY 支付 notional+cost；SELL 收到 notional-cost（旧实现 SELL 符号错误，多记 2×cost）。
+      const notional = executedQty * avgPrice;
+      if (order.side === "BUY") state.cash -= notional + cost;
+      else state.cash += notional - cost;
       state.units += signedUnits;
       mark(avgPrice, order.date);
       order.status = "filled";
