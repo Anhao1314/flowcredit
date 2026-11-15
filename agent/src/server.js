@@ -4,7 +4,7 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DSH_VERSION, MODEL, RELEASE_VERSION } from "./constants.js";
+import { MODEL, RELEASE_VERSION } from "./constants.js";
 import { RULE_VERSION_V021 } from "./rules-v021.js";
 import { HarnessBrain } from "./harness.js";
 import { SafeLogger } from "./logger.js";
@@ -28,7 +28,7 @@ const RUNTIME_ROOT = resolve(process.env.FC_RUNTIME_ROOT || join(ROOT, "..", "..
 const BODY_LIMIT = 64 * 1024;
 const sessions = new SessionStore();
 const logger = new SafeLogger(join(RUNTIME_ROOT, "logs"));
-const brain = new HarnessBrain({ root: ROOT, dshHome: join(RUNTIME_ROOT, "dsh-home"), workspace: join(RUNTIME_ROOT, "workspace") });
+const brain = new HarnessBrain({});
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -366,8 +366,8 @@ async function route(req, res, requestId, context = {}) {
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
     return sendJson(res, 200, {
-      status: "ok", service: "flowcredit-agent", version: "0.4.0", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
-      model: MODEL, productVersions: { v03: PRODUCT_VERSION_V03 }, dshVersion: DSH_VERSION,
+      status: "ok", service: "flowcredit-agent", version: "0.4.1", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
+      model: MODEL, modelProvider: "openai-compatible", productVersions: { v03: PRODUCT_VERSION_V03 },
       llm: { enabled: harness.configured, available: harness.ready }, harness
     }, requestId);
   }

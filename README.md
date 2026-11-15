@@ -32,7 +32,7 @@ The same rule binds both: **authoritative numbers come from pure functions; the 
 
 | | |
 | --- | --- |
-| **Repository release** | `external-alpha-v0.2.0` · agent `0.4.0` · API `flowcredit.api/v1.1` |
+| **Repository release** | `external-alpha-v0.2.1` · agent `0.4.1` · API `flowcredit.api/v1.1` |
 | **Live deployment** | `external-alpha-v0.1.1` — update to v0.2.0 is a pending operator action |
 | **Finch** | Listed on [finchtech.ai](https://finchtech.ai) as *FlowCredit － Business Risk Intelligence* ([agent card](https://www.finchtech.ai/a2a/e96e9a01-50aa-4686-bd0e-1aa9cdfcf967/agent-card.json)) |
 | **Risk engine** | `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1` |
@@ -119,7 +119,7 @@ Idempotency-Key: <optional-client-key>
     "assessmentFingerprint": "sha256:…"
   },
   "meta": {
-    "release": "external-alpha-v0.2.0",
+    "release": "external-alpha-v0.2.1",
     "engine": "flowcredit.risk_result/v0.2.1",
     "intake": "flowcredit.intake/v0.3.1",
     "modelLayer": { "used": false }
@@ -242,7 +242,7 @@ npm run adjudicate     # deterministic adjudication
 | --- | --- |
 | API & rules | [Public API](docs/public-api-v1.md) · [risk rules v0.2.1](docs/flowcredit-rules-v0.2.1.md) · [intake v0.3](docs/flowcredit-intake-v0.3.md) |
 | Finch | [Contract](docs/finch/CONTRACT.md) · [Submission](docs/finch/SUBMISSION.md) · [Listing copy](docs/finch/LISTING.md) · [Handoff guide](docs/finch/FINCH_HANDOFF_GUIDE.md) |
-| Releases | [external-alpha-v0.2.0](docs/releases/external-alpha-v0.2.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
+| Releases | [external-alpha-v0.2.1](docs/releases/external-alpha-v0.2.1.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
 | Quant | [Quant stack](quant/README.md) · [Research memory](quant/research-memory/README.md) · [Licensing](quant/data/LICENSING.md) |
 | Contributions | [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Archive](docs/archive) |
 

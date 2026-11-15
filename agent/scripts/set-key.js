@@ -1,10 +1,15 @@
 #!/usr/bin/env node
-import { mkdir, writeFile, chmod } from "node:fs/promises";
+/*
+ * set-key.js — 把 DeepSeek API Key 写入仓库根 .env（gitignored，权限 600）。
+ * v0.5.0 起不再写 DSH 的 credentials.yaml（DSH SDK 已移除）。
+ */
+import { readFile, writeFile, chmod } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 import process from "node:process";
 
-const root = resolve(process.env.FC_RUNTIME_ROOT || new URL("../../../fc-agent/runtime", import.meta.url).pathname);
-const home = join(root, "dsh-home");
+const repositoryRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const envPath = join(repositoryRoot, ".env");
 
 async function readSecret() {
   if (!process.stdin.isTTY) {
@@ -33,11 +38,18 @@ async function readSecret() {
   });
 }
 
+function upsert(content, key, value) {
+  const line = `${key}=${value}`;
+  const pattern = new RegExp(`^${key}=.*$`, "m");
+  if (pattern.test(content)) return content.replace(pattern, line);
+  const trimmed = content.endsWith("\n") || content === "" ? content : content + "\n";
+  return `${trimmed}${line}\n`;
+}
+
 const key = await readSecret();
 if (!key) throw new Error("key cannot be empty");
-await mkdir(home, { recursive: true, mode: 0o700 });
-await chmod(home, 0o700);
-const path = join(home, ".credentials.yaml");
-await writeFile(path, `version: 1\nrefs:\n  DEEPSEEK_API_KEY: ${JSON.stringify(key)}\n`, { mode: 0o600 });
-await chmod(path, 0o600);
-process.stdout.write(`Credential stored in ${path} with mode 600.\n`);
+let existing = "";
+try { existing = await readFile(envPath, "utf8"); } catch { /* first write */ }
+await writeFile(envPath, upsert(existing, "DEEPSEEK_API_KEY", key), { mode: 0o600 });
+await chmod(envPath, 0o600);
+process.stdout.write(`DEEPSEEK_API_KEY written to ${envPath} (mode 600, gitignored).\n`);

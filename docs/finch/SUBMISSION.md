@@ -1,6 +1,6 @@
 # FlowCredit Finch Submission Checklist
 
-Status: **Listed on Finch (finchtech.ai) — operator-confirmed.** The live External Alpha service is deployed and publicly verified. Repository release **external-alpha-v0.2.0** (agent package 0.4.0) is prepared in this repository; updating the production deployment to it is an operator action and has not been performed here.
+Status: **Listed on Finch (finchtech.ai) — operator-confirmed.** The live External Alpha service is deployed and publicly verified. Repository release **external-alpha-v0.2.1** (agent package 0.4.0) is prepared in this repository; updating the production deployment to it is an operator action and has not been performed here.
 
 This package documents the Direct API Agent integration. It does not claim approval, certification or endorsement by Finch beyond the operator-confirmed listing.
 
@@ -8,7 +8,7 @@ This package documents the Direct API Agent integration. It does not claim appro
 
 | Item | Status |
 | --- | --- |
-| Repository release (prepared) | `external-alpha-v0.2.0` · agent 0.4.0 · API `flowcredit.api/v1.1` |
+| Repository release (prepared) | `external-alpha-v0.2.1` · agent 0.4.1 · API `flowcredit.api/v1.1` |
 | Live deployment | `external-alpha-v0.1.1` (Render Docker Web Service, Singapore) — update to v0.2.0 pending operator action |
 | Public API | Verified over public HTTPS; v1.1 adds `GET /api/v1/schema` and top-level `meta` |
 | Finch listing | Listed on finchtech.ai (operator-confirmed; date/URL to be recorded) |

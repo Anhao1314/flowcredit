@@ -1,6 +1,6 @@
 {
   "artifactVersion": "fc-agent-eval-artifact/v1",
-  "generatedAt": "2026-11-15T14:13:04.636Z",
+  "generatedAt": "2026-11-15T14:55:53.551Z",
   "dataset": {
     "id": "fc-agent-eval",
     "version": "fc-agent-eval/v1",
@@ -9,30 +9,22 @@
     "sha256": "6fdf90dec5707c00de92a719eb36995a9081eb412e00f659c81d5f3f9e61d1c0"
   },
   "baseline": {
-    "commitSha": "915f6c4722d6d24b3ef66a2f197094f62b046bef",
+    "commitSha": "c538394abd8a8e8deef3a504deae6764d0eb5379",
     "branch": "main",
     "dirty": true,
     "dirtyFiles": [
-      "M .github/workflows/ci.yml",
-      "D  .nojekyll",
-      " M README.md",
-      " M agent/.env.example",
+      "M agent/.env.example",
       " M agent/Dockerfile",
-      " M agent/contracts/README.md",
-      " M agent/contracts/finch-assess-input.schema.json",
-      " M agent/contracts/finch-assess-output.schema.json",
-      " M agent/contracts/finch-test-input.json",
-      " M agent/contracts/finch-test-output.example.json",
-      " M agent/contracts/openapi.json",
+      " D agent/config/restricted-sdk.patch.yml",
+      " M agent/package-lock.json",
       " M agent/package.json",
-      " M agent/scripts/check-syntax.js",
-      " M agent/scripts/verify-finch-submission.js",
-      " M agent/scripts/verify-release.js",
-      " M agent/src/cli.js",
+      " M agent/scripts/set-key.js",
       " M agent/src/constants.js",
-      " M agent/src/dsh-plugin.js",
-      " M agent/src/finch-contract.js",
-      " M agent/src/harness.js"
+      " D agent/src/dsh-plugin.js",
+      " M agent/src/harness.js",
+      " M agent/src/server.js",
+      "?? agent/src/model-client.js",
+      "?? agent/test/model-client.test.js"
     ]
   },
   "run": {
