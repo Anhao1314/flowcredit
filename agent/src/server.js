@@ -372,7 +372,7 @@ async function route(req, res, requestId, context = {}) {
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
     return sendJson(res, 200, {
-      status: "ok", service: "flowcredit-agent", version: "0.4.1", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
+      status: "ok", service: "flowcredit-agent", version: "0.4.2", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
       model: MODEL, modelProvider: "openai-compatible", productVersions: { v03: PRODUCT_VERSION_V03 },
       llm: { enabled: harness.configured, available: harness.ready }, harness
     }, requestId);
