@@ -32,7 +32,6 @@ export function createModelClient(options = {}) {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    timer.unref?.();
     try {
       const response = await transport(`${baseUrl}/chat/completions`, {
         method: "POST",
