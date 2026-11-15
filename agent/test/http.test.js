@@ -75,6 +75,8 @@ test("HTTP contracts work without a configured model", async () => {
     assert.equal(intake.CCI, null);
     assert.equal(intake.readinessStatus, "limited");
     assert.equal(intake.evidenceCoverage.total, 24);
+    assert.equal(intake.evidenceStatus.basis, "declared_only");
+    assert.equal(intake.evidenceStatus.independentlyVerified, 0);
     assert.ok(intake.requiredActions.length > 0);
   });
 });

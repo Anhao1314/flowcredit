@@ -63,6 +63,10 @@ test("Public assessment requires Bearer auth and always returns canonical-only o
     assert.equal(body.data.TAI, 93.8);
     assert.equal(body.data.CCI, 929);
     assert.equal(body.data.riskGrade, "A");
+    // 证据分级：声明的 system_api 无连接器证明 → 降级为 attested，独立验证恒为 0
+    assert.equal(body.data.evidenceStatus.basis, "declared_only");
+    assert.equal(body.data.evidenceStatus.independentlyVerified, 0);
+    assert.ok(body.data.evidenceStatus.downgradedCount > 0);
     assert.equal(validateFinchAssessOutput(body).valid, true);
     assert.ok(Buffer.byteLength(text) <= FINCH_RESPONSE_MAX_BYTES);
   });

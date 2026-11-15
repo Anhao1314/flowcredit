@@ -21,6 +21,8 @@ import {
 } from "./finch-contract.js";
 import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
+import { summarizeEvidenceStatus } from "./evidence-status.js";
+import { groundExtractedDraft } from "./grounding.js";
 import { RunRecord } from "../core/run-record.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -210,6 +212,9 @@ async function buildV03Assessment(body, requestId, context) {
   const { normalized, result, modelLayer, harnessStatus } = await runner(validation.draft, requestId, false, useModel, modelBudgetMs);
   const evidenceCoverage = buildEvidenceCoverageV03(validation.draft);
   const requiredActions = buildRequiredActionsV03(validation, result, evidenceCoverage);
+  // 证据分级：声明级 vs 独立验证（当前无连接器 → independentlyVerified 恒为 0）。
+  // 说明：该字段不参与 assessmentFingerprint（与模型注记同理），保持 v0.2.1 确定性身份稳定。
+  const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence);
   const sessionId = typeof body.sessionId === "string" && body.sessionId.length <= 80 ? body.sessionId : requestId;
   sessions.set(`v03:${sessionId}`, { version: "v0.3.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
 
@@ -220,7 +225,7 @@ async function buildV03Assessment(body, requestId, context) {
     modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null,
     validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [], ignoredInputs: validation.ignoredInputs },
     readinessStatus: validation.readinessStatus, missingByGroup: validation.missingByGroup,
-    evidenceCoverage, requiredActions, harnessStatus, sessionId
+    evidenceCoverage, requiredActions, evidenceStatus, harnessStatus, sessionId
   }, inputFingerprint, assessmentFingerprint);
   return { status: 200, body: payload };
 }
@@ -431,7 +436,10 @@ async function route(req, res, requestId, context = {}) {
       }
     }
     const cleaned = sanitizeExtractedDraftV03(extracted);
-    const validation = validateDraftV03(extracted);
+    // 原文 grounding：模型抽取的字段必须能在用户原文中找到依据，否则丢弃。
+    const grounded = groundExtractedDraft(body.text.trim(), cleaned.draft);
+    const validation = validateDraftV03(grounded.draft);
+    const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence);
     const confidence = extracted?.fieldConfidence && typeof extracted.fieldConfidence === "object"
       ? Object.fromEntries(Object.entries(extracted.fieldConfidence).filter(([key]) => Object.hasOwn(validation.draft, key)))
       : {};
@@ -439,8 +447,9 @@ async function route(req, res, requestId, context = {}) {
       productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021,
       draftId: typeof body.draftId === "string" && body.draftId.length <= 80 ? body.draftId : requestId,
       draft: validation.draft, fieldConfidence: confidence,
+      grounding: grounded.report, evidenceStatus,
       missingInputs: validation.missingInputs, missingByGroup: validation.missingByGroup,
-      warnings: [...validation.warnings, ...(primaryWindowDerived ? ["Primary scoring window was derived from the latest explicitly supplied monthly period."] : []), ...(Array.isArray(extracted?.warnings) ? extracted.warnings.slice(0, 10).map(String) : [])],
+      warnings: [...validation.warnings, ...(primaryWindowDerived ? ["Primary scoring window was derived from the latest explicitly supplied monthly period."] : []), ...(Array.isArray(extracted?.warnings) ? extracted.warnings.slice(0, 10).map(String) : []), ...grounded.report.warnings],
       ignoredInputs: [...new Set([...cleaned.ignoredInputs, ...validation.ignoredInputs])], model: MODEL
     }, requestId);
   }

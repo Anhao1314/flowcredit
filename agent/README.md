@@ -3,7 +3,7 @@
 Deterministic credit-risk assessment service with an **optional, non-authoritative** language-model layer.
 Finch Direct API integration lives here; the deterministic engine owns every score, grade and decision status.
 
-**Status:** repository release `external-alpha-v0.2.1` · agent `0.4.1` · public API `flowcredit.api/v1.1`
+**Status:** repository release `external-alpha-v0.2.2` · agent `0.4.2` · public API `flowcredit.api/v1.1`
 **Engine:** `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1`
 
 Shared primitives (model gateway, tool registry, run records, audit events, checkpoints, sessions) live in
@@ -34,9 +34,15 @@ supplied evidence / free text
 ## Safety boundary
 
 - Reserved result fields are stripped before validation; schema validation fails closed.
-- `assessmentFingerprint` excludes request metadata (`meta`) and model annotations.
+- `assessmentFingerprint` excludes request metadata (`meta`), `evidenceStatus` and model
+  annotations.
 - Guided/JSON intake is deterministic by default; raw free text reaches the model only with
   `modelConsent: true` (via `/fc/ai/v0.3/extract` or `POST /api/v1/chat`'s parser path).
+- Model extraction is **grounded** against the supplied text: fields without support are dropped
+  before validation and reported in `grounding.warnings`.
+- Assessments report `evidenceStatus`: `basis: "declared_only"`, no independently verified
+  evidence until connectors exist; declared `system_api` / `cross_verified` / `cryptographic`
+  records are downgraded to `attested` with reasons. The numeric evidence score is unchanged.
 - Persistent logs are metadata-only JSONL; raw cases, prompts and credentials are never logged.
 - Container runs as non-root (`USER node`); runtime dirs are the only writable mounts.
 

@@ -26,7 +26,7 @@ const allDocs = Object.values(documents).join("\n");
 for (const marker of [
   "FlowCredit Risk Intelligence Agent", "POST /api/v1/assess", "POST /api/v1/chat",
   "GET /health", "GET /api/v1/schema",
-  "flowcredit.api/v1.1", "flowcredit.intake/v0.3.1", "flowcredit.risk_result/v0.2.1", "external-alpha-v0.2.1"
+  "flowcredit.api/v1.1", "flowcredit.intake/v0.3.1", "flowcredit.risk_result/v0.2.1", "external-alpha-v0.2.2"
 ]) assert.ok(submission.includes(marker), `SUBMISSION.md is missing: ${marker}`);
 assert.ok(listing.includes("Pricing Status"));
 assert.ok(listing.includes("TBD before marketplace publication"));
@@ -60,13 +60,13 @@ assert.ok(sizes.outputSchema <= 32_768);
 assert.ok(sizes.representativeResponse <= 65_536);
 
 const constants = await readFile(resolve(AGENT_ROOT, "src/constants.js"), "utf8");
-assert.match(constants, /RELEASE_VERSION[\s\S]*external-alpha-v0\.2\.1/);
+assert.match(constants, /RELEASE_VERSION[\s\S]*external-alpha-v0\.2\.2/);
 
 run("Finch contract validator", ["scripts/validate-finch-contract.js"]);
 run("Release verification", ["scripts/verify-release.js"]);
 
 process.stdout.write([
-  "PASS FlowCredit Finch Submission Package v0.4.1 (external-alpha-v0.2.1)",
+  "PASS FlowCredit Finch Submission Package v0.4.2 (external-alpha-v0.2.2)",
   `Input schema: ${sizes.inputSchema} bytes`,
   `Output schema: ${sizes.outputSchema} bytes`,
   `Representative request: ${sizes.representativeRequest} bytes`,
