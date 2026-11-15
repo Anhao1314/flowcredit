@@ -189,7 +189,10 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
           toolCalls.push({
             step, name: call?.function?.name ?? null, ok: result.ok,
             evalRunId: authoritative?.evalRunId ?? null,
-            signalFingerprint: authoritative?.signalFingerprint ?? null
+            signalFingerprint: authoritative?.signalFingerprint ?? null,
+            // 对话内产物卡片用：工具原始结果（仅本地展示；不进入持久层）
+            result: result.ok ? result.result : null,
+            error: result.ok ? null : { code: result.error, message: result.message ?? null }
           });
           messages.push({ role: "tool", tool_call_id: call?.id ?? `call-${step}`, content: JSON.stringify(result) });
         }
@@ -338,7 +341,10 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
           toolCalls.push({
             step, name: call?.function?.name ?? null, ok: result.ok,
             evalRunId: authoritative?.evalRunId ?? null,
-            signalFingerprint: authoritative?.signalFingerprint ?? null
+            signalFingerprint: authoritative?.signalFingerprint ?? null,
+            // 对话内产物卡片用：工具原始结果（仅本地展示；不进入持久层）
+            result: result.ok ? result.result : null,
+            error: result.ok ? null : { code: result.error, message: result.message ?? null }
           });
           messages.push({ role: "tool", tool_call_id: call?.id ?? `call-${step}`, content: JSON.stringify(result) });
         }

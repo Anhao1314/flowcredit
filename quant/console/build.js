@@ -300,6 +300,20 @@ body[data-view="chat"] .footer{display:none}
 .msg.assistant{align-self:flex-start;background:transparent;padding:6px 0}
 .msg .meta{font-size:10.5px;color:var(--muted);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+/* ── 对话内产物卡片（Finch 式：工具输出直接出现在回答下方）────────────────── */
+.artifacts{display:flex;flex-direction:column;gap:8px;margin-top:10px;width:100%}
+.artifact{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:10px 12px}
+.artifact-head{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.artifact-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.artifact-dot.bad{background:var(--bad)}
+.artifact-title{font-size:12px;font-weight:600}
+.artifact-tool{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;color:var(--faint)}
+.artifact-link{margin-left:auto;font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:0}
+.artifact-link:hover{text-decoration:underline}
+.artifact-grid{display:flex;flex-wrap:wrap;gap:6px 18px}
+.artifact-kv{font-size:11.5px;color:var(--muted);line-height:1.5}
+.artifact-kv b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.artifact-note{font-size:10.5px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
 .msg b{font-weight:600}
 .msg code{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:1px 5px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .msg .li{display:flex;gap:7px;margin:2px 0}
@@ -1016,12 +1030,114 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     if (index >= 0) list[index] = entry; else list.push(entry);
     saveHistory(list);
   }
-  function bubble(cls, text, meta, cites) {
+  // ── 对话内产物卡片：把工具输出归一化为可在聊天流中渲染的 artifact ──────────
+  function artifactFromCall(call) {
+    if (!call) return null;
+    if (!call.ok || !call.result) {
+      return { tool: call.name || "tool", title: "工具调用失败", ok: false, view: null,
+        metrics: [{ label: "错误", value: (call.error && call.error.code) || "FAILED" }],
+        note: (call.error && call.error.message) || "" };
+    }
+    var r = call.result || {};
+    var a = r.authoritative || null;
+    var view = null, title = call.name || "tool", metrics = [], note = "";
+    if (call.name === "assess_frozen_dataset" && a) {
+      title = "裁决结果"; view = "overview";
+      metrics = [
+        { label: "Signal Score", value: a.signalScore },
+        { label: "Guard", value: String(a.guardStatus || "").toUpperCase() },
+        { label: "Decision", value: String(a.decisionStatus || "") },
+        { label: "MaxDD", value: a.signals && typeof a.signals.maxDrawdownPct === "number" ? a.signals.maxDrawdownPct.toFixed(2) + "%" : "n/a" }
+      ];
+      note = a.evalRunId || "";
+    } else if (call.name === "signal_components" && r.componentScores) {
+      title = "信号分量"; view = "overview";
+      var fmt2 = function(v) { return typeof v === "number" ? v.toFixed(2) : v; };
+      metrics = [
+        { label: "Momentum", value: fmt2(r.componentScores.momentum) },
+        { label: "Trend", value: fmt2(r.componentScores.trend) },
+        { label: "Stability", value: fmt2(r.componentScores.stability) },
+        { label: "Signal Score", value: r.signalScore }
+      ];
+    } else if (call.name === "guard_check" && r.guardStatus) {
+      title = "风险守卫"; view = "overview";
+      metrics = [
+        { label: "Guard", value: String(r.guardStatus).toUpperCase() },
+        { label: "Breaches", value: (r.breaches || []).length }
+      ];
+      note = (r.breaches || []).map(function(b) { return b.code || b.reason || ""; }).filter(Boolean).join(" · ");
+    } else if (call.name === "trial_metrics") {
+      title = "试验指标"; view = "rules";
+      if (Array.isArray(r.trials)) {
+        metrics = [{ label: "Trials", value: r.trials.length }];
+        if (r.selected) {
+          metrics.push({ label: "Best", value: r.selected.trialId });
+          metrics.push({ label: "DSR", value: typeof r.selected.dsr === "number" ? r.selected.dsr.toFixed(4) : "n/a" });
+        }
+      } else if (r.trialId) {
+        metrics = [
+          { label: r.trialId, value: typeof r.sharpePerPeriod === "number" ? r.sharpePerPeriod.toFixed(4) : "n/a" },
+          { label: "MaxDD", value: typeof r.maxDrawdownPct === "number" ? r.maxDrawdownPct.toFixed(2) + "%" : "n/a" }
+        ];
+      }
+    } else if (call.name === "data_quality" && typeof r.passed === "boolean") {
+      title = "数据质量"; view = "quality";
+      metrics = [
+        { label: "Gates", value: r.passed ? "PASS" : "FAIL" },
+        { label: "Critical", value: r.criticalCount == null ? 0 : r.criticalCount },
+        { label: "Rows", value: r.stats && r.stats.rows != null ? r.stats.rows : "n/a" }
+      ];
+      note = (r.findings || []).slice(0, 2).map(function(f) { return f.code || f.message || ""; }).filter(Boolean).join(" · ");
+    } else {
+      metrics = [{ label: "Status", value: "ok" }];
+    }
+    return { tool: call.name || "tool", title: title, ok: true, view: view, metrics: metrics, note: note };
+  }
+
+  function renderArtifacts(artifacts, host) {
+    if (host) host.innerHTML = "";
+    if (!artifacts || !artifacts.length) return host || null;
+    var box = host || document.createElement("div");
+    box.className = "artifacts";
+    artifacts.forEach(function(a) {
+      var card = document.createElement("div");
+      card.className = "artifact";
+      var head = document.createElement("div");
+      head.className = "artifact-head";
+      var dot = document.createElement("span"); dot.className = "artifact-dot" + (a.ok ? "" : " bad"); head.appendChild(dot);
+      var title = document.createElement("span"); title.className = "artifact-title"; title.textContent = a.title; head.appendChild(title);
+      var tool = document.createElement("span"); tool.className = "artifact-tool"; tool.textContent = a.tool; head.appendChild(tool);
+      if (a.view) {
+        var link = document.createElement("button");
+        link.type = "button"; link.className = "artifact-link"; link.textContent = "查看证据 →";
+        link.addEventListener("click", function() {
+          var nav = document.querySelector('button[data-view="' + a.view + '"]');
+          if (nav) nav.click();
+        });
+        head.appendChild(link);
+      }
+      card.appendChild(head);
+      var grid = document.createElement("div"); grid.className = "artifact-grid";
+      (a.metrics || []).forEach(function(m) {
+        var kv = document.createElement("div"); kv.className = "artifact-kv";
+        kv.textContent = m.label + " ";
+        var b = document.createElement("b"); b.textContent = String(m.value == null ? "n/a" : m.value);
+        kv.appendChild(b); grid.appendChild(kv);
+      });
+      card.appendChild(grid);
+      if (a.note) { var note = document.createElement("div"); note.className = "artifact-note"; note.textContent = a.note; card.appendChild(note); }
+      box.appendChild(card);
+    });
+    return box;
+  }
+
+  function bubble(cls, text, meta, cites, artifacts) {
     ensureThread();
     var div = document.createElement("div");
     div.className = "msg " + cls;
     if (cls === "assistant") div.innerHTML = formatText(text);
     else div.textContent = text;
+    if (artifacts && artifacts.length) div.appendChild(renderArtifacts(artifacts));
     if (meta) { var m = document.createElement("div"); m.className = "meta"; m.textContent = meta; div.appendChild(m); }
     if (cites && cites.length) {
       var box = document.createElement("div"); box.className = "cites";
@@ -1042,7 +1158,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       thread.appendChild(div);
     }
     if (!restoring) {
-      transcript.push({ role: cls, text: text, meta: meta || null, cites: cites || null });
+      transcript.push({ role: cls, text: text, meta: meta || null, cites: cites || null, artifacts: artifacts || null });
       saveCurrentHistory();
       renderHistory();
     }
@@ -1054,7 +1170,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     if (entry && Array.isArray(entry.entries) && entry.entries.length) {
       transcript = entry.entries.slice(-60);
       restoring = true;
-      transcript.forEach(function(item) { bubble(item.role === "assistant" ? "assistant" : "user", item.text, item.meta, item.cites); });
+      transcript.forEach(function(item) { bubble(item.role === "assistant" ? "assistant" : "user", item.text, item.meta, item.cites, item.artifacts); });
       restoring = false;
     }
   })();
@@ -1111,12 +1227,15 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     var meta = document.createElement("div");
     meta.className = "meta";
     meta.textContent = "生成中…";
+    var artifacts = document.createElement("div");
+    artifacts.className = "artifacts";
     msg.appendChild(text);
+    msg.appendChild(artifacts);
     msg.appendChild(meta);
     wrap.appendChild(msg);
     thread.appendChild(wrap);
     thread.scrollTop = thread.scrollHeight;
-    return { wrap: wrap, text: text, meta: meta };
+    return { wrap: wrap, text: text, meta: meta, artifacts: artifacts, calls: [] };
   }
   function removeLive(live) {
     if (live && live.wrap.parentNode) live.wrap.parentNode.removeChild(live.wrap);
@@ -1155,6 +1274,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     var acc = "";
     var live = null;
     var finalize = function(result) {
+      var liveCalls = live ? (live.calls || []) : [];
       removeLive(live); live = null;
       if (requestSession !== chatSession) return; // 会话已切换：丢弃旧回答，避免污染新会话
       var body = result || {};
@@ -1164,9 +1284,10 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         setBotMood("idle");
         return;
       }
+      var calls = (body.toolCalls && body.toolCalls.length) ? body.toolCalls : liveCalls;
       bubble("assistant", body.answer || ("(" + (body.code || "error") + ")"),
         (body.harnessStatus || "") + (body.code ? " · " + body.code : "") + (body.usage ? " · tokens " + body.usage.total_tokens : ""),
-        body.citations || []);
+        body.citations || [], calls.map(artifactFromCall).filter(Boolean));
       if (body.note) { var n = document.createElement("div"); n.className = "chat-hint"; n.textContent = body.note; thread.appendChild(n); thread.scrollTop = thread.scrollHeight; }
       var degraded = body.harnessStatus && body.harnessStatus !== "ok" && body.harnessStatus !== "not-requested";
       if (degraded && lastQuestion === question) renderRetry(question, requestSession);
@@ -1199,7 +1320,10 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
           } else if (payload.type === "tool") {
             var names = (payload.calls || []).map(function(call) { return (call.name || "?") + (call.ok ? " ✓" : " ✗"); }).join("、");
             if (!live) live = buildLive();
+            live.calls = (live.calls || []).concat(payload.calls || []);
+            renderArtifacts(live.calls.map(artifactFromCall).filter(Boolean), live.artifacts);
             live.meta.textContent = "步骤 " + (payload.step || "?") + " · " + names;
+            thread.scrollTop = thread.scrollHeight;
           } else if (payload.type === "done") {
             finalize(payload.result);
           }
@@ -1221,8 +1345,9 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       return pump().then(function() {
         if (buffer.trim()) handleFrame(buffer.trim());
         if (live) { // 服务端提前收尾且无 done 帧：把已收文本落地为普通回答
+          var liveCalls = live.calls || [];
           removeLive(live); live = null;
-          if (requestSession === chatSession) bubble("assistant", acc || "（空回答）", "", []);
+          if (requestSession === chatSession) bubble("assistant", acc || "（空回答）", "", [], liveCalls.map(artifactFromCall).filter(Boolean));
         }
       });
     }).catch(function(err) {
@@ -1308,7 +1433,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       thread.style.display = "flex";
       document.getElementById("chat-empty").style.display = "none";
       restoring = true;
-      entries.forEach(function(item) { bubble(item.role === "assistant" ? "assistant" : "user", item.text, item.meta, item.cites); });
+      entries.forEach(function(item) { bubble(item.role === "assistant" ? "assistant" : "user", item.text, item.meta, item.cites, item.artifacts); });
       restoring = false;
     } else {
       thread.style.display = "none";

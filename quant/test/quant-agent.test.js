@@ -83,10 +83,12 @@ test("happy path: two tool rounds then a scripted final answer", async () => {
   assert.equal(result.ok, true);
   assert.equal(result.harnessStatus, "ok");
   assert.equal(result.steps, 2);
-  assert.deepEqual(result.toolCalls, [
+  // 轨迹断言只比对结构字段；result 为 UI 产物卡片附加的原始工具输出。
+  assert.deepEqual(result.toolCalls.map(({ step, name, ok, evalRunId, signalFingerprint }) => ({ step, name, ok, evalRunId, signalFingerprint })), [
     { step: 1, name: "assess_frozen_dataset", ok: true, evalRunId: "qer-dd147a8ca0cb3163", signalFingerprint: "sig-982d57f915e36caf" },
     { step: 2, name: "trial_metrics", ok: true, evalRunId: null, signalFingerprint: null }
   ]);
+  assert.equal(result.toolCalls[0].result.authoritative.signalScore, runPipeline(cleanInput).authoritative.signalScore, "tool result payload must be exposed for chat artifacts");
   assert.match(result.answer, /工具输出/);
   assert.equal(result.authority, "deterministic-tools");
 });
@@ -102,7 +104,7 @@ test("forged model numbers never land anywhere authoritative", async () => {
   // 模型伪造文本只存在于注记层（answer），不在任何结构化字段或工具轨迹里。
   assert.match(result.answer, /999/);
   assert.equal(result.authoritative, undefined);
-  assert.deepEqual(result.toolCalls, [{ step: 1, name: "assess_frozen_dataset", ok: true, evalRunId: "qer-dd147a8ca0cb3163", signalFingerprint: "sig-982d57f915e36caf" }]);
+  assert.deepEqual(result.toolCalls.map(({ step, name, ok, evalRunId, signalFingerprint }) => ({ step, name, ok, evalRunId, signalFingerprint })), [{ step: 1, name: "assess_frozen_dataset", ok: true, evalRunId: "qer-dd147a8ca0cb3163", signalFingerprint: "sig-982d57f915e36caf" }]);
   const serialized = JSON.stringify(result);
   assert.ok(!/"signalScore":\s*100/.test(serialized), "forged signalScore must not appear as a field");
   assert.ok(!/"decisionStatus":\s*"approved"/.test(serialized), "forged decisionStatus must not appear as a field");
