@@ -6,6 +6,8 @@
 
 Two tracks, one principle: **agent form, deterministic soul** — the model may talk, the engine decides.
 
+<sub>[English](README.md) · [简体中文](README.zh-CN.md)</sub>
+
 [![CI](https://github.com/Anhao1314/flowcredit/actions/workflows/ci.yml/badge.svg)](https://github.com/Anhao1314/flowcredit/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/tag/Anhao1314/flowcredit?label=release&color=black)](https://github.com/Anhao1314/flowcredit/releases)
 [![API](https://img.shields.io/badge/API-flowcredit.api%2Fv1.1-2e5cf6)](docs/public-api-v1.md)
@@ -32,10 +34,19 @@ The same rule binds both: **authoritative numbers come from pure functions; the 
 | --- | --- |
 | **Repository release** | `external-alpha-v0.2.0` · agent `0.4.0` · API `flowcredit.api/v1.1` |
 | **Live deployment** | `external-alpha-v0.1.1` — update to v0.2.0 is a pending operator action |
-| **Finch** | Listed on [finchtech.ai](https://finchtech.ai) (operator-confirmed) |
+| **Finch** | Listed on [finchtech.ai](https://finchtech.ai) as *FlowCredit － Business Risk Intelligence* ([agent card](https://www.finchtech.ai/a2a/e96e9a01-50aa-4686-bd0e-1aa9cdfcf967/agent-card.json)) |
 | **Risk engine** | `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1` |
 | **Tests** | 87/87 agent · 157/157 quant · isolation lint 0 violations |
 | **Honest headline** | No quant candidate passes significance (best PSR(0) 0.942 < 0.95) — this system is a falsifier, not a money printer |
+
+## Product surface
+
+<p align="center">
+  <img src="docs/assets/console-overview.png" alt="Quant console — overview: industry layer map, guard halt banner, dataset cards" width="49%">
+  <img src="docs/assets/console-paper.png" alt="Quant console — paper view: equity curve vs backtest, fills, approval gate" width="49%">
+</p>
+
+<p align="center"><sub>Local console: adjudication overview (left) and paper-trading rehearsal with the human approval gate (right).</sub></p>
 
 ## Two tracks, one boundary
 
