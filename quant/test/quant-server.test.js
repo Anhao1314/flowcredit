@@ -303,7 +303,7 @@ test("Finch proxy forwards {prompt} to the local business agent", async () => {
   const target = `http://127.0.0.1:${upstream.address().port}`;
   try {
     const server = await startServer({
-      env: { ...process.env, FINCH_PROXY_TARGET: target, CONSOLE_AUTH_ENABLED: "false" },
+      env: { FINCH_PROXY_TARGET: target, CONSOLE_AUTH_ENABLED: "false" },
       apiKey: "sk-test",
       transport: createScriptedTransport(scripts.scenarios["direct-answer"])
     });
