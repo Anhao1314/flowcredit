@@ -1,24 +1,27 @@
 # FlowCredit Finch Submission Checklist
 
-Status: **Finch Publisher Ready — public HTTPS deployment live.** External Alpha v0.1 is deployed, verified and ready to be mapped into the Finch Publisher form; it has not yet been submitted to, approved by, certified by, or published on Finch. The original frozen baseline label is retained verbatim because the immutable release gate asserts it: "Submission Candidate — pending public deployment".
+Status: **Listed on Finch (finchtech.ai) — operator-confirmed.** The live External Alpha service is deployed and publicly verified. Repository release **external-alpha-v0.2.0** (agent package 0.4.0) is prepared in this repository; updating the production deployment to it is an operator action and has not been performed here.
 
-This package prepares FlowCredit for Finch's Direct API Agent workflow. It does not claim that the Agent has been submitted, approved, published, certified or accepted by Finch.
+This package documents the Direct API Agent integration. It does not claim approval, certification or endorsement by Finch beyond the operator-confirmed listing.
 
-## Live Deployment Status
+## Release Status
 
 | Item | Status |
 | --- | --- |
-| Git Release | Published — tag `external-alpha-v0.1` at `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9` |
-| Public HTTPS Deployment | **Live** (Render Docker Web Service, Singapore) |
-| External Assessment #1 | **Passed** (TAI 93.8 · CCI 929 · Risk Grade A) |
-| Pre-submission regression (`finch-pre-submission-001`) | **Passed** (identical deterministic result; replay PASS; 409 conflict PASS) |
-| Public API | **Verified** over public HTTPS |
-| Finch Submission Package | **Ready** |
-| Finch Marketplace Submission | Pending |
-| Finch Approval | Pending |
+| Repository release (prepared) | `external-alpha-v0.2.0` · agent 0.4.0 · API `flowcredit.api/v1.1` |
+| Live deployment | `external-alpha-v0.1.1` (Render Docker Web Service, Singapore) — update to v0.2.0 pending operator action |
+| Public API | Verified over public HTTPS; v1.1 adds `GET /api/v1/schema` and top-level `meta` |
+| Finch listing | Listed on finchtech.ai (operator-confirmed; date/URL to be recorded) |
 | Production Calibration | Not yet |
 
-Current hosting is a Render Free Web Service (internal note only — do not present free hosting as a Marketplace product benefit; review cold-start behavior before the Finch official contract test).
+## v0.2.0 changes (repository)
+
+- API v1.1: `GET /api/v1/schema` (machine-readable input/output schemas) and optional top-level `meta` on successful responses (`release` / `engine` / `intake` / `modelLayer`).
+- Legacy v0.1 / v0.2 / v0.2.1 routes and engines removed; public surface remains `POST /api/v1/assess` + `POST /api/v1/chat`; internal compatibility surface reduced to `/fc/ai/v0.3/*`.
+- `assessmentFingerprint` continues to exclude `meta` and language-model annotations.
+- Dockerfile records `org.opencontainers.image.revision` (`GIT_SHA`) for deployment traceability.
+
+Current hosting is a Render Web Service (Singapore). Review cold-start behavior before contract tests against the updated deployment.
 
 ## Submission Profile
 

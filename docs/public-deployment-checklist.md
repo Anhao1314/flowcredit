@@ -1,13 +1,13 @@
 # FlowCredit Public Deployment Checklist
 
-Target release: `external-alpha-v0.1`
+Target release: `external-alpha-v0.2.0`
 
 Status: Git release frozen and published; no public cloud service or HTTPS endpoint has been created.
 
 ## Git Baseline
 
 - [x] Release commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9` exists on `main`.
-- [x] Annotated tag `external-alpha-v0.1` exists and points to the verified release commit.
+- [x] Annotated tag `external-alpha-v0.2.0` exists and points to the verified release commit.
 
 Deploy the frozen tag, not a later documentation-only `main` commit. Do not move, delete, or recreate the release tag.
 

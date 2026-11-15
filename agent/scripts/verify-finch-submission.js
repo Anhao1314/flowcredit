@@ -24,18 +24,17 @@ const testing = documents["TESTING.md"];
 const allDocs = Object.values(documents).join("\n");
 
 for (const marker of [
-  "FlowCredit Risk Intelligence Agent", "Submission Candidate — pending public deployment",
-  "POST /api/v1/assess", "PENDING PUBLIC DEPLOYMENT", "GET /health",
-  "flowcredit.api/v1", "flowcredit.intake/v0.3.1", "flowcredit.risk_result/v0.2.1", "external-alpha-v0.1"
+  "FlowCredit Risk Intelligence Agent", "POST /api/v1/assess", "POST /api/v1/chat",
+  "GET /health", "GET /api/v1/schema",
+  "flowcredit.api/v1.1", "flowcredit.intake/v0.3.1", "flowcredit.risk_result/v0.2.1", "external-alpha-v0.2.0"
 ]) assert.ok(submission.includes(marker), `SUBMISSION.md is missing: ${marker}`);
 assert.ok(listing.includes("Pricing Status"));
 assert.ok(listing.includes("TBD before marketplace publication"));
 assert.ok(contract.includes("data.*"));
 assert.ok(contract.includes("Idempotency-Key"));
-assert.ok(testing.includes("Public HTTPS tests remain pending until deployment"));
+assert.ok(testing.includes("https://flowcredit-api.onrender.com"));
 assert.equal(/\b(?:TODO|FIXME)\b/.test(allDocs), false, "Submission package contains an unexplained TODO or FIXME");
-assert.ok(allDocs.includes("api.example.com"), "Submission package must show the planned example URL");
-assert.ok(allDocs.includes("PLACEHOLDER — replace after public deployment"), "The example domain must be explicitly marked for replacement");
+assert.ok(allDocs.includes("https://flowcredit-api.onrender.com"), "Submission package must reference the live endpoint");
 
 const contracts = resolve(AGENT_ROOT, "contracts");
 const inputSchemaPath = resolve(contracts, "finch-assess-input.schema.json");
@@ -48,7 +47,7 @@ const request = JSON.parse(await readFile(requestPath, "utf8"));
 assert.equal(inputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
 assert.equal(outputSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
 assert.equal(request.modelConsent, false, "Representative input must not require DeepSeek");
-assert.equal(request.apiVersion, "flowcredit.api/v1");
+assert.equal(request.apiVersion, "flowcredit.api/v1.1");
 
 const sizes = {
   inputSchema: (await stat(inputSchemaPath)).size,
@@ -61,16 +60,16 @@ assert.ok(sizes.outputSchema <= 32_768);
 assert.ok(sizes.representativeResponse <= 65_536);
 
 const constants = await readFile(resolve(AGENT_ROOT, "src/constants.js"), "utf8");
-assert.match(constants, /RELEASE_VERSION[\s\S]*external-alpha-v0\.1/);
+assert.match(constants, /RELEASE_VERSION[\s\S]*external-alpha-v0\.2\.0/);
 
 run("Finch contract validator", ["scripts/validate-finch-contract.js"]);
 run("Release verification", ["scripts/verify-release.js"]);
 
 process.stdout.write([
-  "PASS FlowCredit Finch Submission Package v0.1",
+  "PASS FlowCredit Finch Submission Package v0.4.0 (external-alpha-v0.2.0)",
   `Input schema: ${sizes.inputSchema} bytes`,
   `Output schema: ${sizes.outputSchema} bytes`,
   `Representative request: ${sizes.representativeRequest} bytes`,
   `Representative checked-in response: ${sizes.representativeResponse} bytes`,
-  "Status: Submission Candidate — pending public deployment"
+  "Status: repository release prepared — production deployment update is an operator action"
 ].join("\n") + "\n");

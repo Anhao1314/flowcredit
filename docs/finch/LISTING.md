@@ -1,6 +1,6 @@
 # FlowCredit Finch Listing Copy
 
-Status: copy-ready for Finch Publisher entry. The live External Alpha service is deployed and publicly verified (HTTPS); this is still not a published Marketplace listing, and no claim of being published, approved or certified by Finch is made here.
+Status: **Listed on Finch (finchtech.ai) — operator-confirmed.** The live External Alpha service is deployed and publicly verified (HTTPS). Repository release `external-alpha-v0.2.0` is prepared; listing copy below is current for the Direct API Agent entry. Listing date/URL are to be recorded by the operator.
 
 ## Agent Name
 

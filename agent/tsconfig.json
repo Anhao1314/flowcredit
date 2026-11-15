@@ -13,7 +13,6 @@
   },
   "files": [
     "src/constants.js",
-    "src/rules-v02.js",
     "src/rules-v021.js"
   ]
 }

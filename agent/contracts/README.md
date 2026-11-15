@@ -10,7 +10,7 @@ Content-Type: application/json
 Authorization: Bearer <FLOWCREDIT_API_KEY>
 ```
 
-The recommended endpoint always returns the canonical `flowcredit.api/v1` envelope and needs no custom header. The legacy Finch adapter remains available at `POST /fc/ai/v0.3/assess` when `X-FlowCredit-Contract-Version: flowcredit.finch-assess/v0.1` is sent. Existing browser callers that omit the header retain the backward-compatible response shape.
+The recommended endpoint always returns the canonical `flowcredit.api/v1.1` envelope and needs no custom header. The legacy Finch adapter remains available at `POST /fc/ai/v0.3/assess` when `X-FlowCredit-Contract-Version: flowcredit.finch-assess/v0.1` is sent. Existing browser callers that omit the header retain the backward-compatible response shape.
 
 ## Natural Language Adapter (v0.1)
 

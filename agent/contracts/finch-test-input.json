@@ -1,5 +1,5 @@
 {
-  "apiVersion": "flowcredit.api/v1",
+  "apiVersion": "flowcredit.api/v1.1",
   "draftId": "finch-contract-healthy-v01",
   "modelConsent": false,
   "draft": {
@@ -31,22 +31,85 @@
     "top5ConcentrationPct": 36,
     "relatedPartyRevenuePct": 8,
     "monthlySeries": [
-      { "period": "2026-03", "rawTokensM": 72, "validRatePct": 92, "revenueUsd": 94000, "computeSpendUsd": 55000 },
-      { "period": "2026-04", "rawTokensM": 75, "validRatePct": 93, "revenueUsd": 96000, "computeSpendUsd": 56000 },
-      { "period": "2026-05", "rawTokensM": 77, "validRatePct": 93, "revenueUsd": 97000, "computeSpendUsd": 56500 },
-      { "period": "2026-06", "rawTokensM": 79, "validRatePct": 94, "revenueUsd": 99000, "computeSpendUsd": 57500 },
-      { "period": "2026-07", "rawTokensM": 81, "validRatePct": 94, "revenueUsd": 101000, "computeSpendUsd": 59000 },
-      { "period": "2026-08", "rawTokensM": 80, "validRatePct": 94, "revenueUsd": 100000, "computeSpendUsd": 58000 }
+      {
+        "period": "2026-03",
+        "rawTokensM": 72,
+        "validRatePct": 92,
+        "revenueUsd": 94000,
+        "computeSpendUsd": 55000
+      },
+      {
+        "period": "2026-04",
+        "rawTokensM": 75,
+        "validRatePct": 93,
+        "revenueUsd": 96000,
+        "computeSpendUsd": 56000
+      },
+      {
+        "period": "2026-05",
+        "rawTokensM": 77,
+        "validRatePct": 93,
+        "revenueUsd": 97000,
+        "computeSpendUsd": 56500
+      },
+      {
+        "period": "2026-06",
+        "rawTokensM": 79,
+        "validRatePct": 94,
+        "revenueUsd": 99000,
+        "computeSpendUsd": 57500
+      },
+      {
+        "period": "2026-07",
+        "rawTokensM": 81,
+        "validRatePct": 94,
+        "revenueUsd": 101000,
+        "computeSpendUsd": 59000
+      },
+      {
+        "period": "2026-08",
+        "rawTokensM": 80,
+        "validRatePct": 94,
+        "revenueUsd": 100000,
+        "computeSpendUsd": 58000
+      }
     ],
     "operatingHistoryDays": 720,
     "dataCoveragePct": 100,
-    "R": [64, 65, 63, 67, 68, 66, 70, 71],
-    "C": [62, 63, 62, 65, 66, 65, 68, 69],
+    "R": [
+      64,
+      65,
+      63,
+      67,
+      68,
+      66,
+      70,
+      71
+    ],
+    "C": [
+      62,
+      63,
+      62,
+      65,
+      66,
+      65,
+      68,
+      69
+    ],
     "loopWashRatePct": 2,
     "currentExposure": 20000,
     "evidence": [
       {
-        "fields": ["periodStart", "periodEnd", "inputTokensM", "outputTokensM", "validRatePct", "revenueUsd", "computeSpendUsd", "monthlySeries"],
+        "fields": [
+          "periodStart",
+          "periodEnd",
+          "inputTokensM",
+          "outputTokensM",
+          "validRatePct",
+          "revenueUsd",
+          "computeSpendUsd",
+          "monthlySeries"
+        ],
         "sourceDomain": "billing",
         "verification": "system_api",
         "observedAt": "2026-09-01T00:00:00Z",
@@ -54,7 +117,13 @@
         "referenceHash": "sha256:2f083fd14111819f0f35e9af881a51c4ef09f1ae7c7b2f82391a94f5e3641e23"
       },
       {
-        "fields": ["gpuHours", "gpuModel", "R", "C", "dataCoveragePct"],
+        "fields": [
+          "gpuHours",
+          "gpuModel",
+          "R",
+          "C",
+          "dataCoveragePct"
+        ],
         "sourceDomain": "gpu_telemetry",
         "verification": "system_api",
         "observedAt": "2026-09-01T00:00:00Z",
@@ -62,7 +131,13 @@
         "referenceHash": "sha256:bb88b0840f232612a0e3f21262b51ac0276588dbe90b77e6f101dc3955711508"
       },
       {
-        "fields": ["repaymentRatePct", "overdue30Pct", "payingCustomers", "top5ConcentrationPct", "operatingHistoryDays"],
+        "fields": [
+          "repaymentRatePct",
+          "overdue30Pct",
+          "payingCustomers",
+          "top5ConcentrationPct",
+          "operatingHistoryDays"
+        ],
         "sourceDomain": "bank_treasury",
         "verification": "system_api",
         "observedAt": "2026-09-01T00:00:00Z",

@@ -43,9 +43,9 @@ test("TEST 9 natural-language chat is a canonical HTTP 200 with insufficient-evi
     const text = await response.text();
     const body = JSON.parse(text);
     assert.equal(response.status, 200);
-    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data"]);
+    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data", "meta"]);
     assert.equal(body.ok, true);
-    assert.equal(body.apiVersion, "flowcredit.api/v1");
+    assert.equal(body.apiVersion, "flowcredit.api/v1.1");
     assert.equal(body.data.status, "insufficient-evidence");
     assert.match(body.data.message, /信息或证据不足/);
     assert.match(body.data.message, /基于当前已提供、尚未充分核验的数据，可计算的局部维度：/);
@@ -132,7 +132,7 @@ test("chat rejects invalid prompt input with the standard client-error envelope"
       assert.equal(response.status, 400, `${JSON.stringify(payload)} should be a client error`);
       assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "error"]);
       assert.equal(body.ok, false);
-      assert.equal(body.apiVersion, "flowcredit.api/v1");
+      assert.equal(body.apiVersion, "flowcredit.api/v1.1");
       assert.equal(body.error.code, "INVALID_INPUT");
       assert.ok(body.error.details.some(detail => detail.keyword === keyword), `expected a ${keyword} detail`);
     }
@@ -190,7 +190,7 @@ test("chat hides unexpected internal errors behind canonical HTTP 500", async ()
     const response = await chat(base, { prompt: OFFICIAL_CN });
     const body = await response.json();
     assert.equal(response.status, 500);
-    assert.equal(body.apiVersion, "flowcredit.api/v1");
+    assert.equal(body.apiVersion, "flowcredit.api/v1.1");
     assert.equal(body.error.code, "INTERNAL_ERROR");
     assert.equal(JSON.stringify(body).includes("private implementation detail"), false);
     assert.equal(Object.hasOwn(body, "stack"), false);
@@ -221,7 +221,7 @@ test("TEST 10/11 existing assess behaviour and the healthy fixture are unchanged
     const text = await response.text();
     const body = JSON.parse(text);
     assert.equal(response.status, 200);
-    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data"]);
+    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data", "meta"]);
     assert.equal(body.schemaVersion, "flowcredit.risk_result/v0.2.1");
     assert.equal(Object.hasOwn(body, "CCI"), false);
     assert.equal(body.data.readinessStatus, "ready");

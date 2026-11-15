@@ -1,6 +1,6 @@
 # FlowCredit External Alpha Deployment
 
-This guide defines the vendor-neutral deployment baseline for release `external-alpha-v0.1`. It prepares controlled external-alpha operation; it does not claim production readiness or a service-level agreement.
+This guide defines the vendor-neutral deployment baseline for release `external-alpha-v0.2.0`. It prepares controlled external-alpha operation; it does not claim production readiness or a service-level agreement.
 
 ## Architecture
 
@@ -38,8 +38,8 @@ Service checks remain `GET /health` and `GET /ready`. The gateway can expose the
 
 | Layer | Version |
 | --- | --- |
-| Release | `external-alpha-v0.1` |
-| Public API | `flowcredit.api/v1` |
+| Release | `external-alpha-v0.2.0` |
+| Public API | `flowcredit.api/v1.1` |
 | Intake | `flowcredit.intake/v0.3.1` |
 | Risk engine | `flowcredit.risk_result/v0.2.1` |
 
@@ -76,7 +76,7 @@ Copy `agent/.env.example` to a deployment-local `.env` or map the same values th
 Required for External Alpha:
 
 ```text
-FLOWCREDIT_RELEASE_VERSION=external-alpha-v0.1
+FLOWCREDIT_RELEASE_VERSION=external-alpha-v0.2.0
 HOST=0.0.0.0
 PORT=8787
 AUTH_ENABLED=true
@@ -121,7 +121,7 @@ curl --fail http://127.0.0.1:8787/ready
 curl --fail http://127.0.0.1:8787/api/v1
 ```
 
-All three responses must report `release: external-alpha-v0.1` in their response data.
+All three responses must report `release: external-alpha-v0.2.0` in their response data.
 
 ## Reverse Proxy Reference
 
@@ -210,7 +210,7 @@ curl -i \
   --data-binary @agent/contracts/finch-test-input.json
 ```
 
-Expected result: HTTP 200, `ok=true`, `apiVersion=flowcredit.api/v1`, canonical business results under `data.*`, and both deterministic fingerprints present. Once completed against the real public HTTPS service, record this invocation as **External Assessment #1** without storing its Authorization header.
+Expected result: HTTP 200, `ok=true`, `apiVersion=flowcredit.api/v1.1`, canonical business results under `data.*`, and both deterministic fingerprints present. Once completed against the real public HTTPS service, record this invocation as **External Assessment #1** without storing its Authorization header.
 
 ### Public idempotency test
 
@@ -260,7 +260,7 @@ docker compose down
 4. Confirm `/health`, `/ready` and one authenticated representative assessment.
 5. Do not reuse assumptions from in-memory idempotency/session state; those stores reset on restart.
 
-The recommended release baseline and tag are both `external-alpha-v0.1`. Rollback should select an immutable image digest or Git tag, not a moving `latest` tag.
+The recommended release baseline and tag are both `external-alpha-v0.2.0`. Rollback should select an immutable image digest or Git tag, not a moving `latest` tag.
 
 ## Current Limits
 

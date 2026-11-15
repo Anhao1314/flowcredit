@@ -1,11 +1,11 @@
 # FlowCredit Finch Submission Testing
 
-Status: local Contract and Release tests pass, and the public HTTPS sequence has been executed successfully against the live External Alpha service. (Original pre-deployment note, retained verbatim for the frozen release validator: "Public HTTPS tests remain pending until deployment".)
+Status: local Contract and Release tests pass, and the public HTTPS sequence has been executed successfully against the live External Alpha service. Repository release `external-alpha-v0.2.0` (API v1.1) is prepared; re-run the public sequence after the operator updates the deployment.
 
 ## Live Public Endpoint
 
 - Base URL: `https://flowcredit-api.onrender.com`
-- Frozen runtime: `external-alpha-v0.1` at commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`
+- Current runtime: `external-alpha-v0.1.1` (deployment update to v0.2.0 pending operator action)
 - The provider Bearer secret is never written into documents, logs or screenshots.
 
 ## Verified Public Results (External Alpha)

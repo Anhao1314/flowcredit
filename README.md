@@ -1,21 +1,27 @@
-# FlowCredit — Evidence-Aware Risk Workflow with a Constrained LLM Sidecar
+# FlowCredit — Evidence-Aware Risk Workflow + Deterministic Quant Research
 
 [![CI](https://github.com/Anhao1314/flowcredit/actions/workflows/ci.yml/badge.svg)](https://github.com/Anhao1314/flowcredit/actions/workflows/ci.yml)
 
-FlowCredit is a vertical **Evidence → Risk → Action** risk workflow: it normalizes supplied business evidence, computes deterministic risk signals, and returns a review status with prioritized follow-up actions. An optional LLM sidecar (a service that calls DeepSeek for text tasks) assists only with extraction, explanation and text review; the deterministic rule engine owns the authoritative results.
+FlowCredit is two connected tracks over one governance principle — **agent form, deterministic soul**:
 
-**Status:** External Alpha `v0.1.1` — experimental, not a calibrated lending system. This is a vertical business workflow, not a general-purpose agent runtime. All validation is offline: local tests, synthetic fixtures and contract validators. There are no live external connectors and no online model evaluation.
+1. **Credit-risk agent** (this repository's public product): normalizes supplied business evidence, computes deterministic risk signals, and returns a review status with prioritized next actions. An optional LLM sidecar only extracts, explains and reviews text; the deterministic engine owns every score, grade and decision status. **Listed on Finch (finchtech.ai) — operator-confirmed.**
+2. **Quant research stack** (`quant/`): a deterministic signal/backtest/adjudication engine with DSR/PSR correction, an LLM proposal loop, a CoALA-style research memory, a paper/testnet execution path and a local console. It is research infrastructure, not a live trading system.
 
-[Overview](#30-second-overview) · [Architecture](#architecture--authority-boundary) · [Evidence](#verified-evidence) · [Quick Start](#quick-start) · [API](#deterministic-risk-engine--public-api) · [Limitations](#limitations--non-goals) · [MIT](LICENSE)
+**Status:** repository release `external-alpha-v0.2.0` · agent `0.4.0` · API `flowcredit.api/v1.1` · engine `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1`. The live deployment currently reports `external-alpha-v0.1.1`; updating production is an operator action. Not a calibrated lending system.
 
-## 30-Second Overview
+## Repository map
 
-- **Problem.** AI-native operators (inference providers, compute sellers, agent services) hold real activity and revenue, but conventional review cannot tell which supplied numbers are coherent, missing or unverifiable. FlowCredit turns a business draft into structured evidence, deterministic risk signals and a prioritized list of what to fix or supply next. Here, *evidence* means the supplied facts plus field-level provenance metadata; the runtime does not independently verify them.
-- **LLM role.** With explicit `modelConsent`, the sidecar can read free text and propose an intake draft, explain a result, or review the wording. The deterministic path works without it.
-- **Authority boundary.** A field whitelist and sanitizer strip reserved score, grade, limit, approval and decision fields; JSON Schema validation fails closed; the risk engine owns TAI, CCI, grade, evidence quality and veto. Model-extracted business fields can still become inputs to the deterministic calculation, and textual grounding against the user's original text is not implemented yet.
-- **Evidence.** 110 engineering tests; 30 synthetic evaluation cases (18 deterministic-extractor, 12 scripted-model); 4 controlled injection comparisons with 0 authoritative mismatches; `ONLINE_MODEL=NOT_RUN`.
+| Path | What it is |
+| --- | --- |
+| `agent/` | Finch-listed risk agent: HTTP service, intake v0.3.1, risk engine v0.2.1, optional LLM harness, contract validators |
+| `agent/contracts/` | Machine-readable input/output schemas + representative fixtures |
+| `quant/` | Deterministic quant research stack (signal, risk guard, backtest, DSR/PSR, rules, proposals, paper, console, MCP) |
+| `quant/research-memory/` | Evidence-derived research memory v0.1: records, knowledge, memory preview |
+| `quant/journal/`, `quant/knowledge/` | Episodic (JSONL) and semantic (validated JSON) memory layers |
+| `docs/` | Current product/API/Finch docs; `docs/archive/` holds superseded documents |
+| `deploy/` | Alternative deployment example (Caddy); production uses Render |
 
-## Architecture & Authority Boundary
+## Architecture & authority boundary
 
 ```mermaid
 flowchart LR
@@ -27,134 +33,93 @@ flowchart LR
   E -->|invalid| X["HTTP 400 · fail closed"]
   E -->|valid| F["Deterministic risk engine<br/>risk_result v0.2.1"]
   F --> G["Output validation<br/>+ versioned envelope"]
-  G --> H["Versioned API response<br/>data.*"]
+  G --> H["Public API v1.1 response<br/>data.* + meta"]
   F -.->|"facts only"| I["Optional explanation / review<br/>(model text, never a score)"]
-  I -.->|"optional non-authoritative annotations"| H
+  I -.->|"non-authoritative annotations"| H
 ```
 
-- The model cannot directly provide or overwrite reserved result fields: `CCI`, `riskGrade`, `recommendedLimit`, `PD_pct`, `expectedLoss`, `decisionStatus`, `TAI`.
-- Model-extracted allowed business fields (for example `revenueUsd`) still enter schema validation and the deterministic calculation. No textual grounding between those fields and the user's original text is implemented.
-- The sidecar can add non-authoritative modelAnalysis / modelReview annotations, but it never writes or overrides authoritative result fields.
+- The model cannot provide or overwrite reserved fields: `TAI`, `CCI`, `riskGrade`, `PD_pct`, `expectedLoss`, `recommendedLimit`, `decisionStatus`.
+- Model-extracted allowed business fields still pass schema validation and the deterministic calculation; no textual grounding against the user's original text is implemented.
+- `assessmentFingerprint` excludes request metadata (`meta`), session IDs and language-model annotations.
 
-Implementation entry points: [intake](agent/src/intake-v03.js) · [normalization](agent/src/normalize-v021.js) · [risk engine](agent/src/risk-core-v021.js) · [output validation](agent/src/validate-v021.js) · [API server](agent/src/server.js).
+## Credit-risk agent: public API v1.1
 
-## Why the Boundary Matters
-
-The boundary is enforced structurally, not by prompt wording alone. This table separates what the offline governance suite exercises from what remains open.
-
-| Verified in `OFFLINE_SCRIPTED` (supplied model output) | Open boundary |
+| Endpoint | Purpose |
 | --- | --- |
-| Reserved score/decision fields are stripped and reported in `ignoredInputs` | Model-added allowed business fields are not grounded against the user's text |
-| Malformed JSON is rejected at the harness JSON boundary | Evidence verification levels are declared in the payload; no live connector confirms them |
-| Schema-invalid drafts fail closed before any risk computation | Two deterministic parser defects remain unfixed and are scored as failures |
-| Unknown model fields are ignored | No real bank, billing, identity or on-chain connector exists |
-| A conflicting model explanation never replaces the engine's grade | |
-| 4 injected-field cases match a clean control on 13 authoritative fields | |
+| `POST /api/v1/assess` | Deterministic assessment (canonical envelope; optional top-level `meta`) |
+| `POST /api/v1/chat` | Natural-language intake → same deterministic runtime |
+| `GET /api/v1/schema` | Machine-readable input/output JSON Schemas + versions |
+| `GET /api/v1`, `/health`, `/ready` | Discovery, liveness, deterministic readiness (works without the model) |
+| `POST /fc/ai/v0.3/*` | Internal compatibility surface (extract/assess/ask/config/schema) |
 
-These results describe how the system handles **supplied** model output. They do not show that a live model has the same behaviour; `ONLINE_MODEL=NOT_RUN`.
+Legacy v0.1 / v0.2 / v0.2.1 routes and engines were removed in v0.4.0. See the [release notes](docs/releases/external-alpha-v0.2.md) and [contract](docs/finch/CONTRACT.md).
 
-## Verified Evidence
+## Quant research stack
 
-Recorded validation: 2026-10-29, Node.js 22.19.0. Commands, exit codes and caveats: [validation record](docs/validation-20261029.md).
+- **Deterministic core**: signal engine, pre-trade guard, net-of-cost backtest, Sharpe/MaxDD/turnover, PSR, deflated Sharpe (SSRN 2460551, Eq. 2), effective-trials correction (A.3).
+- **Proposal loop**: LLM proposes parameter candidates → schema/bounds/dedup → same-pool adjudication across BTC/ETH → report. Machine never promotes a rule.
+- **Research memory v0.1**: adjudication evidence → 14 experiment records (failures retained) → 5 scoped knowledge entries → human-readable preview. Knowledge is injected into proposal prompts; no model calls are made by the memory layer.
+- **Execution rehearsal**: local paper engine and Binance Spot testnet adapter (fake funds, per-order human approval; no real capital).
+- **Interfaces**: local console (8 views, search, sortable tables), MCP server (7 deterministic tools, no order tools).
+- **Honest result so far**: no candidate passes significance (best PSR(0) 0.942 < 0.95); multi-market direction is consistent for 3/4 candidates; calibrated costs (BTC 13.47bps / ETH 15.29bps) are ~2× the frozen 7bps estimate. The system is a falsifier, not a money printer.
 
-| Check | Result | Evidence |
-| --- | --- | --- |
-| Engineering tests | **110/110 passed**, 0 failed, 0 skipped | [validation record](docs/validation-20261029.md) |
-| Offline dataset | **30 synthetic cases** = 18 deterministic extractor + 12 scripted model | [dataset](agent/eval/datasets/agent-eval-v1.jsonl) · `fc-agent-eval/v1` |
-| Deterministic extractor, full set (18 cases) | precision **63/65 (96.92%)**, recall **63/66 (95.45%)**, case pass **16/18 (88.89%)** | [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
-| Scripted-model governance | 10/10 scored cases across 7 checks | [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
-| Controlled injection comparison | **4 cases × 13 authoritative fields, 0 mismatches** | [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
-| Contract validators | Public API and Finch validators passed on synthetic fixtures | [validation record](docs/validation-20261029.md) |
-| Live model quality | `ONLINE_MODEL=NOT_RUN` | [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
-| Human semantic agreement | `HUMAN_SEMANTIC_EVAL=NOT_MEASURED` | [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
-| Online latency, tokens, cost | `ONLINE_LATENCY_TOKEN_COST=NOT_RUN` | [artifact](agent/eval/results/agent-eval-2026-10-29.json) |
+## Verified evidence (local, offline)
 
-Reading notes:
+| Check | Result |
+| --- | --- |
+| Agent tests (`cd agent && NO_MODEL_ENV=1 npm test`) | **87/87** |
+| Quant tests (`cd quant && ls test/*.test.js \| xargs node --test`) | **157/157** |
+| Zone isolation lint (`npm run check:quant`) | 0 violations |
+| Offline agent evaluation | 30 synthetic cases · 4 injection comparisons · `ONLINE_MODEL=NOT_RUN` ([artifact](agent/eval/results/agent-eval-2026-11-15.json)) |
+| Contract validators | `validate:finch-contract` + `validate:public-api` pass |
+| Release gate | `verify:release` / `verify:finch-submission` pass in a tree without `.env` (the gate rejects any `.env` file by design) |
 
-- The extractor metrics are parser metrics over a fixed synthetic label vocabulary, not LLM metrics.
-- A controlled injection comparison rebuilds the same allowed business fields without the injected fields and requires identical authoritative output.
-- The two known parser failures are included in the full-set metrics; they are not excluded.
-- The 16-case documented-contract subset (57/57 precision and recall) is a secondary reference only and must not be read as the full result or as an accuracy claim.
-- `OFFLINE_SCRIPTED` results describe system governance for supplied outputs, not live-model robustness.
+## Quick start
 
-## Quick Start
-
-Requirements: Node.js `^22.19.0 || >=24.0.0`, Docker with Compose. No online model key is needed for the deterministic path.
+Agent (deterministic path needs no model key):
 
 ```bash
-git clone https://github.com/Anhao1314/flowcredit.git
-cd flowcredit/agent
-cp .env.example .env    # set FLOWCREDIT_API_KEY to at least 16 characters
-docker compose up --build -d
-curl --fail http://127.0.0.1:8787/ready
-```
-
-```bash
-curl --fail-with-body -X POST http://127.0.0.1:8787/api/v1/assess \
-  -H 'Authorization: Bearer <YOUR_LOCAL_API_KEY>' \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: readme-synthetic-001' \
-  --data-binary @contracts/finch-test-input.json
-```
-
-`contracts/finch-test-input.json` is synthetic test data. `modelConsent: false` keeps the request fully deterministic. Open `http://127.0.0.1:8787/` for the static interface. The recorded validation does **not** include a Docker image build (`NOT_RUN`); the Compose path is the intended local run, not a verified build artifact.
-
-## Deterministic Risk Engine & Public API
-
-**Current authoritative chain:** `intake v0.3.1 → normalize-v021 → risk-core-v021 → validate-v021 → public API v1`.
-
-TAI (Token Activity Index) is a 0–100 coherence score for metered token activity. CCI (Compute Credibility Index) is a 0–1000 composite across five dimensions: token activity, repayment, customer structure, unit economics and operating continuity.
-
-```text
-TAI (0–100) = reconciliation×10% + validity×35% + physical×25%
-            + commercial×20% + continuity×10%
-
-CCI (0–1000) = round((TAI×40% + repayment×25% + customer×15%
-              + economics×10% + operatingContinuity×10%) × 10)
-```
-
-Missing required components produce `null` instead of redistributing weight. `PD_pct`, `expectedLoss` and `recommendedLimit` remain `null`; the system does not approve loans or execute transactions. TAI is not revenue, and CCI is not a calibrated probability of default.
-
-Observable behaviours: missing components yield non-computable scores and findings; an unverified Sybil indicator is a signal, not a veto; an eligible confirmed integrity event can trigger a veto.
-
-Endpoint groups:
-
-- **Public authoritative API:** `POST /api/v1/assess`, `POST /api/v1/chat`, plus `/health`, `/ready` and `/api/v1` discovery.
-- **Optional model assistance** (require `modelConsent`, output is non-authoritative): `POST /fc/ai/v0.3/extract`, `POST /fc/ai/v0.3/ask`.
-- **Support endpoints:** `GET /fc/ai/v0.3/schema`, `GET /fc/ai/v0.3/config`.
-- **Compatibility alias:** `POST /fc/ai/v0.3/assess` runs the same deterministic runtime; it is not a model scoring endpoint.
-- **Historical demo sidecar:** unversioned v0.1 `/fc/ai/*` and the v0.2 / v0.2.1 endpoints. They are kept for the frozen static demo, are not part of the public contract, and are not the authoritative chain.
-
-**Finch:** a Direct API contract, validators and a technical handoff package exist. Not submitted, approved, certified or published by Finch. See [submission package](docs/finch/SUBMISSION.md) and [contract](docs/finch/CONTRACT.md).
-
-## Limitations & Non-Goals
-
-- No live bank, billing, identity or on-chain connector; verification levels are supplied in the payload.
-- No online model evaluation, no human semantic evaluation, no online latency, token or cost measurement.
-- No production credit calibration, no automatic lending or transaction decisions.
-- No real on-chain proof: the static UI's Merkle tree/proof and shock → de-risk → recover sequence are historical simulated demonstrations.
-- Not a general-purpose agent runtime, multi-agent cluster, RAG system or MCP server.
-- Historical availability note: the public Render endpoint returned `external-alpha-v0.1.1` with the model disabled on 2026-09-12 and 2026-10-29. These are dated point-in-time checks, not uptime or production-readiness claims.
-
-## Reproduction & Documentation
-
-From `agent/`:
-
-```bash
+cd agent
 npm ci
-npm run check                 # syntax + typecheck + 110 tests
-npm run validate:public-api
-npm run validate:finch-contract
-npm run verify:release
-npm run eval:agent            # offline evaluation; no network or model call
+npm run check                 # syntax + typecheck + 87 tests
+npm run serve                 # http://127.0.0.1:8787 (default)
+curl -X POST http://127.0.0.1:8787/api/v1/assess \
+  -H 'Content-Type: application/json' --data-binary @contracts/finch-test-input.json
 ```
 
-- [Offline evaluation guide](agent/eval/README.md) · [dataset](agent/eval/datasets/agent-eval-v1.jsonl) · [machine-readable artifact](agent/eval/results/agent-eval-2026-10-29.json)
-- [Validation record (2026-10-29)](docs/validation-20261029.md)
-- [Public API semantics](docs/public-api-v1.md) · [risk rules v0.2.1](docs/flowcredit-rules-v0.2.1.md) · [schemas and fixtures](agent/contracts/README.md)
-- [Roadmap](docs/roadmap.md) · [P2 refactor plan](docs/refactor-plan-p2.md) · [CI workflow](.github/workflows/ci.yml)
+Quant (all offline; see `quant/README.md`):
+
+```bash
+cd agent
+npm run test:quant            # 157 tests
+npm run check:quant           # isolation lint
+npm run memory                # research memory preview + knowledge
+npm run console               # build quant/console/index.html
+npm run adjudicate            # deterministic adjudication of candidates.json
+npm run serve                 # console + agent on the same local server
+```
+
+## Data & licensing
+
+- The Finch agent consumes **supplied** evidence only; it has no bank, billing, identity or on-chain connector.
+- Quant market snapshots are frozen local research data. New downloads are gated by a license register: Binance Vision is CC BY-NC-SA 4.0, Coin Metrics is CC BY-NC 4.0, OKX terms are unverified → **no new downloads**; existing snapshots are not redistributed. See [quant/data/LICENSING.md](quant/data/LICENSING.md).
+
+## Limitations & non-goals
+
+- No production credit calibration, no calibrated PD/EL/limit, no automatic lending or transaction decisions, no SLA.
+- No live model evaluation (`ONLINE_MODEL=NOT_RUN`); model-extracted fields are not grounded against source text.
+- Quant stack has no statistically significant strategy; no real funds; testnet funds are fake.
+- Not a general-purpose agent runtime, multi-agent cluster, or trading bot.
+
+## Documentation
+
+- Public API: [docs/public-api-v1.md](docs/public-api-v1.md) · risk rules: [docs/flowcredit-rules-v0.2.1.md](docs/flowcredit-rules-v0.2.1.md) · intake: [docs/flowcredit-intake-v0.3.md](docs/flowcredit-intake-v0.3.md)
+- Finch: [CONTRACT](docs/finch/CONTRACT.md) · [SUBMISSION](docs/finch/SUBMISSION.md) · [LISTING](docs/finch/LISTING.md) · [HANDOFF](docs/finch/FINCH_HANDOFF_GUIDE.md)
+- Releases: [external-alpha-v0.2.0](docs/releases/external-alpha-v0.2.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md)
+- Quant: [quant/README.md](quant/README.md) · [research memory](quant/research-memory/README.md) · [licensing](quant/data/LICENSING.md)
+- Archive: [docs/archive/](docs/archive)
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [MIT license](LICENSE)
 
-## Hackathon Origin
+## Hackathon origin
 
 Originated at the Shenzhen–Hong Kong Hackathon and continued as a post-hackathon productization project. The private historical `DEMO.FlowCredit` repository preserves the original simulated interface; this repository is the current project.

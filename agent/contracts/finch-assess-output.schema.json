@@ -1,37 +1,139 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:flowcredit:assess:output:v1",
-  "title": "FlowCredit Assess API Output v1",
+  "$id": "urn:flowcredit:assess:output:v1.1",
+  "title": "FlowCredit Assess API Output v1.1",
   "description": "Shared canonical successful response for the Public API and Finch compatibility invocation.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["ok", "schemaVersion", "requestId", "timestamp", "data"],
+  "required": [
+    "ok",
+    "schemaVersion",
+    "requestId",
+    "timestamp",
+    "data"
+  ],
   "oneOf": [
-    { "required": ["apiVersion"], "not": { "required": ["contractVersion"] } },
-    { "required": ["contractVersion"], "not": { "required": ["apiVersion"] } }
+    {
+      "required": [
+        "apiVersion"
+      ],
+      "not": {
+        "required": [
+          "contractVersion"
+        ]
+      }
+    },
+    {
+      "required": [
+        "contractVersion"
+      ],
+      "not": {
+        "required": [
+          "apiVersion"
+        ]
+      }
+    }
   ],
   "properties": {
-    "ok": { "const": true },
-    "apiVersion": { "const": "flowcredit.api/v1" },
-    "contractVersion": { "const": "flowcredit.finch-assess/v0.1" },
-    "schemaVersion": { "const": "flowcredit.risk_result/v0.2.1" },
-    "requestId": { "type": "string", "minLength": 19, "maxLength": 19, "description": "FlowCredit request id: an fc- prefix followed by 16 lowercase hexadecimal characters (19 characters total). Finch Direct API rejects regex pattern keywords, so length is constrained here." },
-    "timestamp": { "type": "string", "format": "date-time" },
-    "data": { "$ref": "#/$defs/assessment" }
+    "ok": {
+      "const": true
+    },
+    "apiVersion": {
+      "const": "flowcredit.api/v1.1"
+    },
+    "contractVersion": {
+      "const": "flowcredit.finch-assess/v0.1"
+    },
+    "schemaVersion": {
+      "const": "flowcredit.risk_result/v0.2.1"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 19,
+      "maxLength": 19,
+      "description": "FlowCredit request id: an fc- prefix followed by 16 lowercase hexadecimal characters (19 characters total). Finch Direct API rejects regex pattern keywords, so length is constrained here."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data": {
+      "$ref": "#/$defs/assessment"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Envelope metadata (release/engine/intake/model layer). Excluded from assessmentFingerprint.",
+      "properties": {
+        "release": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "intake": {
+          "type": "string"
+        },
+        "modelLayer": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "used": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
   },
   "$defs": {
-    "nullableNumber": { "type": ["number", "null"] },
-    "nullableString": { "type": ["string", "null"] },
-    "stringArray": { "type": "array", "items": { "type": "string" } },
+    "nullableNumber": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "signal": {
       "type": "object",
-      "required": ["code", "severity", "message"],
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
       "properties": {
-        "code": { "type": "string" },
-        "severity": { "type": "string" },
-        "message": { "type": "string" },
-        "evidenceRefs": { "$ref": "#/$defs/stringArray" },
-        "fields": { "$ref": "#/$defs/stringArray" }
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "evidenceRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "fields": {
+          "$ref": "#/$defs/stringArray"
+        }
       },
       "additionalProperties": true
     },
@@ -39,88 +141,254 @@
       "type": "object",
       "additionalProperties": true,
       "required": [
-        "assessmentId", "inputFingerprint", "assessmentFingerprint", "productVersion", "ruleVersion",
-        "assessmentMode", "readinessStatus", "decisionStatus",
-        "tokenComponentScores", "evidenceCoverage",
-        "vetoApplied", "limitations"
+        "assessmentId",
+        "inputFingerprint",
+        "assessmentFingerprint",
+        "productVersion",
+        "ruleVersion",
+        "assessmentMode",
+        "readinessStatus",
+        "decisionStatus",
+        "tokenComponentScores",
+        "evidenceCoverage",
+        "vetoApplied",
+        "limitations"
       ],
       "properties": {
-        "assessmentId": { "type": "string", "minLength": 28, "maxLength": 28, "description": "Assessment id: an fca- prefix followed by 24 lowercase hexadecimal characters (28 characters total)." },
-        "inputFingerprint": { "type": "string", "minLength": 71, "maxLength": 71, "description": "SHA-256 input fingerprint prefixed sha256: (71 characters total)." },
-        "assessmentFingerprint": { "type": "string", "minLength": 71, "maxLength": 71, "description": "SHA-256 assessment fingerprint prefixed sha256: (71 characters total)." },
-        "productVersion": { "const": "flowcredit.intake/v0.3.1" },
-        "ruleVersion": { "const": "flowcredit.risk_result/v0.2.1" },
-        "assessmentMode": { "enum": ["real", "simulation"] },
-        "readinessStatus": { "enum": ["not-ready", "limited", "ready"] },
-        "decisionStatus": {
-          "enum": ["simulation-only", "reject-confirmed-integrity", "insufficient-evidence", "enhanced-review", "standard-review", "eligible-for-review"]
+        "assessmentId": {
+          "type": "string",
+          "minLength": 28,
+          "maxLength": 28,
+          "description": "Assessment id: an fca- prefix followed by 24 lowercase hexadecimal characters (28 characters total)."
         },
-        "simulatedDecisionStatus": { "$ref": "#/$defs/nullableString" },
-        "verdict": { "type": "string" },
-        "TAI": { "$ref": "#/$defs/nullableNumber" },
-        "tokenActivityBand": { "$ref": "#/$defs/nullableString" },
-        "tokenMeteringStatus": { "enum": ["simulated", "provisional", "verified", "not-computable"] },
-        "tokenMetrics": { "type": "object", "additionalProperties": { "$ref": "#/$defs/nullableNumber" } },
-        "tokenComponentScores": { "type": "object", "additionalProperties": { "$ref": "#/$defs/nullableNumber" } },
-        "CCI": { "$ref": "#/$defs/nullableNumber" },
-        "riskGrade": { "$ref": "#/$defs/nullableString" },
-        "dimensionScores": { "type": "object", "additionalProperties": { "$ref": "#/$defs/nullableNumber" } },
-        "dimensionDetails": { "type": "object" },
-        "evidenceQuality": { "type": "object" },
-        "evidenceStrength": { "type": "string" },
+        "inputFingerprint": {
+          "type": "string",
+          "minLength": 71,
+          "maxLength": 71,
+          "description": "SHA-256 input fingerprint prefixed sha256: (71 characters total)."
+        },
+        "assessmentFingerprint": {
+          "type": "string",
+          "minLength": 71,
+          "maxLength": 71,
+          "description": "SHA-256 assessment fingerprint prefixed sha256: (71 characters total)."
+        },
+        "productVersion": {
+          "const": "flowcredit.intake/v0.3.1"
+        },
+        "ruleVersion": {
+          "const": "flowcredit.risk_result/v0.2.1"
+        },
+        "assessmentMode": {
+          "enum": [
+            "real",
+            "simulation"
+          ]
+        },
+        "readinessStatus": {
+          "enum": [
+            "not-ready",
+            "limited",
+            "ready"
+          ]
+        },
+        "decisionStatus": {
+          "enum": [
+            "simulation-only",
+            "reject-confirmed-integrity",
+            "insufficient-evidence",
+            "enhanced-review",
+            "standard-review",
+            "eligible-for-review"
+          ]
+        },
+        "simulatedDecisionStatus": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "verdict": {
+          "type": "string"
+        },
+        "TAI": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "tokenActivityBand": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "tokenMeteringStatus": {
+          "enum": [
+            "simulated",
+            "provisional",
+            "verified",
+            "not-computable"
+          ]
+        },
+        "tokenMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nullableNumber"
+          }
+        },
+        "tokenComponentScores": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nullableNumber"
+          }
+        },
+        "CCI": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "riskGrade": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "dimensionScores": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nullableNumber"
+          }
+        },
+        "dimensionDetails": {
+          "type": "object"
+        },
+        "evidenceQuality": {
+          "type": "object"
+        },
+        "evidenceStrength": {
+          "type": "string"
+        },
         "evidenceCoverage": {
           "type": "object",
-          "required": ["total", "covered", "missingEvidence", "missingData", "serverDerived", "fields"],
+          "required": [
+            "total",
+            "covered",
+            "missingEvidence",
+            "missingData",
+            "serverDerived",
+            "fields"
+          ],
           "properties": {
-            "total": { "type": "integer", "minimum": 0 },
-            "covered": { "type": "integer", "minimum": 0 },
-            "missingEvidence": { "type": "integer", "minimum": 0 },
-            "missingData": { "type": "integer", "minimum": 0 },
-            "serverDerived": { "type": "integer", "minimum": 0 },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "covered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missingEvidence": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "missingData": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "serverDerived": {
+              "type": "integer",
+              "minimum": 0
+            },
             "fields": {
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["field", "status"],
+                "required": [
+                  "field",
+                  "status"
+                ],
                 "properties": {
-                  "field": { "type": "string" },
-                  "status": { "enum": ["covered", "missing-evidence", "missing-data", "server-derived"] }
+                  "field": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "covered",
+                      "missing-evidence",
+                      "missing-data",
+                      "server-derived"
+                    ]
+                  }
                 }
               }
             }
           },
           "additionalProperties": false
         },
-        "integritySignals": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
-        "confirmedIntegrityEvents": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
-        "integrityFindings": { "type": "array", "items": { "$ref": "#/$defs/signal" } },
-        "vetoApplied": { "type": "boolean" },
-        "missingInputs": { "$ref": "#/$defs/stringArray" },
+        "integritySignals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/signal"
+          }
+        },
+        "confirmedIntegrityEvents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/signal"
+          }
+        },
+        "integrityFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/signal"
+          }
+        },
+        "vetoApplied": {
+          "type": "boolean"
+        },
+        "missingInputs": {
+          "$ref": "#/$defs/stringArray"
+        },
         "missingByGroup": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/stringArray" }
+          "additionalProperties": {
+            "$ref": "#/$defs/stringArray"
+          }
         },
         "requiredActions": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["priority", "category", "fields", "message"],
+            "required": [
+              "priority",
+              "category",
+              "fields",
+              "message"
+            ],
             "properties": {
-              "priority": { "type": "integer", "minimum": 1 },
-              "category": { "type": "string" },
-              "fields": { "$ref": "#/$defs/stringArray" },
-              "message": { "type": "string" }
+              "priority": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "category": {
+                "type": "string"
+              },
+              "fields": {
+                "$ref": "#/$defs/stringArray"
+              },
+              "message": {
+                "type": "string"
+              }
             }
           }
         },
-        "limitations": { "$ref": "#/$defs/stringArray" },
-        "summary": { "type": "string" },
-        "disclaimer": { "type": "string" },
-        "sessionId": { "type": "string" },
-        "draftId": { "type": "string" },
-        "harnessStatus": { "type": "string" }
+        "limitations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "disclaimer": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "draftId": {
+          "type": "string"
+        },
+        "harnessStatus": {
+          "type": "string"
+        }
       }
     }
   }

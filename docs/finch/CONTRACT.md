@@ -1,6 +1,6 @@
 # FlowCredit Finch Invocation Contract
 
-This is the concise Finch consumer contract for FlowCredit Public API v1. The authoritative machine-readable schemas remain in [`agent/contracts/`](../../agent/contracts/).
+This is the concise Finch consumer contract for FlowCredit Public API **v1.1**. The authoritative machine-readable schemas remain in [`agent/contracts/`](../../agent/contracts/).
 
 ## Invocation (live External Alpha endpoint)
 
@@ -11,9 +11,9 @@ Content-Type: application/json
 Idempotency-Key: <optional-client-key>
 ```
 
-The live External Alpha service runs the frozen release `external-alpha-v0.1` (commit `d57c4446b99d793f0ec80a321be4fd73fe8ac9d9`). The provider secret is supplied through Finch's Bearer credential configuration and never appears in this package. A generic, pre-deployment URL template (`api.example.com`) is retained only in [SUBMISSION.md](SUBMISSION.md) to satisfy the immutable release validator; it is not a callable endpoint.
+The live External Alpha service currently runs the frozen release `external-alpha-v0.1.1`. Repository release `external-alpha-v0.2.0` (API v1.1) is prepared; updating the production deployment is an operator action. The provider secret is supplied through Finch's Bearer credential configuration and never appears in this package.
 
-Finch uses the public endpoint, not a Finch-specific risk engine. `/fc/ai/v0.3/assess` remains a legacy/internal compatibility route and is not the recommended submission endpoint.
+Finch uses the public endpoint, not a Finch-specific risk engine. `/fc/ai/v0.3/assess` remains an internal compatibility route and is not the recommended submission endpoint. Legacy v0.1 / v0.2 / v0.2.1 routes were removed in v0.2.0.
 
 ## Input Contract
 
@@ -25,36 +25,46 @@ Finch uses the public endpoint, not a Finch-specific risk engine. `/fc/ai/v0.3/a
 
 ## Output Contract
 
-Successful public invocation returns exactly one canonical envelope:
+Successful public invocation returns exactly one canonical envelope (v1.1 adds optional top-level `meta`):
 
 ```json
 {
   "ok": true,
-  "apiVersion": "flowcredit.api/v1",
+  "apiVersion": "flowcredit.api/v1.1",
   "schemaVersion": "flowcredit.risk_result/v0.2.1",
   "requestId": "fc-example",
   "timestamp": "2026-09-10T00:00:00.000Z",
-  "data": {}
+  "data": {},
+  "meta": {
+    "release": "external-alpha-v0.2.0",
+    "engine": "flowcredit.risk_result/v0.2.1",
+    "intake": "flowcredit.intake/v0.3.1",
+    "modelLayer": { "used": false }
+  }
 }
 ```
 
 - Schema: [`finch-assess-output.schema.json`](../../agent/contracts/finch-assess-output.schema.json).
 - Dialect: JSON Schema Draft 2020-12.
-- Finch consumes business fields only from `data.*`.
+- Finch consumes business fields only from `data.*`; `meta` is envelope metadata and may be ignored.
 - Public output does not duplicate TAI, CCI or other legacy business fields at the top level.
 - Maximum encoded response: 65,536 bytes.
+
+## Schema Discovery
+
+`GET /api/v1/schema` (anonymous) returns the input and output JSON Schemas with the release/engine/intake versions, so integrators can validate without reading this repository.
 
 ## Idempotency and Fingerprints
 
 `Idempotency-Key` accepts 1–128 URL-safe characters. A repeated key with the same payload replays the original logical response; reuse with different input returns HTTP 409 `IDEMPOTENCY_CONFLICT`.
 
-`inputFingerprint` binds canonical validated intake and the risk-engine version. `assessmentFingerprint` binds deterministic assessment semantics while excluding request ID, timestamp, session ID and optional language-model explanation.
+`inputFingerprint` binds canonical validated intake and the risk-engine version. `assessmentFingerprint` binds deterministic assessment semantics while excluding request ID, timestamp, session ID, `meta` and optional language-model explanation.
 
 ## Timeout and Errors
 
 - Default invocation timeout: 30 seconds.
 - Configurable maximum: 120 seconds.
-- Errors use the canonical `flowcredit.api/v1` envelope and do not expose stack traces.
+- Errors use the canonical `flowcredit.api/v1.1` envelope and do not expose stack traces.
 - Relevant statuses: 400, 401, 409, 413, 415, 429, 500, 502 and 504.
 
 ## Health

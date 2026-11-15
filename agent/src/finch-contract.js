@@ -6,9 +6,12 @@ import { RULE_VERSION_V021 } from "./rules-v021.js";
 
 export const FINCH_CONTRACT_VERSION = "flowcredit.finch-assess/v0.1";
 export const FINCH_CONTRACT_HEADER = "x-flowcredit-contract-version";
-export const PUBLIC_API_VERSION = "flowcredit.api/v1";
+// v1.1（v0.4.0 收敛）：公共面新增 GET /api/v1/schema 与成功响应顶层 meta；
+// 业务字段与指纹语义不变（assessmentFingerprint 排除 meta 与模型注记）。
+export const PUBLIC_API_VERSION = "flowcredit.api/v1.1";
 export const PUBLIC_ASSESS_PATH = "/api/v1/assess";
 export const PUBLIC_CHAT_PATH = "/api/v1/chat";
+export const PUBLIC_SCHEMA_PATH = "/api/v1/schema";
 export const FINCH_RESPONSE_MAX_BYTES = 65_536;
 export const FINCH_SCHEMA_MAX_BYTES = 32_768;
 

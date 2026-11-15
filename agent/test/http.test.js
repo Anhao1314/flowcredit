@@ -42,43 +42,11 @@ test("HTTP contracts work without a configured model", async () => {
     assert.equal(health.intakeSchema, "flowcredit.intake/v0.3.1");
     assert.equal(health.harness.configured, false);
 
-    const runResponse = await fetch(`${base}/fc/ai/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy" }) });
-    const run = await runResponse.json();
-    assert.equal(runResponse.status, 200);
-    assert.deepEqual({ verdict: run.verdict, cci: run.cci, grade: run.grade, pdPct: run.pdPct }, { verdict: "approve", cci: 795, grade: "A-", pdPct: 2.3 });
-
-    const assessResponse = await fetch(`${base}/fc/ai/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: { address: "0x0000000000000000000000000000000000000000" } }) });
-    const assessment = await assessResponse.json();
-    assert.equal(assessment.verdict, "watch");
-    assert.equal(assessment.evidenceStrength, "low");
-    assert.equal(assessment.modelAnalysis, null);
-
-    const v02Config = await fetch(`${base}/fc/ai/v0.2/config`).then(response => response.json());
-    assert.equal(v02Config.ruleVersion, "flowcredit.risk_result/v0.2");
-    assert.equal(v02Config.calibratedPd, false);
-    const v02Response = await fetch(`${base}/fc/ai/v0.2/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy" }) });
-    const v02 = await v02Response.json();
-    assert.equal(v02Response.status, 200);
-    assert.deepEqual({ cci: v02.cci, grade: v02.grade, status: v02.decisionStatus, pd: v02.pdPct, limit: v02.creditSuggestedUsd }, { cci: 925, grade: "A", status: "simulation-only", pd: null, limit: null });
-    const askV02 = await fetch(`${base}/fc/ai/v0.2/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy", question: "Is the PD calibrated?" }) });
-    assert.equal(askV02.status, 200);
-    assert.match((await askV02.json()).answer, /not calibrated/i);
-
-    const v021Config = await fetch(`${base}/fc/ai/v0.2.1/config`).then(response => response.json());
-    assert.equal(v021Config.ruleVersion, "flowcredit.risk_result/v0.2.1");
-    assert.equal(v021Config.tokenMetering, true);
-    const v021Response = await fetch(`${base}/fc/ai/v0.2.1/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy" }) });
-    const v021 = await v021Response.json();
-    assert.equal(v021Response.status, 200);
-    assert.deepEqual({ tai: v021.tai, band: v021.tokenActivityBand, cci: v021.cci, grade: v021.grade, status: v021.decisionStatus }, { tai: 93.8, band: "coherent", cci: 929, grade: "A", status: "simulation-only" });
-    assert.equal(v021.tokenMetrics.reportedRawTokensM, 80);
-    assert.equal(v021.vetoApplied, false);
-    assert.deepEqual(v021.confirmedIntegrityEvents, []);
-    assert.ok(Array.isArray(v021.integritySignals));
-    assert.ok(Array.isArray(v021.limitations));
-    const askV021 = await fetch(`${base}/fc/ai/v0.2.1/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy", question: "What does TAI mean?" }) });
-    assert.equal(askV021.status, 200);
-    assert.match((await askV021.json()).answer, /activity/i);
+    // v0.4.0 收敛：v0.1/v0.2/v0.2.1 路由已删除（保留 v0.3 内部面 + /api/v1 公共面）
+    for (const legacyPath of ["/fc/ai/run", "/fc/ai/assess", "/fc/ai/v0.2/run", "/fc/ai/v0.2.1/run", "/fc/ai/v0.2.1/ask"]) {
+      const gone = await fetch(`${base}${legacyPath}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "healthy", input: {} }) });
+      assert.equal(gone.status, 404, `${legacyPath} must be removed in v0.4.0`);
+    }
 
     const v03Config = await fetch(`${base}/fc/ai/v0.3/config`).then(response => response.json());
     assert.equal(v03Config.productVersion, "flowcredit.intake/v0.3.1");
@@ -113,15 +81,15 @@ test("HTTP contracts work without a configured model", async () => {
 
 test("HTTP validation uses documented status codes", async () => {
   await withServer(async base => {
-    const badJson = await fetch(`${base}/fc/ai/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" });
+    const badJson = await fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" });
     assert.equal(badJson.status, 400);
     const badJsonBody = await badJson.json();
     assert.equal(badJsonBody.ok, false);
     assert.equal(badJsonBody.error.code, "INVALID_JSON");
     assert.equal(typeof badJsonBody.requestId, "string");
-    const unknown = await fetch(`${base}/fc/ai/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "unknown" }) });
-    assert.equal(unknown.status, 400);
-    const tooLarge = await fetch(`${base}/fc/ai/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: "x".repeat(70 * 1024) }) });
+    const legacyGone = await fetch(`${base}/fc/ai/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: "unknown" }) });
+    assert.equal(legacyGone.status, 404);
+    const tooLarge = await fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: {}, padding: "x".repeat(70 * 1024) }) });
     assert.equal(tooLarge.status, 413);
     const extractWithoutConsent = await fetch(`${base}/fc/ai/v0.3/extract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "Assess this operator" }) });
     assert.equal(extractWithoutConsent.status, 400);

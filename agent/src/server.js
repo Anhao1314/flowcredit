@@ -4,17 +4,11 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DSH_VERSION, MODEL, RELEASE_VERSION, RULE_VERSION } from "./constants.js";
-import { RULE_VERSION_V02 } from "./rules-v02.js";
+import { DSH_VERSION, MODEL, RELEASE_VERSION } from "./constants.js";
 import { RULE_VERSION_V021 } from "./rules-v021.js";
 import { HarnessBrain } from "./harness.js";
 import { SafeLogger } from "./logger.js";
-import { normalizeEvidence } from "./normalize.js";
-import { normalizeEvidenceV02 } from "./normalize-v02.js";
 import { normalizeEvidenceV021 } from "./normalize-v021.js";
-import { getPreset, getPresetV02, getPresetV021 } from "./presets.js";
-import { computeRisk } from "./risk-core.js";
-import { computeRiskV02 } from "./risk-core-v02.js";
 import { computeRiskV021 } from "./risk-core-v021.js";
 import { SessionStore } from "./session-store.js";
 import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, buildEvidenceCoverageV03, buildRequiredActionsV03, sanitizeExtractedDraftV03, validateDraftV03 } from "./intake-v03.js";
@@ -22,8 +16,8 @@ import { FixedWindowRateLimiter, bearerAuthorized, clientKey, isProtectedApi, ne
 import { IdempotencyStore } from "./idempotency-store.js";
 import {
   FINCH_CONTRACT_HEADER, FINCH_CONTRACT_VERSION, FINCH_RESPONSE_MAX_BYTES, addFinchIdentity, deterministicFingerprintPayload,
-  finchAssessmentFingerprint, finchInputFingerprint, finchRequestFingerprint, isFinchContractRequest,
-  isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, validateFinchAssessInput
+  finchAssessmentFingerprint, finchInputFingerprint, finchRequestFingerprint, finchSchemas, isFinchContractRequest,
+  isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, PUBLIC_SCHEMA_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
 import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
@@ -92,6 +86,7 @@ function sendJson(res, status, body, requestId, options = {}) {
     output = options.canonical
       ? { ok: true, ...canonicalVersion, schemaVersion, requestId: body.requestId || requestId, timestamp, data }
       : { ...body, ok: true, schemaVersion, requestId: body.requestId || requestId, timestamp, data };
+    if (options.meta) output.meta = options.meta;
   }
   if (options.canonical) output = compactContractValue(output);
   let text = JSON.stringify(output);
@@ -162,40 +157,6 @@ function withTimeout(promise, timeoutMs, code = "INVOCATION_TIMEOUT") {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function factsFor(data, result) {
-  return [
-    `F1 normalizedTokensM=${data.normalizedTokensM ?? "missing"}`,
-    `F2 gpuHours=${data.gpuHours ?? "missing"}, utilizationPct=${data.utilizationPct ?? "missing"}`,
-    `F3 efficiency=${result.efficiency_NT_per_GPUh ?? "not-computable"}`,
-    `F4 repaymentRatePct=${data.repaymentRatePct ?? "missing"}`,
-    `F5 payingCustomers=${data.payingCustomers ?? "missing"}, top5ConcentrationPct=${data.top5ConcentrationPct ?? "missing"}`,
-    `F6 spendUsd=${data.spendUsd ?? "missing"}`,
-    `F7 validRatePct=${data.validRatePct ?? "missing"}`,
-    `F8 sybilClusterDetected=${data.sybilClusterDetected === true}`,
-    `F9 loopWashRatePct=${data.loopWashRatePct ?? "missing"}`,
-    `F10 sourceIssues=${(data.sourceIssues || []).length}`,
-    `F11 deviationPct=${result.deviationPct ?? "not-computable"}`,
-    `F12 evidenceStrength=${result.evidenceStrength}`
-  ];
-}
-
-function factsForV02(data, result) {
-  return [
-    `F1 ruleVersion=${result.ruleVersion}, assessmentMode=${result.assessmentMode}`,
-    `F2 validNT_M=${result.validNT_M ?? "not-computable"}`,
-    `F3 validEfficiency=${result.validEfficiency_NT_per_GPUh ?? "not-computable"}, trustedPeer=${data.peerProfileId ?? "missing"}`,
-    `F4 repaymentRatePct=${data.repaymentRatePct ?? "missing"}, overdue30Pct=${data.overdue30Pct ?? "missing"}`,
-    `F5 payingCustomers=${data.payingCustomers ?? "missing"}, top5ConcentrationPct=${data.top5ConcentrationPct ?? "missing"}`,
-    `F6 revenueUsd=${data.revenueUsd ?? "missing"}, computeSpendUsd=${data.computeSpendUsd ?? "missing"}`,
-    `F7 deviationPct=${result.deviationPct ?? "not-computable"}, volatilityPct=${result.volatilityPct ?? "not-computable"}`,
-    `F8 CCI=${result.CCI ?? "not-computable"}, riskGrade=${result.riskGrade ?? "not-computable"}`,
-    `F9 evidenceStrength=${result.evidenceStrength}, EQS=${result.evidenceQuality.score ?? "not-rated"}`,
-    `F10 confirmedIntegrityEvents=${result.confirmedIntegrityEvents.length}`,
-    `F11 decisionStatus=${result.decisionStatus}`,
-    "F12 PD, expected loss and numeric limit are not calibrated in v0.2"
-  ];
-}
-
 function factsForV021(data, result) {
   return [
     `F1 window=${data.periodStart ?? "missing"}..${data.periodEnd ?? "missing"}, normalizationProfile=${data.normalizationProfileId ?? "missing"}`,
@@ -211,145 +172,6 @@ function factsForV021(data, result) {
     `F11 evidenceStrength=${result.evidenceStrength}, decisionStatus=${result.decisionStatus}, confirmedIntegrityEvents=${result.confirmedIntegrityEvents.length}`,
     "F12 TAI is activity coherence; PD, expected loss, numeric limit and automatic approval are not produced"
   ];
-}
-
-function ledgerCompatible(subject, data, result, modelLayer = null) {
-  const names = { efficiency: "efficiency", repayment: "repayment", customer: "customer_concentration", cost: "cost_stability", timeSybil: "time_sybil" };
-  const anchors = Object.entries(result.anchorScores).map(([key, score], index) => ({
-    name: names[key], score, state: score === null ? "y" : score >= 60 ? "g" : score >= 50 ? "y" : "r",
-    evidence: [`F${Math.min(index + 3, 12)}`], note: modelLayer?.analysis?.anchorOpinions?.[key] || "Deterministic preset anchor"
-  }));
-  return {
-    subjectId: data.subjectId || subject,
-    verdict: result.verdict,
-    cci: result.CCI,
-    pdPct: result.PD_pct,
-    grade: result.grade,
-    creditSuggestedUsd: result.vetoApplied ? 0 : data.exposureAmount ?? 0,
-    redflags: result.redflags,
-    anchors,
-    trace: modelLayer?.review?.correctedExplanation || modelLayer?.analysis?.explanation || result.summary,
-    factsSha256: result.inputHash,
-    promptSha256: modelLayer ? hash(modelLayer) : "deterministic",
-    builtAtUtc: stamp(),
-    model: MODEL,
-    ruleVersion: RULE_VERSION,
-    evidenceStrength: result.evidenceStrength,
-    modelLayer,
-    deterministic: true
-  };
-}
-
-function ledgerCompatibleV02(subject, data, result, modelLayer = null) {
-  const names = { compute: "compute_plausibility", repayment: "repayment_quality", customer: "customer_resilience", economics: "unit_economics", continuity: "operating_continuity" };
-  const evidenceIds = { compute: "F3", repayment: "F4", customer: "F5", economics: "F6", continuity: "F7" };
-  const anchors = Object.entries(result.dimensionScores).map(([key, score]) => ({
-    name: names[key], score, state: score === null ? "y" : score >= 75 ? "g" : score >= 50 ? "y" : "r",
-    evidence: [evidenceIds[key]], note: modelLayer?.analysis?.dimensionOpinions?.[key] || "Deterministic v0.2 rule result"
-  }));
-  return {
-    subjectId: data.subjectId || subject,
-    verdict: result.verdict,
-    decisionStatus: result.decisionStatus,
-    simulatedDecisionStatus: result.simulatedDecisionStatus,
-    assessmentMode: result.assessmentMode,
-    cci: result.CCI,
-    pdPct: null,
-    pdStatus: result.pdStatus,
-    grade: result.riskGrade,
-    creditSuggestedUsd: null,
-    currentExposure: result.currentExposure,
-    redflags: [...result.integritySignals, ...result.confirmedIntegrityEvents],
-    anchors,
-    evidenceQuality: result.evidenceQuality,
-    trace: modelLayer?.review?.correctedExplanation || modelLayer?.analysis?.explanation || result.summary,
-    factsSha256: result.inputHash,
-    promptSha256: modelLayer ? hash(modelLayer) : "deterministic",
-    builtAtUtc: stamp(),
-    model: MODEL,
-    ruleVersion: RULE_VERSION_V02,
-    evidenceStrength: result.evidenceStrength,
-    modelLayer,
-    deterministic: true
-  };
-}
-
-function ledgerCompatibleV021(subject, data, result, modelLayer = null) {
-  const names = { tokenActivity: "ai_token_activity", repayment: "repayment_quality", customer: "customer_resilience", economics: "unit_economics", continuity: "operating_continuity" };
-  const evidenceIds = { tokenActivity: "F8", repayment: "F10", customer: "F10", economics: "F6", continuity: "F7" };
-  const anchors = Object.entries(result.dimensionScores).map(([key, score]) => ({
-    name: names[key], score, state: score === null ? "y" : score >= 75 ? "g" : score >= 50 ? "y" : "r",
-    evidence: [evidenceIds[key]], note: modelLayer?.analysis?.creditOpinions?.[key] || "Deterministic v0.2.1 rule result"
-  }));
-  const tokenComponents = Object.entries(result.tokenComponentScores).map(([key, score]) => ({
-    name: key, score, state: score === null ? "y" : score >= 75 ? "g" : score >= 50 ? "y" : "r",
-    evidence: [key === "reconciliation" ? "F2" : key === "validity" ? "F4" : key === "physical" ? "F5" : key === "commercial" ? "F6" : "F7"],
-    note: modelLayer?.analysis?.tokenOpinions?.[key] || "Deterministic Token metering component"
-  }));
-  return {
-    subjectId: data.subjectId || subject,
-    verdict: result.verdict,
-    decisionStatus: result.decisionStatus,
-    simulatedDecisionStatus: result.simulatedDecisionStatus,
-    assessmentMode: result.assessmentMode,
-    tai: result.TAI,
-    tokenActivityBand: result.tokenActivityBand,
-    tokenMeteringStatus: result.tokenMeteringStatus,
-    tokenMetrics: result.tokenMetrics,
-    tokenComponents,
-    cci: result.CCI,
-    pdPct: null,
-    pdStatus: result.pdStatus,
-    grade: result.riskGrade,
-    creditSuggestedUsd: null,
-    currentExposure: result.currentExposure,
-    vetoApplied: result.vetoApplied,
-    integritySignals: result.integritySignals,
-    confirmedIntegrityEvents: result.confirmedIntegrityEvents,
-    limitations: result.limitations,
-    redflags: [...result.integritySignals, ...result.confirmedIntegrityEvents],
-    anchors,
-    evidenceQuality: result.evidenceQuality,
-    trace: modelLayer?.review?.correctedExplanation || modelLayer?.analysis?.explanation || result.summary,
-    factsSha256: result.inputHash,
-    promptSha256: modelLayer ? hash(modelLayer) : "deterministic",
-    builtAtUtc: stamp(),
-    model: MODEL,
-    ruleVersion: RULE_VERSION_V021,
-    evidenceStrength: result.evidenceStrength,
-    modelLayer,
-    deterministic: true
-  };
-}
-
-async function assessWithOptionalBrain(input, requestId, requireModel = false) {
-  const normalized = normalizeEvidence(input);
-  const result = computeRisk(normalized, { normalized: true });
-  let modelLayer = null;
-  let harnessStatus = "unconfigured";
-  try {
-    modelLayer = await brain.assess(normalized, result, requestId);
-    harnessStatus = "ok";
-  } catch (error) {
-    if (requireModel) throw error;
-    harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
-  }
-  return { normalized, result, modelLayer, harnessStatus };
-}
-
-async function assessV02WithOptionalBrain(input, requestId, requireModel = false) {
-  const normalized = normalizeEvidenceV02(input);
-  const result = computeRiskV02(normalized);
-  let modelLayer = null;
-  let harnessStatus = "unconfigured";
-  try {
-    modelLayer = await brain.assessV02(normalized, result, requestId);
-    harnessStatus = "ok";
-  } catch (error) {
-    if (requireModel) throw error;
-    harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
-  }
-  return { normalized, result, modelLayer, harnessStatus };
 }
 
 async function assessV021WithOptionalBrain(input, requestId, requireModel = false, useModel = true, modelTimeoutMs = null) {
@@ -457,6 +279,16 @@ function validateChatRequest(value) {
   return errors.length ? { valid: false, errors } : { valid: true, prompt: prompt.trim() };
 }
 
+function responseMeta(body) {
+  const used = Boolean(body?.modelAnalysis || body?.modelReview);
+  return {
+    release: RELEASE_VERSION,
+    engine: RULE_VERSION_V021,
+    intake: PRODUCT_VERSION_V03,
+    modelLayer: { used, model: used ? MODEL : null }
+  };
+}
+
 async function serveChat(req, res, requestId, context) {
   const canonical = { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 };
   const body = await readJson(req);
@@ -491,7 +323,7 @@ async function serveChat(req, res, requestId, context) {
     missingInputs: result.missingInputs, missingByGroup: result.missingByGroup, requiredActions: result.requiredActions,
     sessionId: result.sessionId, assessmentId: result.assessmentId
   };
-  return sendJson(res, 200, data, requestId, { ...canonical, maxBytes: FINCH_RESPONSE_MAX_BYTES });
+  return sendJson(res, 200, data, requestId, { ...canonical, maxBytes: FINCH_RESPONSE_MAX_BYTES, meta: responseMeta(data) });
 }
 
 async function serveAssessment(req, res, requestId, context, { publicApi = false } = {}) {
@@ -504,7 +336,8 @@ async function serveAssessment(req, res, requestId, context, { publicApi = false
     canonicalData: response.body,
     timestamp: response.timestamp,
     schemaVersion: canonical ? RULE_VERSION_V021 : undefined,
-    maxBytes: FINCH_RESPONSE_MAX_BYTES
+    maxBytes: FINCH_RESPONSE_MAX_BYTES,
+    meta: canonical && response.status === 200 ? responseMeta(response.body) : undefined
   });
 }
 
@@ -533,9 +366,8 @@ async function route(req, res, requestId, context = {}) {
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
     return sendJson(res, 200, {
-      status: "ok", service: "flowcredit-agent", version: "0.3.1", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
-      model: MODEL, productVersions: { v03: PRODUCT_VERSION_V03 }, ruleVersion: RULE_VERSION,
-      ruleVersions: { v01: RULE_VERSION, v02: RULE_VERSION_V02, v021: RULE_VERSION_V021 }, dshVersion: DSH_VERSION,
+      status: "ok", service: "flowcredit-agent", version: "0.4.0", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
+      model: MODEL, productVersions: { v03: PRODUCT_VERSION_V03 }, dshVersion: DSH_VERSION,
       llm: { enabled: harness.configured, available: harness.ready }, harness
     }, requestId);
   }
@@ -547,20 +379,16 @@ async function route(req, res, requestId, context = {}) {
     return sendJson(res, 200, {
       service: "FlowCredit Risk Intelligence API", release: RELEASE_VERSION, apiVersion: PUBLIC_API_VERSION,
       intakeVersion: PRODUCT_VERSION_V03, riskEngineVersion: RULE_VERSION_V021,
-      endpoints: { assess: PUBLIC_ASSESS_PATH, chat: PUBLIC_CHAT_PATH, health: "/health", ready: "/ready" }
+      endpoints: { assess: PUBLIC_ASSESS_PATH, chat: PUBLIC_CHAT_PATH, schema: PUBLIC_SCHEMA_PATH, health: "/health", ready: "/ready" }
     }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: RULE_VERSION_V021 });
   }
-  if (req.method === "GET" && url.pathname === "/fc/ai/config") {
-    const harness = await brain.status();
-    return sendJson(res, 200, { ok: true, enabled: true, model: MODEL, ruleVersion: RULE_VERSION, dshVersion: DSH_VERSION, harnessReady: harness.ready }, requestId);
-  }
-  if (req.method === "GET" && url.pathname === "/fc/ai/v0.2/config") {
-    const harness = await brain.status();
-    return sendJson(res, 200, { ok: true, enabled: true, model: MODEL, ruleVersion: RULE_VERSION_V02, dshVersion: DSH_VERSION, harnessReady: harness.ready, calibratedPd: false, automatedApproval: false }, requestId);
-  }
-  if (req.method === "GET" && url.pathname === "/fc/ai/v0.2.1/config") {
-    const harness = await brain.status();
-    return sendJson(res, 200, { ok: true, enabled: true, model: MODEL, ruleVersion: RULE_VERSION_V021, dshVersion: DSH_VERSION, harnessReady: harness.ready, tokenMetering: true, calibratedPd: false, automatedApproval: false }, requestId);
+  if (req.method === "GET" && url.pathname === PUBLIC_SCHEMA_PATH) {
+    const { inputSchema, outputSchema } = finchSchemas();
+    return sendJson(res, 200, {
+      apiVersion: PUBLIC_API_VERSION, release: RELEASE_VERSION,
+      engine: RULE_VERSION_V021, intake: PRODUCT_VERSION_V03,
+      schemas: { input: inputSchema, output: outputSchema }
+    }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: RULE_VERSION_V021, maxBytes: FINCH_RESPONSE_MAX_BYTES });
   }
   if (req.method === "GET" && url.pathname === "/fc/ai/v0.3/config") {
     const harness = await brain.status();
@@ -628,137 +456,6 @@ async function route(req, res, requestId, context = {}) {
     const response = await brain.ask({ ruleVersion: RULE_VERSION_V021, ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
     const citations = Array.isArray(response.citations) ? response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value)) : [];
     return sendJson(res, 200, { answer: String(response.answer || ""), citations, harnessStatus: "ok", model: MODEL, productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021 }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/run") {
-    const body = await readJson(req);
-    const preset = getPresetV021(body.subject);
-    if (!preset) return sendJson(res, 400, { error: "subject must be healthy, watch, or sybil" }, requestId);
-    const { normalized, result, modelLayer, harnessStatus } = await assessV021WithOptionalBrain(preset, requestId, body.requireModel === true);
-    sessions.set(`v021:${body.subject}`, { version: "v0.2.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
-    return sendJson(res, 200, { ...ledgerCompatibleV021(body.subject, normalized, result, modelLayer), harnessStatus }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/assess") {
-    const body = await readJson(req);
-    if (!("input" in body)) return sendJson(res, 400, { error: "input is required" }, requestId);
-    const { normalized, result, modelLayer, harnessStatus } = await assessV021WithOptionalBrain(body.input, requestId, body.requireModel === true);
-    const sessionId = body.sessionId || requestId;
-    sessions.set(`v021:${sessionId}`, { version: "v0.2.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
-    return sendJson(res, 200, { ...result, model: MODEL, modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null, validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [] }, harnessStatus, sessionId }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2.1/ask") {
-    const body = await readJson(req);
-    if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) return sendJson(res, 400, { error: "question must contain 1 to 500 characters" }, requestId);
-    const key = body.sessionId || body.subject;
-    let session = sessions.get(`v021:${key}`);
-    if (!session && getPresetV021(body.subject)) {
-      const input = normalizeEvidenceV021(getPresetV021(body.subject));
-      const assessment = computeRiskV021(input);
-      session = { version: "v0.2.1", input, assessment, modelLayer: null, facts: factsForV021(input, assessment) };
-      sessions.set(`v021:${body.subject}`, session);
-    }
-    if (!session) return sendJson(res, 400, { error: "no v0.2.1 assessment found for this session or subject" }, requestId);
-    let answer = `${session.assessment.summary} The answer is limited to v0.2.1 supplied evidence.`;
-    let citations = session.facts.slice(0, 4).map(fact => fact.split(" ")[0]);
-    let harnessStatus = "unavailable";
-    try {
-      const response = await brain.ask({ ruleVersion: RULE_VERSION_V021, ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
-      if (typeof response.answer === "string" && Array.isArray(response.citations)) {
-        answer = response.answer;
-        citations = response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value));
-        harnessStatus = "ok";
-      }
-    } catch (error) {
-      if (body.requireModel === true) throw error;
-      harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
-    }
-    return sendJson(res, 200, { answer, citations, harnessStatus, model: MODEL, ruleVersion: RULE_VERSION_V021 }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2/run") {
-    const body = await readJson(req);
-    const preset = getPresetV02(body.subject);
-    if (!preset) return sendJson(res, 400, { error: "subject must be healthy, watch, or sybil" }, requestId);
-    const { normalized, result, modelLayer, harnessStatus } = await assessV02WithOptionalBrain(preset, requestId, body.requireModel === true);
-    sessions.set(`v02:${body.subject}`, { version: "v0.2", input: normalized, assessment: result, modelLayer, facts: factsForV02(normalized, result) });
-    return sendJson(res, 200, { ...ledgerCompatibleV02(body.subject, normalized, result, modelLayer), harnessStatus }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2/assess") {
-    const body = await readJson(req);
-    if (!("input" in body)) return sendJson(res, 400, { error: "input is required" }, requestId);
-    const { normalized, result, modelLayer, harnessStatus } = await assessV02WithOptionalBrain(body.input, requestId, body.requireModel === true);
-    const sessionId = body.sessionId || requestId;
-    sessions.set(`v02:${sessionId}`, { version: "v0.2", input: normalized, assessment: result, modelLayer, facts: factsForV02(normalized, result) });
-    return sendJson(res, 200, { ...result, model: MODEL, modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null, validation: { authoritative: "deterministic-v0.2", modelConflicts: modelLayer?.review?.conflicts || [] }, harnessStatus, sessionId }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.2/ask") {
-    const body = await readJson(req);
-    if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) return sendJson(res, 400, { error: "question must contain 1 to 500 characters" }, requestId);
-    const key = body.sessionId || body.subject;
-    let session = sessions.get(`v02:${key}`);
-    if (!session && getPresetV02(body.subject)) {
-      const input = normalizeEvidenceV02(getPresetV02(body.subject));
-      const assessment = computeRiskV02(input);
-      session = { version: "v0.2", input, assessment, modelLayer: null, facts: factsForV02(input, assessment) };
-      sessions.set(`v02:${body.subject}`, session);
-    }
-    if (!session) return sendJson(res, 400, { error: "no v0.2 assessment found for this session or subject" }, requestId);
-    let answer = `${session.assessment.summary} The answer is limited to v0.2 supplied evidence.`;
-    let citations = session.facts.slice(0, 4).map(fact => fact.split(" ")[0]);
-    let harnessStatus = "unavailable";
-    try {
-      const response = await brain.ask({ ruleVersion: RULE_VERSION_V02, ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
-      if (typeof response.answer === "string" && Array.isArray(response.citations)) {
-        answer = response.answer;
-        citations = response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value));
-        harnessStatus = "ok";
-      }
-    } catch (error) {
-      if (body.requireModel === true) throw error;
-      harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
-    }
-    return sendJson(res, 200, { answer, citations, harnessStatus, model: MODEL, ruleVersion: RULE_VERSION_V02 }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/run") {
-    const body = await readJson(req);
-    const preset = getPreset(body.subject);
-    if (!preset) return sendJson(res, 400, { error: "subject must be healthy, watch, or sybil" }, requestId);
-    const { normalized, result, modelLayer, harnessStatus } = await assessWithOptionalBrain(preset, requestId, body.requireModel === true);
-    sessions.set(body.subject, { input: normalized, assessment: result, modelLayer, facts: factsFor(normalized, result) });
-    return sendJson(res, 200, { ...ledgerCompatible(body.subject, normalized, result, modelLayer), harnessStatus }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/assess") {
-    const body = await readJson(req);
-    if (!("input" in body)) return sendJson(res, 400, { error: "input is required" }, requestId);
-    const { normalized, result, modelLayer, harnessStatus } = await assessWithOptionalBrain(body.input, requestId, body.requireModel === true);
-    const sessionId = body.sessionId || requestId;
-    sessions.set(sessionId, { input: normalized, assessment: result, modelLayer, facts: factsFor(normalized, result) });
-    return sendJson(res, 200, { ...result, model: MODEL, modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null, validation: { authoritative: "deterministic", modelConflicts: modelLayer?.review?.conflicts || [] }, harnessStatus, sessionId }, requestId);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/ask") {
-    const body = await readJson(req);
-    if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) return sendJson(res, 400, { error: "question must contain 1 to 500 characters" }, requestId);
-    let session = sessions.get(body.sessionId || body.subject);
-    if (!session && getPreset(body.subject)) {
-      const input = normalizeEvidence(getPreset(body.subject));
-      const assessment = computeRisk(input, { normalized: true });
-      session = { input, assessment, modelLayer: null, facts: factsFor(input, assessment) };
-      sessions.set(body.subject, session);
-    }
-    if (!session) return sendJson(res, 400, { error: "no assessment found for this session or subject" }, requestId);
-    let answer = `${session.assessment.summary} The answer is limited to the supplied evidence.`;
-    let citations = session.facts.slice(0, 4).map(fact => fact.split(" ")[0]);
-    let harnessStatus = "unavailable";
-    try {
-      const response = await brain.ask({ ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
-      if (typeof response.answer === "string" && Array.isArray(response.citations)) {
-        answer = response.answer;
-        citations = response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value));
-        harnessStatus = "ok";
-      }
-    } catch (error) {
-      if (body.requireModel === true) throw error;
-      harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
-    }
-    return sendJson(res, 200, { answer, citations, harnessStatus, model: MODEL }, requestId);
   }
   if ((req.method === "GET" || req.method === "HEAD") && await serveStatic(req, res)) return null;
   return sendJson(res, 404, { error: "not found" }, requestId);

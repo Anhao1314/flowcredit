@@ -31,11 +31,12 @@ test("fixed-window rate limiter resets deterministically", () => {
 
 test("mutating Agent endpoints are protected and host defaults to loopback", () => {
   assert.equal(isProtectedApi("POST", "/api/v1/assess"), true);
-  assert.equal(isProtectedApi("POST", "/fc/ai/run"), true);
-  assert.equal(isProtectedApi("POST", "/fc/ai/v0.2/ask"), true);
   assert.equal(isProtectedApi("POST", "/fc/ai/v0.3/assess"), true);
-  assert.equal(isProtectedApi("POST", "/fc/ai/v0.2.1/run"), true);
   assert.equal(isProtectedApi("GET", "/fc/ai/v0.3/schema"), false);
+  // v0.4.0 收敛：v0.1/v0.2/v0.2.1 路由已删除，不再进入受保护面
+  assert.equal(isProtectedApi("POST", "/fc/ai/run"), false);
+  assert.equal(isProtectedApi("POST", "/fc/ai/v0.2/ask"), false);
+  assert.equal(isProtectedApi("POST", "/fc/ai/v0.2.1/run"), false);
   assert.deepEqual(networkConfig({}), { host: "127.0.0.1", port: 8787 });
   assert.deepEqual(networkConfig({ HOST: "0.0.0.0", PORT: "9090" }), { host: "0.0.0.0", port: 9090 });
   const request = { headers: { "x-forwarded-for": "203.0.113.8, 10.0.0.2" }, socket: { remoteAddress: "127.0.0.1" } };

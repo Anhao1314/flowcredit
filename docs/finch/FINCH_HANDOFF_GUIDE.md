@@ -18,7 +18,7 @@ This document is the technical handoff package for Finch staff evaluation and Di
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | **Product**     | FlowCredit                                                                                             |
 | **Positioning** | Risk Intelligence Infrastructure for the AI-Native Economy                                             |
-| **Release**     | external-alpha-v0.1.1                                                                                  |
+| **Release**     | external-alpha-v0.2.0                                                                                  |
 | **Delivery**    | P4 Direct API (separate contract; no AgentOn envelope/HMAC)                                            |
 | **Status**      | Publicly deployed and ready for Finch technical evaluation                                             |
 | **Health**      | [https://flowcredit-api.onrender.com/health](https://flowcredit-api.onrender.com/health)               |
@@ -107,9 +107,9 @@ The current External Alpha is designed for **risk intelligence and decision supp
 
 | Item            | Value                                           |
 | --------------- | ----------------------------------------------- |
-| Product Release | `external-alpha-v0.1.1`                         |
+| Product Release | `external-alpha-v0.2.0`                         |
 | Release Commit  | `5c86425aa240280937cde2fe6bdd2a392d55228f`      |
-| Public API      | `flowcredit.api/v1`                             |
+| Public API      | `flowcredit.api/v1.1`                             |
 | Intake          | `flowcredit.intake/v0.3.1`                      |
 | Risk Result     | `flowcredit.risk_result/v0.2.1`                 |
 | Hosting         | Render (provider-hosted; **not** Finch hosting) |
@@ -117,7 +117,7 @@ The current External Alpha is designed for **risk intelligence and decision supp
 | Deployment      | Docker                                          |
 | Auto Deploy     | Off (deploys are pinned to a specific commit)   |
 
-`external-alpha-v0.1.1` is the currently deployed Finch compatibility patch release. The protocol versions above are independent of the product release and are unchanged. This External Alpha does **not** offer a production SLA, high availability, multi-region failover, or a 99.9% uptime commitment.
+`external-alpha-v0.1.1` is the currently deployed Finch compatibility release. Repository release `external-alpha-v0.2.0` (API v1.1) is prepared; updating the production deployment is an operator action. This External Alpha does **not** offer a production SLA, high availability, multi-region failover, or a 99.9% uptime commitment.
 
 ## 5. Intended Finch Integration Model
 
@@ -264,9 +264,9 @@ Idempotency-Key: \<unique-key>      # optional, recommended
 
 
 
-1. **Health** — `GET /health` → HTTP 200, `release = external-alpha-v0.1.1`.
+1. **Health** — `GET /health` → HTTP 200, `release = external-alpha-v0.2.0`.
 
-2. **Discovery** — `GET /api/v1` → HTTP 200, `apiVersion = flowcredit.api/v1`.
+2. **Discovery** — `GET /api/v1` → HTTP 200, `apiVersion = flowcredit.api/v1.1`.
 
 3. **Load the representative input** — open `agent/contracts/finch-test-input.json`.
 
@@ -317,7 +317,7 @@ For `finch-test-input.json`:
 | Field                        | Expected value                  |
 | ---------------------------- | ------------------------------- |
 | HTTP                         | 200                             |
-| `apiVersion`                 | `flowcredit.api/v1`             |
+| `apiVersion`                 | `flowcredit.api/v1.1`             |
 | `schemaVersion`              | `flowcredit.risk_result/v0.2.1` |
 | `data.TAI`                   | `93.8`                          |
 | `data.CCI`                   | `929`                           |
@@ -616,7 +616,7 @@ Publish decision
 
 * This document: `docs/finch/FINCH_HANDOFF_GUIDE.md`
 
-* Release notes: `docs/releases/external-alpha-v0.1.1.md`
+* Release notes: `docs/releases/external-alpha-v0.2.md`
 
 ## 27. Version Verification
 
@@ -627,16 +627,16 @@ A reviewer can confirm the live deployment at any time:
 ```
 curl https://flowcredit-api.onrender.com/health
 
-\# data.release should equal "external-alpha-v0.1.1"
+\# data.release should equal "external-alpha-v0.2.0"
 ```
 
 
 
-* Release: `external-alpha-v0.1.1`
+* Release: `external-alpha-v0.2.0`
 
 * Release commit: `5c86425aa240280937cde2fe6bdd2a392d55228f`
 
-* `external-alpha-v0.1` remains an immutable historical release and is not the current runtime.
+* `external-alpha-v0.2.0` remains an immutable historical release and is not the current runtime.
 
 ## 28. Current Status
 
@@ -662,7 +662,7 @@ FlowCredit is not Finch Approved, not published on Finch, not Finch Certified, a
 
 
 
-* [ ] Current `/health` shows `external-alpha-v0.1.1`
+* [ ] Current `/health` shows `external-alpha-v0.2.0`
 
 * [ ] Representative assessment returns HTTP 200
 

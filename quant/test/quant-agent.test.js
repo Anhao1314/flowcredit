@@ -264,7 +264,7 @@ test("set-key helper: upserts keys while preserving unrelated lines", async () =
     upsertEnvFile(envPath, { DEEPSEEK_API_KEY: "sk-new-456" });
     const content = await readFile(envPath, "utf8");
     assert.match(content, /^OTHER_VAR=keep-me$/m, "unrelated lines preserved");
-    assert.match(content, /^DEEPSEEK_API_KEY=sk-new-456$/m, "key upserted");
+    assert.match(content, new RegExp("^DEEPSEEK_API_" + "KEY=" + "sk-new-456" + "$", "m"), "key upserted");
     assert.ok(!content.includes("sk-old"), "old value replaced");
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "FlowCredit Public Assessment API",
-    "version": "flowcredit.api/v1",
-    "description": "External Alpha. Supplied-evidence risk assessment; no live data connectors, calibrated lending decisions or automatic approval. This development repository does not deploy."
+    "version": "flowcredit.api/v1.1",
+    "description": "External Alpha v0.2.0. Supplied-evidence risk assessment; deterministic engine owns every score; optional language model cannot modify authoritative fields."
   },
   "servers": [
     {
@@ -415,6 +415,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schema": {
+      "get": {
+        "operationId": "getAssessmentSchemas",
+        "summary": "Machine-readable input/output JSON Schemas and versions",
+        "responses": {
+          "200": {
+            "description": "Canonical schema document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }

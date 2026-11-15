@@ -108,7 +108,7 @@ test("pipeline returns a complete deterministic result with the LLM fully unavai
   // 最小 env：不继承 PATH/HOME——子进程按绝对路径运行，环境近乎为空，环境无关性更强。
   const run = env => execFileSync(process.execPath, ["--input-type=module", "-e", script], { env, encoding: "utf8" });
   const clean = run({ NODE_ENV: "test" });
-  const polluted = run({ NODE_ENV: "test", DEEPSEEK_API_KEY: "sk-fake-credentials-1234567890", DEEPSEEK_BASE_URL: "https://127.0.0.1:1", NO_MODEL_ENV: "0" });
+  const polluted = run({ NODE_ENV: "test", DEEPSEEK_API_KEY: "fake-credentials-fixture-1234567890", DEEPSEEK_BASE_URL: "https://127.0.0.1:1", NO_MODEL_ENV: "0" });
   assert.deepEqual(JSON.parse(polluted), JSON.parse(clean));
   const { authoritative } = JSON.parse(clean);
   assert.equal(authoritative.decisionStatus, "eligible");

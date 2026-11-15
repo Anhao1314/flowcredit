@@ -16,7 +16,7 @@ The API does not claim that an applicant's data is true, query external systems,
 
 | Layer | Identifier | Meaning |
 | --- | --- | --- |
-| Public API | `flowcredit.api/v1` | Transport and canonical envelope |
+| Public API | `flowcredit.api/v1.1` | Transport and canonical envelope |
 | Intake | `flowcredit.intake/v0.3.1` | Accepted draft structure and validation |
 | Risk engine | `flowcredit.risk_result/v0.2.1` | Authoritative deterministic assessment |
 
@@ -123,7 +123,7 @@ Public consumers must read business results only from `data.*`:
 ```json
 {
   "ok": true,
-  "apiVersion": "flowcredit.api/v1",
+  "apiVersion": "flowcredit.api/v1.1",
   "schemaVersion": "flowcredit.risk_result/v0.2.1",
   "requestId": "fc-example",
   "timestamp": "2026-09-10T00:00:00.000Z",
@@ -143,12 +143,17 @@ Public consumers must read business results only from `data.*`:
 
 The actual representative response contains component scores, evidence quality and coverage, integrity findings, required actions, limitations, fingerprints and session metadata. The response does not duplicate TAI, CCI or other business fields at the top level.
 
+**v1.1 additions:** successful responses may include a top-level `meta` object
+(`release`, `engine`, `intake`, `modelLayer: { used, model? }`). It is envelope metadata,
+excluded from `assessmentFingerprint`, and safe for v1 clients to ignore.
+`GET /api/v1/schema` returns the machine-readable input/output JSON Schemas and versions.
+
 Errors use the same versioned envelope:
 
 ```json
 {
   "ok": false,
-  "apiVersion": "flowcredit.api/v1",
+  "apiVersion": "flowcredit.api/v1.1",
   "schemaVersion": "flowcredit.risk_result/v0.2.1",
   "requestId": "fc-example",
   "timestamp": "2026-09-10T00:00:00.000Z",

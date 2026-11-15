@@ -80,7 +80,7 @@ async function verifyHttpContract() {
     const responseText = await response.text();
     const body = JSON.parse(responseText);
     assert.equal(response.status, 200, "valid Bearer token must return 200");
-    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data"]);
+    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data", "meta"]);
     assert.equal(body.apiVersion, PUBLIC_API_VERSION);
     assert.equal(validateFinchAssessOutput(body).valid, true, "Public response must match the output schema");
     assert.ok(Buffer.byteLength(responseText) <= FINCH_RESPONSE_MAX_BYTES, "Public response exceeds 65,536 bytes");

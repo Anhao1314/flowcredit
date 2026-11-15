@@ -76,7 +76,7 @@ test("Finch invocation is authenticated, canonical, meaningful, bounded, and red
     const text = await response.text();
     const output = JSON.parse(text);
     assert.equal(response.status, 200);
-    assert.deepEqual(Object.keys(output), ["ok", "contractVersion", "schemaVersion", "requestId", "timestamp", "data"]);
+    assert.deepEqual(Object.keys(output), ["ok", "contractVersion", "schemaVersion", "requestId", "timestamp", "data", "meta"]);
     assert.equal(validateFinchAssessOutput(output).valid, true);
     assert.ok(Buffer.byteLength(text) <= FINCH_RESPONSE_MAX_BYTES);
     assert.equal(output.data.TAI, 93.8);

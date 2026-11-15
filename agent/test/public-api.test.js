@@ -55,7 +55,7 @@ test("Public assessment requires Bearer auth and always returns canonical-only o
     const text = await response.text();
     const body = JSON.parse(text);
     assert.equal(response.status, 200);
-    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data"]);
+    assert.deepEqual(Object.keys(body), ["ok", "apiVersion", "schemaVersion", "requestId", "timestamp", "data", "meta"]);
     assert.equal(body.apiVersion, PUBLIC_API_VERSION);
     assert.equal(body.schemaVersion, "flowcredit.risk_result/v0.2.1");
     assert.equal(Object.hasOwn(body, "CCI"), false);
