@@ -23,6 +23,8 @@ jobs:
           cache-dependency-path: agent/package-lock.json
       - name: Install locked dependencies
         run: npm ci
+      - name: Install quant workflow dependencies
+        run: npm ci --prefix ../quant/agent
       - name: JavaScript syntax
         run: npm run check:syntax
       - name: Rule registry type check
