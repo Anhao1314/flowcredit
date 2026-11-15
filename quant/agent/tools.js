@@ -14,6 +14,7 @@ import { runPipeline } from "../pipeline.js";
 import { computeSignals } from "../signal/engine-v001.js";
 import { evaluateGuard } from "../risk/guard-v001.js";
 import { runQualityGates } from "../data/quality-gates.js";
+import { createCoreToolRegistry } from "../../agent/core/tool-registry.js";
 import {
   strategyReturns, sharpeRatio, turnover, maxDrawdownPct, deflatedSharpe,
   trailingComponents, METRICS_BASIS
@@ -116,23 +117,15 @@ export function createToolRegistry({ dataset, trials } = {}) {
     }
   ];
 
-  const schemas = tools.map(tool => ({
-    type: "function",
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: {
-        type: "object",
-        properties: Object.fromEntries(Object.entries(tool.parameters).map(([key, spec]) => [key, { type: spec.type, ...(spec.enum ? { enum: spec.enum } : {}) }])),
-        required: Object.entries(tool.parameters).filter(([, spec]) => spec.required).map(([key]) => key),
-        additionalProperties: false
-      }
+  const definitions = tools.map(tool => ({
+    ...tool,
+    parameters: {
+      type: "object",
+      properties: Object.fromEntries(Object.entries(tool.parameters).map(([key, spec]) => [key, { type: spec.type, ...(spec.enum ? { enum: spec.enum } : {}) }])),
+      required: Object.entries(tool.parameters).filter(([, spec]) => spec.required).map(([key]) => key),
+      additionalProperties: false
     }
   }));
 
-  return {
-    list: tools,
-    schemas,
-    get: name => tools.find(tool => tool.name === name) || null
-  };
+  return createCoreToolRegistry(definitions);
 }

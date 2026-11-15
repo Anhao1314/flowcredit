@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readdir, rename, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { createAuditEvent } from "../core/audit-event.js";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -11,20 +12,24 @@ export class SafeLogger {
   }
 
   write(event) {
-    const allowed = {
+    const allowed = createAuditEvent({
+      eventType: "credit.http.completed",
       timestamp: new Date().toISOString(),
-      requestId: event.requestId,
-      route: event.route,
-      mode: event.mode,
-      model: event.model,
-      harnessStatus: event.harnessStatus,
-      durationMs: event.durationMs,
-      status: event.status,
-      inputHash: event.inputHash,
-      outputHash: event.outputHash,
-      tokenUsage: event.tokenUsage,
-      errorClass: event.errorClass
-    };
+      run: event.run ?? null,
+      payload: {
+        requestId: event.requestId,
+        route: event.route,
+        mode: event.mode,
+        model: event.model,
+        harnessStatus: event.harnessStatus,
+        durationMs: event.durationMs,
+        status: event.status,
+        inputHash: event.inputHash,
+        outputHash: event.outputHash,
+        tokenUsage: event.tokenUsage,
+        errorClass: event.errorClass
+      }
+    });
     for (const key of Object.keys(allowed)) if (allowed[key] === undefined) delete allowed[key];
     this.queue = this.queue.then(() => this.#append(allowed)).catch(() => {});
     return this.queue;

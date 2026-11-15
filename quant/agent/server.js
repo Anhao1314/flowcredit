@@ -24,6 +24,7 @@ import { computeConsolePayload } from "../console/payload.js";
 import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/engine-adapter.js";
 import { createInspectionWorkflow, startInspection, signInspection } from "./workflow/inspection.js";
 import { JsonFileSaver, loadCaseIndex, saveCaseIndex, nextCaseSeq } from "./workflow/case-store.js";
+import { RunRecord } from "../../agent/core/run-record.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
@@ -53,6 +54,9 @@ export function securityFromEnv(env = process.env) {
   return {
     authEnabled,
     apiKey,
+    // 签字人身份绑定：开启鉴权时，signedBy 必须等于该值（部署级操作员身份）。
+    // 单 token 模式下这是"认证主体"的唯一可用表示；多用户身份需 per-user token（后续）。
+    operatorId: String(env.CONSOLE_OPERATOR_ID || "").trim(),
     rateLimitMax: intBetween(env.CONSOLE_RATE_LIMIT_MAX, 30, 1, 1000),
     rateLimitWindowMs: intBetween(env.CONSOLE_RATE_LIMIT_WINDOW_MS, 60_000, 1_000, 600_000),
     bodyLimit: 65_536,
@@ -167,6 +171,24 @@ export function createQuantConsoleServer(options = {}) {
   const existingCases = loadCaseIndex(indexFile);
   for (const entry of existingCases) cases.set(entry.caseId, entry);
   let caseSeq = nextCaseSeq([...cases.values()]);
+
+  function restoreCaseRun(entry, atMs) {
+    if (entry.run) return RunRecord.fromJSON(entry.run);
+    const parsedCreatedAt = Date.parse(entry.createdAtUtc);
+    const createdAtMs = Number.isFinite(parsedCreatedAt) ? parsedCreatedAt : atMs;
+    const run = new RunRecord({
+      runId: entry.caseId, product: "quant", kind: "inspection", createdAtMs,
+      metadata: { threadId: entry.threadId }
+    });
+    return run.transition("waiting", {
+      atMs: Math.max(atMs, createdAtMs),
+      productStatus: entry.summary?.status ?? "REPORTED"
+    });
+  }
+
+  function terminalCasePhase(status) {
+    return typeof status === "string" && status.startsWith("REJECTED") ? "failed" : "succeeded";
+  }
 
   function caseSummary(caseId) {
     const entry = cases.get(caseId);
@@ -332,6 +354,11 @@ export function createQuantConsoleServer(options = {}) {
         const caseId = `case-${String(++caseSeq).padStart(4, "0")}`;
         const submission = { ...(body.submission ?? body), submittedBy: typeof body.submittedBy === "string" && body.submittedBy ? body.submittedBy : "anonymous" };
         const threadId = `${caseId}:${submission.submittedBy}`;
+        const caseStartedAt = nowMs();
+        const run = new RunRecord({
+          runId: caseId, product: "quant", kind: "inspection", createdAtMs: caseStartedAt,
+          metadata: { threadId }
+        }).transition("running", { atMs: caseStartedAt, productStatus: "RECEIVED" });
         let result;
         try {
           result = await withTimeout(
@@ -341,18 +368,33 @@ export function createQuantConsoleServer(options = {}) {
         } catch (error) {
           return send(500, { ok: false, code: error?.code || "CASE_FAILED", error: String(error?.message || error) });
         }
-        const caseEntry = { caseId, threadId, kind: submission.kind ?? "strategy", submittedBy: submission.submittedBy, createdAtUtc: new Date(nowMs()).toISOString(), summary: { status: result.status ?? null, verdict: result.claimReport?.verdict ?? (result.adjudication ? "adjudicated" : null) } };
+        const caseFinishedAt = nowMs();
+        const awaitingSignature = Array.isArray(result.__interrupt__);
+        run.transition(awaitingSignature ? "waiting" : terminalCasePhase(result.status), { atMs: caseFinishedAt, productStatus: result.status ?? null });
+        const caseEntry = {
+          caseId, threadId, kind: submission.kind ?? "strategy", submittedBy: submission.submittedBy,
+          createdAtUtc: new Date(caseFinishedAt).toISOString(), run: run.snapshot(),
+          summary: { status: result.status ?? null, verdict: result.claimReport?.verdict ?? (result.adjudication ? "adjudicated" : null) }
+        };
         cases.set(caseId, caseEntry);
         saveCaseIndex(indexFile, [...cases.values()]);
         const rejectedInvalid = result.status === "REJECTED_INVALID";
-        return send(rejectedInvalid ? 400 : 200, { ok: !rejectedInvalid, caseId, status: result.status ?? null, error: rejectedInvalid ? result.error : undefined, claimReport: result.claimReport ?? null, adjudication: result.adjudication ? { best: result.adjudication.best, nTrials: result.adjudication.nTrials } : null, narrative: result.narrative ?? null, awaitingSignature: Array.isArray(result.__interrupt__) });
+        return send(rejectedInvalid ? 400 : 200, { ok: !rejectedInvalid, caseId, status: result.status ?? null, error: rejectedInvalid ? result.error : undefined, claimReport: result.claimReport ?? null, adjudication: result.adjudication ? { best: result.adjudication.best, nTrials: result.adjudication.nTrials } : null, narrative: result.narrative ?? null, awaitingSignature });
       }
       const casesListMatch = url.pathname === "/api/cases" && req.method === "GET";
       if (casesListMatch) {
+        // P1：案件列表含送检人/裁决状态，开启鉴权时必须与写接口同等保护。
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
         return send(200, { ok: true, cases: [...cases.values()].map(entry => caseSummary(entry.caseId)) }); // map 回调直传会把 entry 当 caseId——显式取键
       }
       const caseGetMatch = /^\/api\/cases\/(case-\d+)$/.exec(url.pathname);
       if (req.method === "GET" && caseGetMatch) {
+        // P1：详情包含 LangGraph checkpoint values（完整送检内容），必须鉴权。
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
         const entry = cases.get(caseGetMatch[1]);
         if (!entry) return send(404, { ok: false, code: "NO_SUCH_CASE", error: caseGetMatch[1] });
         const snapshot = await inspectionGraph.getState({ configurable: { thread_id: entry.threadId } });
@@ -371,19 +413,40 @@ export function createQuantConsoleServer(options = {}) {
         const raw = await readBody(req, security.bodyLimit);
         let body;
         try { body = JSON.parse(raw || "{}"); } catch { body = {}; }
+        // P1：签字人身份校验——空身份拒绝；开启鉴权时必须等于部署级操作员身份。
+        // 单 token 模式下这是可用的"认证主体"表示；多用户身份需 per-user token（后续）。
+        const signedBy = typeof body.signedBy === "string" ? body.signedBy.trim() : "";
+        if (!signedBy) {
+          return send(400, { ok: false, code: "SIGNER_REQUIRED", error: "signedBy is required; anonymous signatures are not accepted" });
+        }
+        if (security.authEnabled) {
+          if (!security.operatorId) {
+            return send(500, { ok: false, code: "OPERATOR_ID_NOT_CONFIGURED", error: "CONSOLE_OPERATOR_ID must be configured when authentication is enabled" });
+          }
+          if (signedBy !== security.operatorId) {
+            return send(403, { ok: false, code: "SIGNER_NOT_AUTHORIZED", error: "signedBy must match the authenticated operator identity" });
+          }
+        }
         const state = await inspectionGraph.getState({ configurable: { thread_id: entry.threadId } });
         if (!(Array.isArray(state.next) && state.next.includes("await_sign"))) {
           return send(409, { ok: false, code: "CASE_NOT_AWAITING_SIGNATURE", error: "案件不在签字门（当前 next: " + JSON.stringify(state.next) + "）" });
         }
+        const signStartedAt = nowMs();
+        const run = restoreCaseRun(entry, signStartedAt);
+        if (run.snapshot().phase === "waiting") {
+          run.transition("running", { atMs: signStartedAt, productStatus: entry.summary?.status ?? "REPORTED" });
+        }
         let result;
         try {
           result = await withTimeout(
-            signInspection(inspectionGraph, { caseId: entry.threadId, signedBy: typeof body.signedBy === "string" && body.signedBy ? body.signedBy : "anonymous", decision: body.decision === "RELEASED" ? "RELEASED" : "REJECTED", reason: typeof body.reason === "string" ? body.reason : null, client, audit }),
+            signInspection(inspectionGraph, { caseId: entry.threadId, signedBy, decision: body.decision === "RELEASED" ? "RELEASED" : "REJECTED", reason: typeof body.reason === "string" ? body.reason : null, client, audit }),
             security.askTimeoutMs, "CASE_TIMEOUT"
           );
         } catch (error) {
           return send(500, { ok: false, code: error?.code || "CASE_SIGN_FAILED", error: String(error?.message || error) });
         }
+        run.transition(terminalCasePhase(result.status), { atMs: nowMs(), productStatus: result.status ?? null });
+        entry.run = run.snapshot();
         entry.summary = { ...entry.summary, status: result.status ?? null, signedBy: result.signature?.signedBy ?? null };
         saveCaseIndex(indexFile, [...cases.values()]);
         return send(200, { ok: true, caseId, status: result.status ?? null, signature: result.signature ?? null, narrative: result.narrative ?? null });

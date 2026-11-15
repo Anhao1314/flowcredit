@@ -2,6 +2,8 @@
 
 FlowCredit risk-assessment service for trusted local use or deployment behind an HTTPS reverse proxy or managed gateway. Reviewable source lives in `agent/`; local credentials, sessions, dependencies, and logs remain in the repository-external runtime directory configured by `FC_RUNTIME_ROOT`.
 
+Shared transport, closed tool-registry, TTL-session and run-governance primitives live in [`core/`](core/README.md). Credit HTTP requests and quant agent runs use a common audit envelope; quant LangGraph checkpoints use versioned atomic files. Product adapters remain outside core, and quant never imports credit business logic from `agent/src`.
+
 The configured default model is `deepseek-v4-flash`.
 
 Current release baseline: `external-alpha-v0.1.1` (Finch Direct API compatibility patch; historical frozen baseline remains `external-alpha-v0.1`). See the [External Alpha deployment guide](../docs/external-alpha-deployment.md), the [v0.1.1 patch notes](../docs/releases/external-alpha-v0.1.1.md) and the [v0.1 release notes](../docs/releases/external-alpha-v0.1.md).

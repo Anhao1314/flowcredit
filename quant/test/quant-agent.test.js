@@ -251,6 +251,11 @@ test("audit log: metadata-only JSONL, hashes instead of plaintext, one line per 
     assert.equal(entry.harnessStatus, "ok");
     assert.equal(entry.toolCalls, "assess_frozen_dataset:ok>trial_metrics:ok");
     assert.equal(typeof entry.durationMs, "number");
+    assert.equal(entry.eventVersion, "flowcredit.audit_event/v1");
+    assert.equal(entry.eventType, "quant.agent.completed");
+    assert.equal(entry.run.product, "quant");
+    assert.equal(entry.run.kind, "ask");
+    assert.equal(entry.run.phase, "succeeded");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

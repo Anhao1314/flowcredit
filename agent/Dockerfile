@@ -12,9 +12,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY contracts ./contracts
 COPY scripts ./scripts
+COPY --chown=node:node core ./core
 COPY src ./src
 
 RUN mkdir -p /runtime/logs /runtime/workspace /site \
+    && chown -R node:node /runtime /site \
     && chmod 700 /runtime/logs /runtime/workspace
 
 ENV NODE_ENV=production \
@@ -24,4 +26,5 @@ ENV NODE_ENV=production \
     FC_MODEL=deepseek-v4-flash
 
 EXPOSE 8787
+USER node
 CMD ["node", "src/server.js"]

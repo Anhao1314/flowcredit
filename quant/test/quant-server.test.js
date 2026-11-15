@@ -268,6 +268,9 @@ test("W4 restart survival: case paused at signature gate survives process restar
   assert.equal(started.ok, true);
   assert.equal(started.claimReport.verdict, "fail");
   await new Promise(resolve => server1.close(resolve));
+  const pausedIndex = JSON.parse(await readFile(join(casesDir, "index.json"), "utf8"));
+  assert.equal(pausedIndex.cases[0].run.phase, "waiting");
+  assert.equal(pausedIndex.cases[0].run.productStatus, "REPORTED");
 
   // 进程 2：从磁盘回载检查点与索引 → 签字门仍可恢复
   const server2 = await startServer({ apiKey: "sk-test", transport: createScriptedTransport(scripts.scenarios["direct-answer"]), env });
@@ -280,6 +283,9 @@ test("W4 restart survival: case paused at signature gate survives process restar
   assert.equal(sign.status, "REJECTED");
   const detail = await (await fetch(`${base2}/api/cases/${started.caseId}`)).json();
   assert.equal(detail.values.status, "REJECTED");
+  const completedIndex = JSON.parse(await readFile(join(casesDir, "index.json"), "utf8"));
+  assert.equal(completedIndex.cases[0].run.phase, "failed");
+  assert.equal(completedIndex.cases[0].run.productStatus, "REJECTED");
   await new Promise(resolve => server2.close(resolve));
 });
 

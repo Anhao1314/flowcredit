@@ -28,15 +28,17 @@ FlowCredit 是"治理优先"的风险系统，有两个面：
 
 两条线遵守同一条规则：**权威数字来自纯函数，模型只做注记。**
 
+零业务共享 Agent Core 位于 [`agent/core/`](agent/core/README.md)：统一 OpenAI 兼容 JSON/SSE 网关、封闭工具注册表、显式策略 TTL 会话、受校验的运行投影、通用审计事件和版本化原子检查点；信用与量化仍保留各自产品适配器和确定性引擎。
+
 ## 当前状态
 
 | | |
 | --- | --- |
 | **仓库版本** | `external-alpha-v0.2.1` · agent `0.4.1` · API `flowcredit.api/v1.1` |
-| **线上部署** | `external-alpha-v0.1.1` —— 升级到 v0.2.0 是待执行的运营动作 |
+| **线上部署** | `external-alpha-v0.1.1` —— 升级到 v0.2.1 是待执行的运营动作 |
 | **Finch** | 已上架 [finchtech.ai](https://finchtech.ai)，名称 *FlowCredit － Business Risk Intelligence*（[agent card](https://www.finchtech.ai/a2a/e96e9a01-50aa-4686-bd0e-1aa9cdfcf967/agent-card.json)） |
 | **风险引擎** | `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1` |
-| **测试** | agent 87/87 · quant 157/157 · 隔离 lint 0 违规 |
+| **测试** | agent 107/107 · quant 157/157 · 隔离 lint 0 违规 |
 | **诚实的结论** | 没有任何量化候选通过显著性检验（最佳 PSR(0) 0.942 < 0.95）——这是一个"证伪器"，不是印钞机 |
 
 ## 产品界面
@@ -179,7 +181,7 @@ CCI (0–1000) = round((TAI×40% + repayment×25% + customer×15%
 
 | 检查 | 结果 |
 | --- | --- |
-| Agent 测试 | **87/87** |
+| Agent 测试 | **107/107** |
 | Quant 测试 | **157/157** |
 | 隔离 lint | **0 违规**（62 文件） |
 | 契约校验 | `validate:public-api` · `validate:finch-contract` 通过 |
@@ -193,8 +195,8 @@ CCI (0–1000) = round((TAI×40% + repayment×25% + customer×15%
 ```bash
 cd agent
 npm ci
-npm run check          # 语法 + 类型 + 87 测试
-npm run serve          # http://127.0.0.1:8787
+npm run check          # 语法 + 类型 + 107 测试
+npm start              # http://127.0.0.1:8787
 
 curl -X POST http://127.0.0.1:8787/api/v1/assess \
   -H 'Content-Type: application/json' \

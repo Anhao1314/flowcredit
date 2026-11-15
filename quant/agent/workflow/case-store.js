@@ -11,40 +11,23 @@
  *      写侧失败原样抛出）。
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
 import { MemorySaver } from "@langchain/langgraph-checkpoint";
+import { JsonCheckpointFile } from "../../../agent/core/checkpoint-file.js";
 
 export const CASE_STORE_VERSION = "quant-case-store/v0.1.0";
 
 /** 继承 MemorySaver 的语义（storage/writes 双对象），落盘到单个 JSON 文件。 */
 export class JsonFileSaver extends MemorySaver {
-  #filePath;
+  #store;
   constructor(filePath) {
     super();
-    this.#filePath = filePath;
-    if (existsSync(filePath)) {
-      try {
-        const saved = JSON.parse(readFileSync(filePath, "utf8"), (_key, value) => (value && typeof value === "object" && typeof value.__uint8array__ === "string" ? new Uint8Array(Buffer.from(value.__uint8array__, "base64")) : value));
-        if (saved?.caseStoreVersion !== CASE_STORE_VERSION) throw new TypeError("case store version mismatch");
-        this.storage = saved.storage ?? Object.create(null);
-        this.writes = saved.writes ?? Object.create(null);
-      } catch (error) {
-        // fail-closed：损坏/版本不符的档案库绝不静默降级为空——必须人工处理
-        throw new TypeError(`case store unreadable: ${String(error?.message || error)}`);
-      }
-    }
+    this.#store = new JsonCheckpointFile(filePath, { version: CASE_STORE_VERSION, versionKey: "caseStoreVersion" });
+    const saved = this.#store.load();
+    this.storage = saved?.storage ?? Object.create(null);
+    this.writes = saved?.writes ?? Object.create(null);
   }
   #flush() {
-    mkdirSync(dirname(this.#filePath), { recursive: true, mode: 0o700 });
-    // 检查点值可能含二进制序列化产物（Uint8Array）——JSON 需要 base64 编解码才能往返
-    const binaryToBase64 = (_key, value) => (value instanceof Uint8Array ? { __uint8array__: Buffer.from(value).toString("base64") } : value);
-    writeFileSync(this.#filePath, JSON.stringify({ caseStoreVersion: CASE_STORE_VERSION, storage: this.storage, writes: this.writes }, binaryToBase64));
-  }
-  #revive(value) {
-    return value && typeof value === "object" && typeof value.__uint8array__ === "string"
-      ? new Uint8Array(Buffer.from(value.__uint8array__, "base64"))
-      : value;
+    this.#store.save({ storage: this.storage, writes: this.writes });
   }
   async put(config, checkpoint, metadata) {
     const result = await super.put(config, checkpoint, metadata);
@@ -60,17 +43,15 @@ export class JsonFileSaver extends MemorySaver {
 /** 案件索引持久化：[{caseId, threadId, kind, submittedBy, createdAtUtc, summary}]。 */
 export function loadCaseIndex(filePath) {
   try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf8"));
-    if (parsed?.caseIndexVersion !== CASE_STORE_VERSION || !Array.isArray(parsed.cases)) return [];
-    return parsed.cases;
+    const parsed = new JsonCheckpointFile(filePath, { version: CASE_STORE_VERSION, versionKey: "caseIndexVersion" }).load();
+    return Array.isArray(parsed?.cases) ? parsed.cases : [];
   } catch {
     return [];
   }
 }
 
 export function saveCaseIndex(filePath, cases) {
-  mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
-  writeFileSync(filePath, JSON.stringify({ caseIndexVersion: CASE_STORE_VERSION, cases }) + "\n", "utf8");
+  new JsonCheckpointFile(filePath, { version: CASE_STORE_VERSION, versionKey: "caseIndexVersion" }).save({ cases });
 }
 
 export function nextCaseSeq(cases) {

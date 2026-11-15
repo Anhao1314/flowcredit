@@ -14,6 +14,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { createAuditEvent } from "../../agent/core/audit-event.js";
 
 export const AUDIT_VERSION = "quant-audit/v0.0.3";
 
@@ -42,21 +43,25 @@ export function createAuditLogger({ dir = defaultAuditDir(), now = () => new Dat
     write(event) {
       try {
         mkdirSync(dir, { recursive: true, mode: 0o700 });
-        const allowed = {
-          auditVersion: AUDIT_VERSION,
+        const allowed = createAuditEvent({
+          eventType: event.kind === "inspection-narrative" ? "quant.inspection.narrative" : "quant.agent.completed",
           timestamp: now(),
-          sessionId: event.sessionId ?? null,
-          questionHash: event.question == null ? null : hash16(event.question),
-          answerHash: event.answer == null ? null : hash16(event.answer),
-          harnessStatus: event.harnessStatus ?? null,
-          code: event.code ?? null,
-          toolCalls: Array.isArray(event.toolCalls) ? event.toolCalls.map(call => `${call.name}:${call.ok ? "ok" : "rejected"}`).join(">") : null,
-          steps: event.steps ?? null,
-          usage: event.usage ?? null,
-          durationMs: event.durationMs ?? null,
-          model: event.model ?? null,
-          agentVersion: event.agentVersion ?? null
-        };
+          run: event.run ?? null,
+          payload: {
+            auditVersion: AUDIT_VERSION,
+            sessionId: event.sessionId ?? null,
+            questionHash: event.question == null ? null : hash16(event.question),
+            answerHash: event.answer == null ? null : hash16(event.answer),
+            harnessStatus: event.harnessStatus ?? null,
+            code: event.code ?? null,
+            toolCalls: Array.isArray(event.toolCalls) ? event.toolCalls.map(call => `${call.name}:${call.ok ? "ok" : "rejected"}`).join(">") : null,
+            steps: event.steps ?? null,
+            usage: event.usage ?? null,
+            durationMs: event.durationMs ?? null,
+            model: event.model ?? null,
+            agentVersion: event.agentVersion ?? null
+          }
+        });
         appendFileSync(join(dir, "agent-audit.jsonl"), `${JSON.stringify(allowed)}\n`, { encoding: "utf8" });
         return true;
       } catch {

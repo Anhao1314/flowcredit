@@ -168,11 +168,27 @@ LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立�
 
 ```sh
 cd agent
-NO_MODEL_ENV=1 npm test          # agent 全量回归（110 用例，不受本目录影响）
+NO_MODEL_ENV=1 npm test          # agent 全量回归（95 用例，不受本目录影响）
 npm run test:quant               # quant 用例
 npm run check:quant              # 隔离 lint
 npm run eval                     # 离线评估 → ../quant/eval/results/
 ```
+
+### 控制台鉴权（可选）
+
+开启后所有写接口与案件读取均要求 Bearer；签字人必须等于部署级操作员身份：
+
+```sh
+CONSOLE_AUTH_ENABLED=true \
+CONSOLE_API_KEY=<≥16 字符> \
+CONSOLE_OPERATOR_ID=<签字人名称> \
+npm run serve
+```
+
+- 案件列表/详情（GET）与送检/签字（POST）同等保护；未鉴权返回 401。
+- 签字：空 `signedBy` → 400 `SIGNER_REQUIRED`；与 `CONSOLE_OPERATOR_ID` 不符 → 403 `SIGNER_NOT_AUTHORIZED`；开启鉴权但未配置 operator id → 500 fail-closed。
+- 单 token = 部署级身份表示；多用户/组织级身份需 per-user token（未实现）。
+- 注意：浏览器控制台的 fetch 不携带 token，开启鉴权后控制台数据视图不可用；鉴权面向 API/CLI 调用方。
 
 ## 禁入清单 v4（虚拟盘修订，修订点逐条标注）
 

@@ -21,6 +21,7 @@ import {
 } from "./finch-contract.js";
 import { NL_DRAFT_PARSER_VERSION, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
+import { RunRecord } from "../core/run-record.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
@@ -469,6 +470,8 @@ export function createFlowCreditServer(options = {}) {
   const server = createServer(async (req, res) => {
     const requestId = `fc-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const started = Date.now();
+    const run = new RunRecord({ runId: requestId, product: "credit", kind: "http", createdAtMs: started })
+      .transition("running", { atMs: started, productStatus: "STARTED" });
     let output;
     let status = 200;
     let errorClass;
@@ -521,7 +524,9 @@ export function createFlowCreditServer(options = {}) {
     } finally {
       const url = new URL(req.url, "http://localhost");
       status = res.statusCode || status;
-      logger.write({ requestId, route: url.pathname, model: MODEL, durationMs: Date.now() - started, status, outputHash: output ? hash(output) : undefined, inputHash: output?.inputFingerprint || output?.data?.inputFingerprint, harnessStatus: output?.harnessStatus || output?.data?.harnessStatus, errorClass });
+      const finishedAt = Date.now();
+      run.transition(status >= 500 ? "failed" : "succeeded", { atMs: finishedAt, productStatus: String(status) });
+      logger.write({ run: run.snapshot(), requestId, route: url.pathname, model: MODEL, durationMs: finishedAt - started, status, outputHash: output ? hash(output) : undefined, inputHash: output?.inputFingerprint || output?.data?.inputFingerprint, harnessStatus: output?.harnessStatus || output?.data?.harnessStatus, errorClass });
     }
   });
   // Log appends are queued asynchronously; tests and shutdown await this before cleanup.

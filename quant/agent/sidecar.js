@@ -22,6 +22,8 @@
 
 import { AGENT_VERSION } from "./client.js";
 import { createAuditLogger } from "./audit.js";
+import { TtlSessionStore } from "../../agent/core/session-store.js";
+import { RunRecord } from "../../agent/core/run-record.js";
 
 export const MAX_STEPS_V002 = 4;
 export const RETRY_BUDGET_V002 = 1;
@@ -56,28 +58,30 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
   if (!registry || typeof registry.get !== "function") throw new TypeError("registry required");
   if (!dataset?.dataVersion || !trials?.trialsVersion) throw new TypeError("frozen dataset and trials required");
   const auditLogger = audit || createAuditLogger({});
-  const sessions = new Map(); // sessionId -> { turns: [{role, content}...], expiresAt }
+  const sessions = new TtlSessionStore({ ttlMs: sessionTtlMs, maxEntries: MAX_SESSIONS_V002, now: auditLogger.nowMs, refreshOnRead: true });
+  let runSequence = 0;
 
-  function pruneSessions(nowMs) {
-    for (const [key, session] of sessions) if (session.expiresAt <= nowMs) sessions.delete(key);
-    while (sessions.size > MAX_SESSIONS_V002) sessions.delete(sessions.keys().next().value);
+  function beginRun(kind, startedAt) {
+    const run = new RunRecord({ runId: `quant-${kind}-${startedAt}-${++runSequence}`, product: "quant", kind, createdAtMs: startedAt });
+    return run.transition("running", { atMs: startedAt, productStatus: "STARTED" });
   }
 
-  function sessionTurns(sessionId, nowMs) {
+  function completeRun(run, result, finishedAt) {
+    const phase = result.harnessStatus === "aborted" ? "cancelled" : result.ok ? "succeeded" : "failed";
+    run.transition(phase, { atMs: finishedAt, productStatus: result.code ?? result.harnessStatus ?? null });
+    return run.snapshot();
+  }
+
+  function sessionTurns(sessionId) {
     if (!sessionId) return [];
-    pruneSessions(nowMs);
     const session = sessions.get(sessionId);
-    if (!session) return [];
-    session.expiresAt = nowMs + sessionTtlMs;
-    return session.turns.slice(-MAX_SESSION_TURNS_V002);
+    return session ? session.turns.slice(-MAX_SESSION_TURNS_V002) : [];
   }
 
-  function sessionAppend(sessionId, question, answer, nowMs) {
+  function sessionAppend(sessionId, question, answer) {
     if (!sessionId) return;
-    pruneSessions(nowMs);
-    const session = sessions.get(sessionId) || { turns: [], expiresAt: 0 };
+    const session = sessions.get(sessionId) || { turns: [] };
     session.turns = [...session.turns, { role: "user", content: question }, { role: "assistant", content: answer }].slice(-MAX_SESSION_TURNS_V002);
-    session.expiresAt = nowMs + sessionTtlMs;
     sessions.set(sessionId, session);
   }
 
@@ -100,13 +104,16 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
 
   async function askQuant({ question, modelConsent = false, sessionId = null } = {}) {
     const startedAt = auditLogger.nowMs();
+    const run = beginRun("ask", startedAt);
     const finish = result => {
+      const finishedAt = auditLogger.nowMs();
       auditLogger.write({
+        run: completeRun(run, result, finishedAt),
         sessionId: sessionId ?? null, question, answer: result.answer ?? "",
         harnessStatus: result.harnessStatus ?? null, code: result.code ?? null,
         toolCalls: result.toolCalls ?? [], steps: result.steps ?? null,
         usage: result.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
-        durationMs: auditLogger.nowMs() - startedAt
+        durationMs: finishedAt - startedAt
       });
       return result;
     };
@@ -114,8 +121,6 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
     if (typeof question !== "string" || !question.trim() || question.length > 2000) {
       return finish({ ok: false, code: "INVALID_QUESTION", harnessStatus: "not-requested", answer: "", toolCalls: [], steps: 0, citations: [], usage: null, sessionId, agentVersion: AGENT_VERSION, model: client.model });
     }
-
-    const nowMs = () => auditLogger.nowMs();
 
     // 门禁一：consent——false 时连 transport 都不应被调用。
     if (modelConsent !== true) {
@@ -137,7 +142,7 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
 
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      ...sessionTurns(sessionId, nowMs()),
+      ...sessionTurns(sessionId),
       { role: "user", content: question }
     ];
     const toolCalls = [];
@@ -195,7 +200,7 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
       if (!answer.trim()) {
         return finish(fallback("unavailable", "MODEL_EMPTY_ANSWER", toolCalls, steps, totalUsage));
       }
-      if (sessionId) sessionAppend(sessionId, question, answer, nowMs());
+      if (sessionId) sessionAppend(sessionId, question, answer);
       return finish({
         ok: true, harnessStatus: "ok",
         answer, toolCalls, steps,
@@ -232,14 +237,17 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
    */
   async function askQuantStream({ question, modelConsent = false, sessionId = null, onEvent = () => {}, signal = null } = {}) {
     const startedAt = auditLogger.nowMs();
+    const run = beginRun("ask-stream", startedAt);
     const emit = event => { try { onEvent(event); } catch { /* 观察者异常不污染主流程 */ } };
     const finish = result => {
+      const finishedAt = auditLogger.nowMs();
       auditLogger.write({
+        run: completeRun(run, result, finishedAt),
         sessionId: sessionId ?? null, question, answer: result.answer ?? "",
         harnessStatus: result.harnessStatus ?? null, code: result.code ?? null,
         toolCalls: result.toolCalls ?? [], steps: result.steps ?? null,
         usage: result.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
-        durationMs: auditLogger.nowMs() - startedAt
+        durationMs: finishedAt - startedAt
       });
       emit({ type: "done", result });
       return result;
@@ -248,8 +256,6 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
     if (typeof question !== "string" || !question.trim() || question.length > 2000) {
       return finish({ ok: false, code: "INVALID_QUESTION", harnessStatus: "not-requested", answer: "", toolCalls: [], steps: 0, citations: [], usage: null, sessionId, agentVersion: AGENT_VERSION, model: client.model });
     }
-
-    const nowMs = () => auditLogger.nowMs();
 
     if (modelConsent !== true) {
       return finish({
@@ -275,7 +281,7 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
 
     const messages = [
       { role: "system", content: SYSTEM_PROMPT },
-      ...sessionTurns(sessionId, nowMs()),
+      ...sessionTurns(sessionId),
       { role: "user", content: question }
     ];
     const toolCalls = [];
@@ -344,7 +350,7 @@ export function createQuantAssistant({ client, registry, dataset, trials, audit,
       if (!answer.trim()) {
         return finish(fallback("unavailable", "MODEL_EMPTY_ANSWER", toolCalls, steps, totalUsage));
       }
-      if (sessionId) sessionAppend(sessionId, question, answer, nowMs());
+      if (sessionId) sessionAppend(sessionId, question, answer);
       return finish({
         ok: true, harnessStatus: "ok",
         answer, toolCalls, steps,

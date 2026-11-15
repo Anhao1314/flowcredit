@@ -31,41 +31,19 @@ export const MCP_SERVER_INFO = { name: "flowcredit-inspection-mcp", version: "qu
 /** 构建工具清单与处理器（注入 registry/dataset 以便测试）。 */
 export function buildMcpTools({ dataset, trials, adjudicationDataset, costRate } = {}) {
   const registry = createToolRegistry({ dataset, trials });
-  const tools = [
-    {
-      name: "assess_frozen_dataset",
-      description: "Run the full deterministic pipeline on the frozen snapshot: signal components, guard status, decision, fingerprints. Use when asked about overall dataset verdict.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      execute: () => registry.get("assess_frozen_dataset").execute({})
-    },
-    {
-      name: "guard_check",
-      description: "Risk guard re-check: drawdown vs frozen 25% limit, breach codes, decision status. Use when asked why trading is halted/blocked.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      execute: () => registry.get("guard_check").execute({})
-    },
-    {
-      name: "trial_metrics",
-      description: "All six registered trials with net-of-cost metrics (pp-Sharpe/OOS/turnover/MaxDD) + the deterministic selection with DSR. Call ONCE — it returns everything.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      execute: () => registry.get("trial_metrics").execute({})
-    },
-    {
-      name: "data_quality",
-      description: "Data quality gate re-check: rows, span, max daily move, findings. Use when asked about data trustworthiness.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      execute: () => registry.get("data_quality").execute({})
-    },
-    {
-      name: "signal_components",
-      description: "Three signal components (momentum/trend/stability) breakdown for the frozen snapshot.",
-      inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      execute: () => registry.get("signal_components").execute({})
-    },
+  const baseNames = ["assess_frozen_dataset", "guard_check", "trial_metrics", "data_quality", "signal_components"];
+  const descriptions = {
+    assess_frozen_dataset: "Run the full deterministic pipeline on the frozen snapshot: signal components, guard status, decision, fingerprints. Use when asked about overall dataset verdict.",
+    guard_check: "Risk guard re-check: drawdown vs frozen 25% limit, breach codes, decision status. Use when asked why trading is halted/blocked.",
+    trial_metrics: "All six registered trials with net-of-cost metrics (pp-Sharpe/OOS/turnover/MaxDD) + the deterministic selection with DSR. Call ONCE — it returns everything.",
+    data_quality: "Data quality gate re-check: rows, span, max daily move, findings. Use when asked about data trustworthiness.",
+    signal_components: "Three signal components (momentum/trend/stability) breakdown for the frozen snapshot."
+  };
+  const extended = registry.extend([
     {
       name: "verify_claims",
       description: "The claim verifier: paste AI-generated research text; every keyword-anchored numeric claim (drawdown %, signalScore, DSR, pp-Sharpe, rows) is re-computed against deterministic tools and flagged match/mismatch/unverifiable. Use to check whether an AI report's numbers are trustworthy.",
-      inputSchema: { type: "object", properties: { text: { type: "string", description: "AI-generated research artifact text to inspect" } }, required: ["text"], additionalProperties: false },
+      parameters: { type: "object", properties: { text: { type: "string", description: "AI-generated research artifact text to inspect" } }, required: ["text"], additionalProperties: false },
       execute: args => verifyText(String(args.text), {
         signalScore: registry.get("assess_frozen_dataset").execute({}).authoritative.signalScore,
         maxDrawdownPct: registry.get("assess_frozen_dataset").execute({}).authoritative.signals.maxDrawdownPct,
@@ -77,7 +55,7 @@ export function buildMcpTools({ dataset, trials, adjudicationDataset, costRate }
     {
       name: "adjudicate_candidate",
       description: "Deterministic adjudication of ONE strategy candidate (family + params) against the 2y BTC snapshot with calibrated cost: returns net metrics + pool DSR. Read-only review material — never registers or promotes anything.",
-      inputSchema: {
+      parameters: {
         type: "object",
         properties: { family: { type: "string" }, params: { type: "object" }, rationale: { type: "string" } },
         required: ["family", "params"], additionalProperties: false
@@ -88,8 +66,19 @@ export function buildMcpTools({ dataset, trials, adjudicationDataset, costRate }
         return adjudicateCandidates({ dataset: adjudicationDataset, candidates: [validated.candidate], costRate });
       }
     }
-  ];
-  return { tools, registry };
+  ]);
+  const byName = new Map(extended.list.map(tool => [tool.name, tool]));
+  const tools = [...baseNames, "verify_claims", "adjudicate_candidate"].map(name => {
+    const tool = byName.get(name);
+    const isBaseTool = baseNames.includes(name);
+    return {
+      name,
+      description: descriptions[name] || tool.description,
+      inputSchema: isBaseTool ? { type: "object", properties: {}, additionalProperties: false } : tool.parameters,
+      execute: isBaseTool ? () => tool.execute({}) : tool.execute
+    };
+  });
+  return { tools, registry: extended };
 }
 
 /** JSON-RPC 请求分发（确定性、纯帧级——供 stdio 循环与测试共用）。 */

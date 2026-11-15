@@ -28,15 +28,17 @@ FlowCredit is a governance-first risk system with two surfaces:
 
 The same rule binds both: **authoritative numbers come from pure functions; the model only annotates.**
 
+Shared, zero-business Agent Core primitives now live in [`agent/core/`](agent/core/README.md): one OpenAI-compatible JSON/SSE gateway, a closed tool registry, explicit-policy TTL sessions, checked run projections, common audit events and versioned atomic checkpoints. Credit and quant keep separate product adapters and deterministic engines.
+
 ## Status at a glance
 
 | | |
 | --- | --- |
 | **Repository release** | `external-alpha-v0.2.1` · agent `0.4.1` · API `flowcredit.api/v1.1` |
-| **Live deployment** | `external-alpha-v0.1.1` — update to v0.2.0 is a pending operator action |
+| **Live deployment** | `external-alpha-v0.1.1` — update to v0.2.1 is a pending operator action |
 | **Finch** | Listed on [finchtech.ai](https://finchtech.ai) as *FlowCredit － Business Risk Intelligence* ([agent card](https://www.finchtech.ai/a2a/e96e9a01-50aa-4686-bd0e-1aa9cdfcf967/agent-card.json)) |
 | **Risk engine** | `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1` |
-| **Tests** | 87/87 agent · 157/157 quant · isolation lint 0 violations |
+| **Tests** | 107/107 agent · 157/157 quant · isolation lint 0 violations |
 | **Honest headline** | No quant candidate passes significance (best PSR(0) 0.942 < 0.95) — this system is a falsifier, not a money printer |
 
 ## Product surface
@@ -179,7 +181,7 @@ All failures are retained in the research memory — the system's job is to prov
 
 | Check | Result |
 | --- | --- |
-| Agent tests | **87/87** |
+| Agent tests | **107/107** |
 | Quant tests | **157/157** |
 | Isolation lint | **0 violations** (62 files) |
 | Contract validators | `validate:public-api` · `validate:finch-contract` pass |
@@ -193,8 +195,8 @@ All failures are retained in the research memory — the system's job is to prov
 ```bash
 cd agent
 npm ci
-npm run check          # syntax + typecheck + 87 tests
-npm run serve          # http://127.0.0.1:8787
+npm run check          # syntax + typecheck + 107 tests
+npm start              # http://127.0.0.1:8787
 
 curl -X POST http://127.0.0.1:8787/api/v1/assess \
   -H 'Content-Type: application/json' \
