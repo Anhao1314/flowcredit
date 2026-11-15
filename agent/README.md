@@ -3,7 +3,7 @@
 Deterministic credit-risk assessment service with an **optional, non-authoritative** language-model layer.
 Finch Direct API integration lives here; the deterministic engine owns every score, grade and decision status.
 
-**Status:** repository release `external-alpha-v0.2.2` · agent `0.4.2` · public API `flowcredit.api/v1.1`
+**Status:** repository release `external-alpha-v0.2.3` · agent `0.4.3` · public API `flowcredit.api/v1.1`
 **Engine:** `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1`
 
 Shared primitives (model gateway, tool registry, run records, audit events, checkpoints, sessions) live in

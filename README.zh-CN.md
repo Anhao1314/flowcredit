@@ -34,7 +34,7 @@ FlowCredit 是"治理优先"的风险系统，有两个面：
 
 | | |
 | --- | --- |
-| **仓库版本** | `external-alpha-v0.2.2` · agent `0.4.2` · API `flowcredit.api/v1.1` |
+| **仓库版本** | `external-alpha-v0.2.3` · agent `0.4.3` · API `flowcredit.api/v1.1` |
 | **线上部署** | `external-alpha-v0.1.1` —— 升级到 v0.2.1 是待执行的运营动作 |
 | **Finch** | 已上架 [finchtech.ai](https://finchtech.ai)，名称 *FlowCredit － Business Risk Intelligence*（[agent card](https://www.finchtech.ai/a2a/e96e9a01-50aa-4686-bd0e-1aa9cdfcf967/agent-card.json)） |
 | **风险引擎** | `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1` |
@@ -121,7 +121,7 @@ Idempotency-Key: <可选客户端 key>
     "assessmentFingerprint": "sha256:…"
   },
   "meta": {
-    "release": "external-alpha-v0.2.2",
+    "release": "external-alpha-v0.2.3",
     "engine": "flowcredit.risk_result/v0.2.1",
     "intake": "flowcredit.intake/v0.3.1",
     "modelLayer": { "used": false }
@@ -244,7 +244,7 @@ npm run adjudicate     # 确定性裁决
 | --- | --- |
 | API 与规则 | [公共 API](docs/public-api-v1.md) · [风险规则 v0.2.1](docs/flowcredit-rules-v0.2.1.md) · [intake v0.3](docs/flowcredit-intake-v0.3.md) |
 | Finch | [契约](docs/finch/CONTRACT.md) · [提交包](docs/finch/SUBMISSION.md) · [上架文案](docs/finch/LISTING.md) · [交接指南](docs/finch/FINCH_HANDOFF_GUIDE.md) |
-| 发布 | [external-alpha-v0.2.2](docs/releases/external-alpha-v0.2.2.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
+| 发布 | [external-alpha-v0.2.3](docs/releases/external-alpha-v0.2.3.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
 | 产品 | [Enterprise PRD v0.1](docs/product/enterprise-prd-v0.1.md) · [Design Partner 候选](docs/product/design-partner-candidates-v0.1.md) |
 | 量化 | [量化栈](quant/README.md) · [研究记忆](quant/research-memory/README.md) · [许可](quant/data/LICENSING.md) |
 | 参与 | [贡献指南](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [变更日志](CHANGELOG.md) · [归档](docs/archive) |

@@ -11,7 +11,7 @@ Content-Type: application/json
 Idempotency-Key: <optional-client-key>
 ```
 
-The live External Alpha service currently runs the frozen release `external-alpha-v0.1.1`. Repository release `external-alpha-v0.2.2` (API v1.1) is prepared; updating the production deployment is an operator action. The provider secret is supplied through Finch's Bearer credential configuration and never appears in this package.
+The live External Alpha service currently runs the frozen release `external-alpha-v0.1.1`. Repository release `external-alpha-v0.2.3` (API v1.1) is prepared; updating the production deployment is an operator action. The provider secret is supplied through Finch's Bearer credential configuration and never appears in this package.
 
 Finch uses the public endpoint, not a Finch-specific risk engine. `/fc/ai/v0.3/assess` remains an internal compatibility route and is not the recommended submission endpoint. Legacy v0.1 / v0.2 / v0.2.1 routes were removed in v0.2.0.
 
@@ -36,7 +36,7 @@ Successful public invocation returns exactly one canonical envelope (v1.1 adds o
   "timestamp": "2026-09-10T00:00:00.000Z",
   "data": {},
   "meta": {
-    "release": "external-alpha-v0.2.2",
+    "release": "external-alpha-v0.2.3",
     "engine": "flowcredit.risk_result/v0.2.1",
     "intake": "flowcredit.intake/v0.3.1",
     "modelLayer": { "used": false }

@@ -139,6 +139,22 @@ test("CSV import endpoint: builds monthly draft + documented evidence status", a
   });
 });
 
+test("Finch A2A compatibility: POST /api/v1/assess with { prompt } returns a chat answer", async () => {
+  await withServer(async base => {
+    const response = await fetch(`${base}/api/v1/assess`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "某 AI 推理服务商 2026-08 收入 100000 美元，GPU 4200 小时，回款率 94%" })
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(typeof body.data.answer, "string");
+    assert.ok(body.data.answer.length > 0, "answer must be non-empty");
+    assert.equal(body.schemaVersion, "flowcredit.risk_result/v0.2.1");
+    assert.equal(body.data.parserVersion, "nl-draft-v0.1");
+  });
+});
+
 test("Bearer authentication protects mutating Agent APIs while health and schema stay public", async () => {
   const env = { ...process.env, AUTH_ENABLED: "true", FLOWCREDIT_API_KEY: "test-secret-key-12345", RATE_LIMIT_MAX_REQUESTS: "20" };
   await withServer(async base => {

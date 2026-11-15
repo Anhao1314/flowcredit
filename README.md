@@ -34,7 +34,7 @@ Shared, zero-business Agent Core primitives now live in [`agent/core/`](agent/co
 
 | | |
 | --- | --- |
-| **Repository release** | `external-alpha-v0.2.2` · agent `0.4.2` · API `flowcredit.api/v1.1` |
+| **Repository release** | `external-alpha-v0.2.3` · agent `0.4.3` · API `flowcredit.api/v1.1` |
 | **Live deployment** | `external-alpha-v0.1.1` — update to v0.2.1 is a pending operator action |
 | **Finch** | Listed on [finchtech.ai](https://finchtech.ai) as *FlowCredit － Business Risk Intelligence* ([agent card](https://www.finchtech.ai/a2a/e96e9a01-50aa-4686-bd0e-1aa9cdfcf967/agent-card.json)) |
 | **Risk engine** | `flowcredit.risk_result/v0.2.1` · intake `flowcredit.intake/v0.3.1` |
@@ -121,7 +121,7 @@ Idempotency-Key: <optional-client-key>
     "assessmentFingerprint": "sha256:…"
   },
   "meta": {
-    "release": "external-alpha-v0.2.2",
+    "release": "external-alpha-v0.2.3",
     "engine": "flowcredit.risk_result/v0.2.1",
     "intake": "flowcredit.intake/v0.3.1",
     "modelLayer": { "used": false }
@@ -244,7 +244,7 @@ npm run adjudicate     # deterministic adjudication
 | --- | --- |
 | API & rules | [Public API](docs/public-api-v1.md) · [risk rules v0.2.1](docs/flowcredit-rules-v0.2.1.md) · [intake v0.3](docs/flowcredit-intake-v0.3.md) |
 | Finch | [Contract](docs/finch/CONTRACT.md) · [Submission](docs/finch/SUBMISSION.md) · [Listing copy](docs/finch/LISTING.md) · [Handoff guide](docs/finch/FINCH_HANDOFF_GUIDE.md) |
-| Releases | [external-alpha-v0.2.2](docs/releases/external-alpha-v0.2.2.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
+| Releases | [external-alpha-v0.2.3](docs/releases/external-alpha-v0.2.3.md) · [v0.1.1](docs/releases/external-alpha-v0.1.1.md) |
 | Product | [Enterprise PRD v0.1](docs/product/enterprise-prd-v0.1.md) · [Design Partner candidates](docs/product/design-partner-candidates-v0.1.md) |
 | Quant | [Quant stack](quant/README.md) · [Research memory](quant/research-memory/README.md) · [Licensing](quant/data/LICENSING.md) |
 | Contributions | [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Archive](docs/archive) |

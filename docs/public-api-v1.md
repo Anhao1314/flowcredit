@@ -163,6 +163,10 @@ model-extracted fields without support in the supplied text are dropped before v
 The internal CSV import path (`POST /fc/ai/v0.3/import/csv`) returns an intake draft plus its
 `digest` and `evidenceStatus` (CSV evidence is `documented` tier, attested by `csv-import-v1`).
 
+**Finch A2A compatibility:** `POST /api/v1/assess` also accepts `{"prompt": "..."}` (prompt-only)
+and returns the deterministic chat payload with a plain-text `data.answer`; draft-based assessment
+is unchanged. Auth requirements are identical.
+
 Errors use the same versioned envelope:
 
 ```json

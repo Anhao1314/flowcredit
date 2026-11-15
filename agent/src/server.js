@@ -240,6 +240,12 @@ async function handleV03Assessment(req, requestId, context) {
   const publicMode = isPublicAssessRequest(req);
   const key = idempotencyKey(req);
   const operation = async () => {
+    // Finch A2A 兼容：listing 契约以 {"prompt":"..."} 调用；assess 端点直接接受并走 chat 路径。
+    // 这是 prompt 单字段输入的兼容层，不改变 draft 评估契约。
+    if (publicMode && typeof body.prompt === "string" && body.draft === undefined) {
+      const chat = await buildChatPayload({ prompt: body.prompt }, requestId, context);
+      return { status: chat.status, body: chat.body, requestId, timestamp: new Date().toISOString() };
+    }
     if (contractMode || publicMode) {
       const contractValidation = validateFinchAssessInput(body);
       if (!contractValidation.valid) return {
@@ -299,12 +305,10 @@ function responseMeta(body) {
   };
 }
 
-async function serveChat(req, res, requestId, context) {
-  const canonical = { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 };
-  const body = await readJson(req);
+async function buildChatPayload(body, requestId, context) {
   const request = validateChatRequest(body);
   if (!request.valid) {
-    return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit chat input schema.", errorDetails: request.errors }, requestId, canonical);
+    return { status: 400, body: { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit chat input schema.", errorDetails: request.errors } };
   }
   const extraction = extractNaturalLanguageDraft(request.prompt);
   const effectiveDraft = sanitizeExtractedDraftV03(extraction.draft).draft;
@@ -314,7 +318,7 @@ async function serveChat(req, res, requestId, context) {
     context.security.invocationTimeoutMs
   );
   if (assessment.status !== 200) {
-    return sendJson(res, assessment.status, { ...assessment.body, draftId, extractedDraft: extraction.draft, parserVersion: NL_DRAFT_PARSER_VERSION }, requestId, canonical);
+    return { status: assessment.status, body: { ...assessment.body, draftId, extractedDraft: extraction.draft, parserVersion: NL_DRAFT_PARSER_VERSION } };
   }
   const result = assessment.body;
   const status = result.decisionStatus === "insufficient-evidence" ? "insufficient-evidence" : "assessed";
@@ -322,8 +326,9 @@ async function serveChat(req, res, requestId, context) {
     extractedDraft: extraction.draft, assessment: result,
     missingByGroup: result.missingByGroup, requiredActions: result.requiredActions
   };
+  const message = buildChatUserMessage(presentationInput);
   const data = {
-    status, message: buildChatUserMessage(presentationInput), presentation: buildChatPresentation(presentationInput),
+    status, message, answer: message, presentation: buildChatPresentation(presentationInput),
     parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
     extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
     assessment: result,
@@ -333,7 +338,17 @@ async function serveChat(req, res, requestId, context) {
     missingInputs: result.missingInputs, missingByGroup: result.missingByGroup, requiredActions: result.requiredActions,
     sessionId: result.sessionId, assessmentId: result.assessmentId
   };
-  return sendJson(res, 200, data, requestId, { ...canonical, maxBytes: FINCH_RESPONSE_MAX_BYTES, meta: responseMeta(data) });
+  return { status: 200, body: data };
+}
+
+async function serveChat(req, res, requestId, context) {
+  const canonical = { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 };
+  const body = await readJson(req);
+  const result = await buildChatPayload(body, requestId, context);
+  if (result.status !== 200) {
+    return sendJson(res, result.status, result.body, requestId, canonical);
+  }
+  return sendJson(res, 200, result.body, requestId, { ...canonical, maxBytes: FINCH_RESPONSE_MAX_BYTES, meta: responseMeta(result.body) });
 }
 
 async function serveAssessment(req, res, requestId, context, { publicApi = false } = {}) {
@@ -376,7 +391,7 @@ async function route(req, res, requestId, context = {}) {
   if (req.method === "GET" && url.pathname === "/health") {
     const harness = await brain.status();
     return sendJson(res, 200, {
-      status: "ok", service: "flowcredit-agent", version: "0.4.2", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
+      status: "ok", service: "flowcredit-agent", version: "0.4.3", release: RELEASE_VERSION, schemaVersion: PRODUCT_VERSION_V03, riskEngine: RULE_VERSION_V021, intakeSchema: PRODUCT_VERSION_V03,
       model: MODEL, modelProvider: "openai-compatible", productVersions: { v03: PRODUCT_VERSION_V03 },
       llm: { enabled: harness.configured, available: harness.ready }, harness
     }, requestId);

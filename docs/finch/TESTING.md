@@ -1,6 +1,6 @@
 # FlowCredit Finch Submission Testing
 
-Status: local Contract and Release tests pass, and the public HTTPS sequence has been executed successfully against the live External Alpha service. Repository release `external-alpha-v0.2.2` (API v1.1) is prepared; re-run the public sequence after the operator updates the deployment.
+Status: local Contract and Release tests pass, and the public HTTPS sequence has been executed successfully against the live External Alpha service. Repository release `external-alpha-v0.2.3` (API v1.1) is prepared; re-run the public sequence after the operator updates the deployment.
 
 ## Live Public Endpoint
 
