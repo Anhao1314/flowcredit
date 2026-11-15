@@ -357,6 +357,15 @@ body[data-view="chat"] .footer{display:none}
 .chat-note.fill{border-left:3px solid var(--good)}
 .chat-note.reject{border-left:3px solid var(--bad)}
 .chat-hint{font-size:11.5px;color:var(--muted);margin:10px auto 0;max-width:820px;width:100%}
+/* ── Finch 模拟（与 Direct API 同构：只发 {prompt}）──────────────────────── */
+body[data-view="finch"] main{padding:16px 24px}
+body[data-view="finch"] .footer{display:none}
+.finch-diag{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.finch-diag .badge{font-size:10.5px}
+.finch-raw{margin-top:8px;font-size:11px;color:var(--muted)}
+.finch-raw summary{cursor:pointer;user-select:none}
+.finch-raw pre{max-height:220px;overflow:auto;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
+.finch-reset{color:var(--accent);cursor:pointer;background:none;border:none;font-size:11.5px;padding:0;margin-left:8px}
 /* ── P1：历史会话列表 / 流式光标 / 重试芯片 ──────────────────────────────── */
 .history-list{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow:auto;margin:0 2px 4px}
 .history-item{display:flex;align-items:center;gap:6px;border-radius:10px;padding:4px 6px 4px 8px}
@@ -402,6 +411,7 @@ body[data-view="chat"] .footer{display:none}
   <div class="brand"><span id="brand-avatar"></span>FlowCredit Quant</div>
   <div class="segmented">
     <button class="seg-btn active" data-view="chat">Chat</button>
+    <button class="seg-btn" data-view="finch">Finch</button>
     <button class="seg-btn" data-view="paper">Paper</button>
   </div>
   <div class="side-search">
@@ -740,6 +750,36 @@ npm run mcp                                                       # 质检能力
         <button class="quick-chip" data-q="当前数据集的质量如何？">数据质量如何？</button>
       </div>
       <div id="chat-hint" class="chat-hint" style="text-align:center">检测服务中…</div>
+    </div>
+  </section>
+
+  <section class="view" data-view="finch">
+    <div class="chat-shell" id="finch-shell">
+      <div style="display:flex;justify-content:center;padding:6px 0 0">
+        <span class="badge badge-accent">Finch Direct API 模拟 · 只发送 {prompt} · 买家所见即所得</span>
+      </div>
+      <div class="chat-empty" id="finch-empty">
+        <div class="wordmark"><span id="finch-avatar"></span>FlowCredit<span class="dot-blue"></span></div>
+        <div class="wordmark-sub">Business Risk Intelligence · 与 Finch 买家对话框同构</div>
+      </div>
+      <div id="finch-thread" class="chat-thread" style="display:none"></div>
+      <div class="composer">
+        <textarea id="finch-input" rows="2" placeholder="像 Finch 买家一样提问，例如：帮我评估一家 AI 推理服务商…"></textarea>
+        <div class="composer-row">
+          <span class="model-label">deterministic · no model call</span>
+          <button id="finch-send" class="send-circle" disabled title="发送">↑</button>
+        </div>
+      </div>
+      <div class="quick-chips" id="finch-chips">
+        <button class="quick-chip" data-fq="官方模板">官方模板</button>
+        <button class="quick-chip" data-fq="纯 JSON 字段">纯 JSON 字段</button>
+        <button class="quick-chip" data-fq="你好，你能做什么？">问候</button>
+        <button class="quick-chip" data-fq="Arweave 范围外">Arweave 范围外</button>
+      </div>
+      <div class="chat-hint" style="text-align:center">
+        诊断信息（parsedFields / missing / draftId）仅本地展示；买家只看到正文。
+        <button class="finch-reset" id="finch-reset" type="button">清空模拟会话</button>
+      </div>
     </div>
   </section>
 
@@ -1838,6 +1878,169 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       return origLivePoll();
     });
   };
+  // ── Finch 模拟：与 Direct API 同构（只发 {prompt}）─────────────────────────
+  (function initFinchSim() {
+    var shell = document.getElementById("finch-shell");
+    if (!shell) return;
+    var thread = document.getElementById("finch-thread");
+    var empty = document.getElementById("finch-empty");
+    var input = document.getElementById("finch-input");
+    var sendBtn = document.getElementById("finch-send");
+    var chips = document.getElementById("finch-chips");
+    var reset = document.getElementById("finch-reset");
+    var STORE = "fc.finchSim.v1";
+    var SESSION = "fc.finchSim.session.v1";
+    var messages = [];
+    var sessionId = null;
+    var busy = false;
+    function newSessionId() {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return "finch-" + crypto.randomUUID();
+      return "finch-" + Date.now();
+    }
+    try {
+      messages = JSON.parse(localStorage.getItem(STORE) || "[]");
+      if (!Array.isArray(messages)) messages = [];
+      sessionId = localStorage.getItem(SESSION) || newSessionId();
+      if (!localStorage.getItem(SESSION)) localStorage.setItem(SESSION, sessionId);
+    } catch (e) { messages = []; sessionId = newSessionId(); }
+
+    function persist() {
+      try {
+        localStorage.setItem(STORE, JSON.stringify(messages.slice(-40).map(function(m) {
+          return { role: m.role, text: m.text, diag: m.diag || null };
+        })));
+        if (sessionId) localStorage.setItem(SESSION, sessionId); else localStorage.removeItem(SESSION);
+      } catch (e) {}
+    }
+    function scroll() { thread.scrollTop = thread.scrollHeight; }
+    function updateSend() { sendBtn.disabled = busy || !input.value.trim(); }
+    function badge(text, cls) {
+      var b = document.createElement("span");
+      b.className = "badge" + (cls ? " " + cls : "");
+      b.textContent = text;
+      return b;
+    }
+    function diagnostic(data, ms) {
+      var parsed = (data.parsedFields || []).length;
+      var missing = (data.missingInputs || []).length;
+      var out = [
+        ["parsed " + parsed, parsed ? "badge-good" : "badge-bad"],
+        ["missing " + missing, missing ? "badge-warn" : "badge-good"]
+      ];
+      if (data.readinessStatus) out.push(["readiness " + data.readinessStatus, data.readinessStatus === "ready" ? "badge-good" : "badge-warn"]);
+      if (data.decisionStatus) out.push(["decision " + data.decisionStatus, data.decisionStatus === "insufficient-evidence" ? "badge-warn" : ""]);
+      if (data.draftId) out.push([data.draftId, "badge-mono"]);
+      out.push([ms + " ms", ""]);
+      return out;
+    }
+    function renderMessage(m) {
+      var div = document.createElement("div");
+      div.className = "msg " + (m.role === "user" ? "user" : "assistant");
+      div.textContent = m.text;
+      if (m.diag && m.diag.length) {
+        var diag = document.createElement("div");
+        diag.className = "finch-diag";
+        m.diag.forEach(function(item) { diag.appendChild(badge(item[0], item[1])); });
+        div.appendChild(diag);
+      }
+      if (m.raw) {
+        var details = document.createElement("details");
+        details.className = "finch-raw";
+        var summary = document.createElement("summary");
+        var parsed = (m.raw.data && m.raw.data.parsedFields) || [];
+        summary.textContent = "诊断：parsedFields = " + (parsed.length ? parsed.join(", ") : "—") + " · 原始响应";
+        details.appendChild(summary);
+        var pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(m.raw, null, 1);
+        details.appendChild(pre);
+        div.appendChild(details);
+      }
+      thread.appendChild(div);
+      thread.style.display = "flex";
+      empty.style.display = "none";
+      shell.classList.add("has-messages");
+      scroll();
+    }
+    function append(m) {
+      messages.push(m);
+      persist();
+      renderMessage(m);
+    }
+    function send() {
+      var prompt = input.value.trim();
+      if (!prompt || busy) return;
+      append({ role: "user", text: prompt });
+      input.value = "";
+      updateSend();
+      busy = true;
+      sendBtn.disabled = true;
+      var started = Date.now();
+      var payload = { prompt: prompt };
+      if (sessionId) payload.sessionId = sessionId;
+      fetch("/api/finch/assess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function(response) {
+        return response.text().then(function(text) { return { status: response.status, text: text }; });
+      }).then(function(result) {
+        var body = null;
+        try { body = JSON.parse(result.text); } catch (e) {}
+        var data = body && body.data ? body.data : null;
+        var answer = data && (data.answer || data.message)
+          ? (data.answer || data.message)
+          : (body && body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
+        if (data && data.sessionId) sessionId = data.sessionId;
+        append({ role: "assistant", text: answer, diag: data ? diagnostic(data, Date.now() - started) : [["HTTP " + result.status, "badge-bad"]], raw: body });
+      }).catch(function(error) {
+        append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)) });
+      }).finally(function() {
+        busy = false;
+        updateSend();
+      });
+    }
+
+    if (messages.length) {
+      var restored = messages.slice();
+      messages = [];
+      restored.forEach(function(m) { messages.push(m); renderMessage(m); });
+      persist();
+    }
+
+    var samples = {
+      "官方模板": "请帮我评估一家 AI 推理服务商的交易对手风险。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。请根据这些信息给出风险评估，如果信息不足，请明确告诉我还缺哪些数据，不要自行编造",
+      "纯 JSON 字段": '{"taskType":"inference","gpuModel":"h100-equivalent","periodStart":"2026-08-01","periodEnd":"2026-08-31","inputTokensM":64,"outputTokensM":16,"validRatePct":94,"gpuHours":4200,"revenueUsd":100000,"computeSpendUsd":58000,"repaymentRatePct":96,"overdue30Pct":2,"payingCustomers":168,"top5ConcentrationPct":36,"operatingHistoryDays":720,"dataCoveragePct":100,"monthlySeries":[{"period":"2026-03","rawTokensM":72,"validRatePct":92,"revenueUsd":94000,"computeSpendUsd":55000},{"period":"2026-04","rawTokensM":75,"validRatePct":93,"revenueUsd":96000,"computeSpendUsd":56000},{"period":"2026-05","rawTokensM":77,"validRatePct":93,"revenueUsd":97000,"computeSpendUsd":56500},{"period":"2026-06","rawTokensM":79,"validRatePct":94,"revenueUsd":99000,"computeSpendUsd":57500},{"period":"2026-07","rawTokensM":81,"validRatePct":94,"revenueUsd":101000,"computeSpendUsd":59000},{"period":"2026-08","rawTokensM":80,"validRatePct":94,"revenueUsd":100000,"computeSpendUsd":58000}],"R":[64,65,63,67,68,66,70,71],"C":[62,63,62,65,66,65,68,69]}',
+      "Arweave 范围外": "Arweave 过去 30 天存储收入 1,200,000 美元，付费用户 4,800 个，协议收入环比增长 12%"
+    };
+    chips.addEventListener("click", function(event) {
+      var btn = event.target.closest("button[data-fq]");
+      if (!btn) return;
+      var key = btn.getAttribute("data-fq");
+      input.value = samples[key] || key;
+      input.focus();
+      updateSend();
+    });
+    input.addEventListener("input", updateSend);
+    input.addEventListener("keydown", function(event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        send();
+      }
+    });
+    sendBtn.addEventListener("click", send);
+    reset.addEventListener("click", function() {
+      messages = [];
+      sessionId = newSessionId();
+      thread.innerHTML = "";
+      thread.style.display = "none";
+      empty.style.display = "flex";
+      shell.classList.remove("has-messages");
+      try { localStorage.removeItem(STORE); localStorage.removeItem(SESSION); } catch (e) {}
+      updateSend();
+    });
+    updateSend();
+  })();
+
   livePoll();
 })();
 </script>

@@ -8,6 +8,7 @@
  */
 
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test, { after } from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -287,6 +288,43 @@ test("W4 restart survival: case paused at signature gate survives process restar
   assert.equal(completedIndex.cases[0].run.phase, "failed");
   assert.equal(completedIndex.cases[0].run.productStatus, "REJECTED");
   await new Promise(resolve => server2.close(resolve));
+});
+
+test("Finch proxy forwards {prompt} to the local business agent", async () => {
+  const upstream = createServer((req, res) => {
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, path: req.url, received: JSON.parse(body) }));
+    });
+  });
+  await new Promise(resolve => upstream.listen(0, "127.0.0.1", resolve));
+  const target = `http://127.0.0.1:${upstream.address().port}`;
+  try {
+    const server = await startServer({
+      env: { ...process.env, FINCH_PROXY_TARGET: target, CONSOLE_AUTH_ENABLED: "false" },
+      apiKey: "sk-test",
+      transport: createScriptedTransport(scripts.scenarios["direct-answer"])
+    });
+    const response = await fetch(`${addressOf(server)}/api/finch/assess`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "评估这家 AI 推理服务商", sessionId: "sim-1" })
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.path, "/api/v1/assess");
+    assert.deepEqual(body.received, { prompt: "评估这家 AI 推理服务商", sessionId: "sim-1" });
+
+    const invalid = await fetch(`${addressOf(server)}/api/finch/assess`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: " " })
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).code, "INVALID_PROMPT");
+  } finally {
+    await new Promise(resolve => upstream.close(resolve));
+  }
 });
 
 test("loadDotEnv fills only missing env vars and never overrides", () => {

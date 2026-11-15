@@ -280,6 +280,45 @@ export function createQuantConsoleServer(options = {}) {
         }
       }
 
+      // Finch 模拟代理（仅本地开发）：把 { prompt } 原样转发到业务风险 agent，
+      // 默认 127.0.0.1:8790；控制台与目标都不出本机，不接触公网凭证。
+      if (req.method === "POST" && url.pathname === "/api/finch/assess") {
+        if (!authorized(req.headers.authorization, security)) {
+          return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required (CONSOLE_AUTH_ENABLED=true)" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
+        }
+        const ip = req.socket?.remoteAddress || "unknown";
+        const rate = limiter.consume(ip, nowMs());
+        if (!rate.allowed) {
+          return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
+        }
+        const raw = await readBody(req, security.bodyLimit);
+        let body;
+        try { body = JSON.parse(raw || "{}"); } catch { return send(400, { ok: false, code: "INVALID_JSON", error: "request body must be valid JSON" }); }
+        if (typeof body.prompt !== "string" || !body.prompt.trim() || body.prompt.length > 10000) {
+          return send(400, { ok: false, code: "INVALID_PROMPT", error: "prompt must be a non-empty string of at most 10000 characters" });
+        }
+        const target = String(env.FINCH_PROXY_TARGET || "http://127.0.0.1:8790").replace(/\/+$/, "");
+        const payload = { prompt: body.prompt };
+        if (typeof body.sessionId === "string" && body.sessionId) payload.sessionId = body.sessionId;
+        let upstream;
+        try {
+          upstream = await withTimeout(
+            fetch(target + "/api/v1/assess", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            }),
+            security.askTimeoutMs, "FINCH_PROXY_TIMEOUT"
+          );
+        } catch (error) {
+          const code = error?.code === "FINCH_PROXY_TIMEOUT" ? "FINCH_PROXY_TIMEOUT" : "FINCH_PROXY_FAILED";
+          return send(502, { ok: false, code, error: String(error?.message || error), target });
+        }
+        const text = await upstream.text();
+        res.writeHead(upstream.status, { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" });
+        return res.end(text);
+      }
+
       // 数据端点：只读。
       if (req.method === "GET" && url.pathname === "/api/data") {
         return send(200, { ok: true, data: await computeConsolePayload({ auditDir: env.QUANT_AUDIT_DIR || undefined, paperAuditDir: env.QUANT_PAPER_AUDIT_DIR || undefined, generatedAtUtc: new Date(startedAt).toISOString() }) });
