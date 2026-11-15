@@ -1,0 +1,209 @@
+{
+  "knowledgeVersion": "quant-knowledge/v0.1.0",
+  "builtFrom": {
+    "researchMemoryVersion": "quant-research-memory/v0.1.0",
+    "adjudicationSha256": "321c0e23660f371386e4f464a87fb7df69851d20c29035348a0dda5dde7fabbf"
+  },
+  "entries": [
+    {
+      "id": "kb-f9bd0670999d",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "strategy_pattern",
+      "title": "composite-percentile：4 次观察中 3 次正 pp-Sharpe（75% 正向）",
+      "content": "族 composite-percentile 在 BTC-USDT/ETH-USDT 的 4 次确定性裁决观察中，正 pp-Sharpe 占比 75%。平均 PSR(0)=0.644（阈值 0.95）。 存在方向分歧。 口径：净收益、校准成本、2024-11-11 .. 2026-11-10。局限：样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime；PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准；跨市场观测存在方向分歧，不能外推为普适模式。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "multiReport": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "exp-c6112bcd0d51",
+          "exp-98552a982510",
+          "exp-ccbf8b366167",
+          "exp-a822e86b3222"
+        ]
+      },
+      "confidence": 0.25,
+      "tags": [
+        "composite-percentile",
+        "direction-divergent",
+        "positive-skew",
+        "cost-calibrated"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "sampleRange": "2024-11-11 .. 2026-11-10",
+        "observationCount": 4,
+        "limitations": [
+          "样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime",
+          "PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准",
+          "跨市场观测存在方向分歧，不能外推为普适模式"
+        ]
+      }
+    },
+    {
+      "id": "kb-bab905108796",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "strategy_pattern",
+      "title": "momentum-cooldown：4 次观察中 2 次正 pp-Sharpe（50% 正向）",
+      "content": "族 momentum-cooldown 在 BTC-USDT/ETH-USDT 的 4 次确定性裁决观察中，正 pp-Sharpe 占比 50%。平均 PSR(0)=0.500（阈值 0.95）。 存在方向分歧。 口径：净收益、校准成本、2024-11-11 .. 2026-11-10。局限：样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime；PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准；跨市场观测存在方向分歧，不能外推为普适模式。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "multiReport": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "exp-8abb4ca38b6d",
+          "exp-94d67a5808ef",
+          "exp-4684ac770bc2",
+          "exp-f619f956cacc"
+        ]
+      },
+      "confidence": 0.25,
+      "tags": [
+        "momentum-cooldown",
+        "direction-divergent",
+        "negative-skew",
+        "cost-calibrated"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "sampleRange": "2024-11-11 .. 2026-11-10",
+        "observationCount": 4,
+        "limitations": [
+          "样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime",
+          "PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准",
+          "跨市场观测存在方向分歧，不能外推为普适模式"
+        ]
+      }
+    },
+    {
+      "id": "kb-83c1c75db131",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "strategy_pattern",
+      "title": "sma-cross-hysteresis：6 次观察中 5 次正 pp-Sharpe（83% 正向）",
+      "content": "族 sma-cross-hysteresis 在 BTC-USDT/ETH-USDT 的 6 次确定性裁决观察中，正 pp-Sharpe 占比 83%。平均 PSR(0)=0.628（阈值 0.95）。 存在方向分歧。 口径：净收益、校准成本、2024-11-11 .. 2026-11-10。局限：样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime；PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准；跨市场观测存在方向分歧，不能外推为普适模式。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "multiReport": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "exp-a4c0a41e6a8a",
+          "exp-d3fe338ec9d1",
+          "exp-0b70495c7d00",
+          "exp-b3b9e4dbe9d9",
+          "exp-b60e7aa71e10",
+          "exp-6669e9a8d992"
+        ]
+      },
+      "confidence": 0.375,
+      "tags": [
+        "sma-cross-hysteresis",
+        "direction-divergent",
+        "positive-skew",
+        "cost-calibrated"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "sampleRange": "2024-11-11 .. 2026-11-10",
+        "observationCount": 6,
+        "limitations": [
+          "样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime",
+          "PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准",
+          "跨市场观测存在方向分歧，不能外推为普适模式"
+        ]
+      }
+    },
+    {
+      "id": "kb-361588c71c98",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "cost_finding",
+      "title": "校准成本 13.47bps/边 高于冻结口径 7bps",
+      "content": "本报告使用校准后的单边成本 13.47bps（costModel.effectiveSource=calibrated；构成见 quant/data/cost-calibration.json：taker 费率 + 半价差 + √参与率冲击，冲击系数 K=25 为冻结假设，未经真实成交重校准）。报告中的 commissionBps/slippageBps（2/5）是冻结 V002 口径的拆分，不是 13.47bps 的构成——两者不可混用。冻结口径 7bps 会低估成本、使净 Sharpe 偏乐观。局限：跨交易所/永续未覆盖；无真实成交样本校验。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "costCalibration": "quant/data/cost-calibration.json",
+        "records": [
+          "exp-a4c0a41e6a8a",
+          "exp-8abb4ca38b6d",
+          "exp-c6112bcd0d51",
+          "exp-d3fe338ec9d1",
+          "exp-0b70495c7d00",
+          "exp-b3b9e4dbe9d9",
+          "exp-94d67a5808ef",
+          "exp-4684ac770bc2",
+          "exp-98552a982510",
+          "exp-ccbf8b366167",
+          "exp-b60e7aa71e10",
+          "exp-f619f956cacc",
+          "exp-a822e86b3222",
+          "exp-6669e9a8d992"
+        ]
+      },
+      "confidence": 0.7,
+      "tags": [
+        "cost",
+        "calibration",
+        "must-disclose"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "costBasis": "calibrated"
+      }
+    },
+    {
+      "id": "kb-eecff2e0581d",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "market_insight",
+      "title": "跨市场一致性：3/4 候选方向一致，显著性 全部未达标",
+      "content": "候选在 BTC/ETH 双市场逐一对照：方向一致 3/4；分歧项：p-4446c60af172b4f6（sma-cross-hysteresis）。PSR(0)≥0.95 跨市场达标：0/4。 局限：两市场同属加密现货风险因子，非真正独立样本；方向一致不等于显著性。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "candidate:p-69c9f905705356af",
+          "candidate:p-fcabb1cf103b2636",
+          "candidate:p-e646ddf3f786a252",
+          "candidate:p-4446c60af172b4f6"
+        ]
+      },
+      "confidence": 0.4,
+      "tags": [
+        "cross-market",
+        "divergence-detected",
+        "no-significance"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "observationCount": 4
+      }
+    }
+  ]
+}

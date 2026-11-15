@@ -61,16 +61,19 @@ function main() {
   const artifact = { runDate: new Date().toISOString(), market: first.label, symbol: first.dataset.symbol, ...report };
   writeFileSync(OUTPUT_PATH, JSON.stringify(artifact, null, 2) + "\n", "utf8");
   // 自动写 journal entries（episodic memory：每次裁决记录一条）
+  // 修复（2026-11-15）：原实现引用未定义变量 adjudicationDataset → 每条写入都被 catch 吞掉，
+  // journal 从未落盘（提案上下文因此永远读到空记忆）。市场符号取自已裁决数据集。
   const journalDir = join(QUANT, "journal");
   const journalPath = join(journalDir, "entries.jsonl");
   const journalNow = new Date().toISOString();
+  const journalSymbol = first.dataset.symbol ?? first.label;
   for (const candidate of report.candidates) {
     try {
       appendEntry(journalPath, {
         timestamp: journalNow, type: "adjudication", kind: "strategy",
-        subject: { proposalId: candidate.proposalId, family: candidate.family, params: candidate.params, market: adjudicationDataset?.symbol ?? "BTC-USDT" },
+        subject: { proposalId: candidate.proposalId, family: candidate.family, params: candidate.params, market: journalSymbol },
         outcome: { verdict: candidate.sharpePerPeriod > 0 ? "pass" : "fail", reason: `pp-Sharpe ${candidate.sharpePerPeriod?.toFixed?.(4) ?? "n/a"} · DSR ${candidate.dsr?.toFixed?.(4) ?? "n/a"}`, metrics: { ppSharpe: candidate.sharpePerPeriod, dsr: candidate.dsr, psr: candidate.psrZero } },
-        context: { market: adjudicationDataset?.symbol ?? "BTC-USDT", dataVersion: report.datasetVersion, model: "n/a" },
+        context: { market: journalSymbol, dataVersion: report.datasetVersion, model: "n/a" },
         tags: [candidate.kind, candidate.family, candidate.sharpePerPeriod > 0 ? "positive" : "negative"]
       }, journalNow);
     } catch (e) { process.stderr.write(`journal write failed: ${e.message}\n`); }
@@ -84,4 +87,5 @@ function main() {
   process.stdout.write(`报告：${MULTI_OUTPUT_PATH}\n下一步：人工 review 后，晋升 = 把候选写入 quant/strategy/rules-v002.js + RULES_VERSION 升级 + golden 重算 + 人工 review。\n`);
 }
 
-main();
+// 仅直接运行时执行（被测试/研究记忆构建器 import 时不触发任何写盘）。
+if (process.argv[1] && process.argv[1].endsWith("run-adjudication.js")) main();

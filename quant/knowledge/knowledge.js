@@ -10,6 +10,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 export const KNOWLEDGE_VERSION = "quant-knowledge/v0.1.0";
 
@@ -57,6 +58,25 @@ export function queryKnowledge(entries, filters = {}) {
     if (filters.minConfidence !== undefined && (entry.confidence ?? 0) < filters.minConfidence) return false;
     return true;
   });
+}
+
+/**
+ * 加载知识库文件（fail-closed）：版本不符/损坏/坏条目 → 空库，绝不抛错到调用方。
+ * 存储格式：{ knowledgeVersion, builtFrom?, entries: [...] }（由 research-memory 构建器生成）。
+ */
+export function loadKnowledge(filePath) {
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, "utf8"));
+    if (parsed?.knowledgeVersion !== KNOWLEDGE_VERSION) return [];
+    const entries = [];
+    for (const raw of Array.isArray(parsed.entries) ? parsed.entries : []) {
+      const checked = validateKnowledgeEntry(raw);
+      if (checked.ok) entries.push(checked.entry);
+    }
+    return entries;
+  } catch {
+    return [];
+  }
 }
 
 /** 构建 LLM prompt 注入的 knowledge context（紧凑，≤ ~300 tokens）。 */

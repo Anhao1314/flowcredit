@@ -1,0 +1,81 @@
+{
+  "licensingVersion": "quant-data-licensing/v0.1.0",
+  "checkedAtUtcDate": "2026-11-15",
+  "sources": [
+    {
+      "id": "binance-vision",
+      "name": "Binance Vision 公共历史数据",
+      "url": "https://github.com/binance/binance-public-data/",
+      "termsUrl": "https://github.com/binance/binance-public-data/blob/master/TERMS_AND_CONDITIONS.md",
+      "license": "CC BY-NC-SA 4.0",
+      "licenseNote": "BINANCE VISION DATASET TERMS v1.0, Last Updated 2026-08-26",
+      "commercialUse": "prohibited_without_enterprise_license",
+      "redistribution": "prohibited_resale; derivatives require attribution + identical license",
+      "status": "pending_confirmation",
+      "decision": "do_not_download_v0_1; do_not_package"
+    },
+    {
+      "id": "okx-historical",
+      "name": "OKX 历史行情",
+      "url": "https://www.okx.com/historical-data",
+      "termsUrl": "https://www.okx.com/pl/help/historicaldata-terms-and-conditions",
+      "license": "unverified",
+      "licenseNote": "条款页 2026-11-15 从本机不可达（EHOSTDOWN/timeout）；按最严格处理",
+      "commercialUse": "unverified",
+      "redistribution": "unverified",
+      "status": "pending_confirmation",
+      "decision": "reuse_existing_committed_snapshots_only; no_new_download"
+    },
+    {
+      "id": "coinmetrics-community",
+      "name": "Coin Metrics 社区数据",
+      "url": "https://github.com/coinmetrics/data",
+      "termsUrl": "https://github.com/coinmetrics/data/blob/master/LICENSE",
+      "license": "CC BY-NC 4.0",
+      "licenseNote": "NonCommercial",
+      "commercialUse": "prohibited",
+      "redistribution": "allowed_under_CC_BY_NC_4_0_with_attribution",
+      "status": "pending_confirmation",
+      "decision": "do_not_download_v0_1; do_not_package"
+    }
+  ],
+  "existingSnapshots": [
+    {
+      "dataVersion": "quant-dataset/v0.0.1",
+      "symbol": null,
+      "nature": "synthetic_fixture",
+      "source": "project_local_lcg_seed_20261102",
+      "rows": 130,
+      "fetchedAtUtc": null,
+      "licenseStatus": "project_owned"
+    },
+    {
+      "dataVersion": "quant-dataset/v0.0.2",
+      "symbol": "BTC-USDT",
+      "nature": "real_market_data",
+      "source": "okx:BTC-USDT:1D",
+      "rows": 260,
+      "fetchedAtUtc": "2026-11-05T19:22:18.540Z",
+      "licenseStatus": "pending_confirmation"
+    },
+    {
+      "dataVersion": "quant-dataset/v0.0.3",
+      "symbol": "BTC-USDT",
+      "nature": "real_market_data",
+      "source": "okx:BTC-USDT:1D",
+      "rows": 730,
+      "fetchedAtUtc": "2026-11-11T18:19:33.959Z",
+      "licenseStatus": "pending_confirmation"
+    },
+    {
+      "dataVersion": "quant-dataset/v0.0.4",
+      "symbol": "ETH-USDT",
+      "nature": "real_market_data",
+      "source": "okx:ETH-USDT:1D",
+      "rows": 730,
+      "fetchedAtUtc": "2026-11-11T18:19:46.256Z",
+      "licenseStatus": "pending_confirmation"
+    }
+  ],
+  "policy": "受限来源数据只用于本地研究评估，不进入产品分发；新增来源必须先完成许可核查并在此登记（fail-closed）。"
+}

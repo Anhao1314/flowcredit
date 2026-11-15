@@ -154,6 +154,16 @@ LLM 提案 → 确定性裁决 → **人工晋升**（不变式 3 全程成立�
 - 运行：`npm run mcp`（stdio）；测试 quant-mcp.test.js 8 例（握手/白名单/验货/裁决/错误码/stdio 端到端）。
 - 活体记录（2026-11-13）：stdio JSON-RPC → verify_claims → 判定 fail（声称 12.34% vs 权威 28.5426%）。
 
+## Research Memory v0.1（2026-11-15，研究记忆层）
+
+- `quant/research-memory/`（`quant-research-memory/v0.1.0`）：把**既有裁决证据**（adjudication 报告 / 候选库 / 数据集元数据 / 许可登记）确定性整理为研究记录 + 知识库 + 人读预览。
+- 产物：`memory-preview.json`（机器可读，含输入 sha256）、`memory-preview.md`（审查材料：已读入数据 → 成功/失败/分歧 → 经验（范围+来源+局限）→ 不能推断 → 下一轮问题 → 人工评审）、`quant/knowledge/knowledge-v001.json`（Semantic 知识库，经 `knowledge.js` 校验）。
+- 构建：`cd agent && npm run memory`（离线；`--backfill-journal` 可从既有报告幂等回填 journal）。**零模型、零网络、零 .env**。
+- 人工评审：`quant/research-memory/reviews-v001.json`，标签白名单含 `approved_for_research`（仅人工可写；≠ 晋升）。
+- 数据许可：`quant/data/LICENSING.md` —— Binance CC BY-NC-SA 4.0（禁商用）/ Coin Metrics CC BY-NC 4.0 / OKX 条款待核验 → **v0.1 未新增任何行情下载**；受限数据不打包不外发。
+- 提案生成已接入双层记忆：journal 汇总（episodic）+ 知识库摘要（semantic）注入 prompt；模型输出仍走 schema 校验，不构成权威。
+- 修复（同批）：`run-adjudication.js` 曾引用未定义变量导致 journal 写入静默失败（记忆永远为空）——已修复并由 `quant-research-memory.test.js` 锁死回填幂等性。
+
 ## 运行
 
 ```sh

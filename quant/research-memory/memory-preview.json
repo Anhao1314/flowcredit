@@ -1,0 +1,1641 @@
+{
+  "researchMemoryVersion": "quant-research-memory/v0.1.0",
+  "latestEvidenceRunDate": "2026-11-13T17:44:40.466Z",
+  "builtFrom": {
+    "adjudication": {
+      "path": "quant/proposals/adjudication-latest.json",
+      "sha256": "321c0e23660f371386e4f464a87fb7df69851d20c29035348a0dda5dde7fabbf",
+      "runDate": "2026-11-13T17:44:40.466Z"
+    },
+    "multi": {
+      "path": "quant/proposals/adjudication-multi-latest.json",
+      "sha256": "cebf72cd593c2169ee46bd84acbad2f10fdb4ad35e7f2cac41b276df417240e3",
+      "runDate": "2026-11-13T17:44:40.459Z"
+    },
+    "candidates": {
+      "path": "quant/proposals/candidates.json",
+      "sha256": "50fbd4b61bdd9cd07ac3c3e66b95e87794bc793ac3a193bcf857273f16c1d8d5",
+      "updatedAtUtc": "2026-11-13T17:44:24.035Z",
+      "count": 4
+    },
+    "journal": {
+      "backfilled": 0,
+      "entries": 4,
+      "exists": true
+    }
+  },
+  "dataIngested": [
+    {
+      "version": "quant-dataset/v0.0.1",
+      "symbol": null,
+      "nature": "synthetic_fixture",
+      "marketType": "synthetic",
+      "timeframe": "1D",
+      "rows": 130,
+      "span": [
+        "2026-05-01",
+        "2026-10-29"
+      ],
+      "source": null,
+      "fetchedAtUtc": null,
+      "licenseStatus": "project_owned"
+    },
+    {
+      "version": "quant-dataset/v0.0.2",
+      "symbol": "BTC-USDT",
+      "nature": "real_market_data",
+      "marketType": "spot",
+      "timeframe": "1D",
+      "rows": 260,
+      "span": [
+        "2026-02-18",
+        "2026-11-04"
+      ],
+      "source": "okx:BTC-USDT:1D",
+      "fetchedAtUtc": "2026-11-05T19:22:18.540Z",
+      "licenseStatus": "pending_confirmation"
+    },
+    {
+      "version": "quant-dataset/v0.0.3",
+      "symbol": "BTC-USDT",
+      "nature": "real_market_data",
+      "marketType": "spot",
+      "timeframe": "1D",
+      "rows": 730,
+      "span": [
+        "2024-11-11",
+        "2026-11-10"
+      ],
+      "source": "okx:BTC-USDT:1D",
+      "fetchedAtUtc": "2026-11-11T18:19:33.959Z",
+      "licenseStatus": "pending_confirmation"
+    },
+    {
+      "version": "quant-dataset/v0.0.4",
+      "symbol": "ETH-USDT",
+      "nature": "real_market_data",
+      "marketType": "spot",
+      "timeframe": "1D",
+      "rows": 730,
+      "span": [
+        "2024-11-11",
+        "2026-11-10"
+      ],
+      "source": "okx:ETH-USDT:1D",
+      "fetchedAtUtc": "2026-11-11T18:19:46.256Z",
+      "licenseStatus": "pending_confirmation"
+    }
+  ],
+  "records": [
+    {
+      "experimentId": "exp-a4c0a41e6a8a",
+      "kind": "proposal",
+      "candidateId": "p-69c9f905705356af",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 14,
+        "smaLong": 65,
+        "entryBandPct": 0.15,
+        "exitBandPct": -0.4
+      },
+      "rationale": "演示候选 A（更快交叉，带宽收窄）",
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.0027272066423119482,
+        "sharpeAnnualized": 0.04329306329664538,
+        "isSharpePerPeriod": -0.028044858433556964,
+        "oosSharpePerPeriod": 0.04618326426813973,
+        "turnover": 0.02092675635276532,
+        "maxDrawdownPct": 34.24469239566817,
+        "psrZero": 0.5281136156458253,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": true,
+        "profitableEverywhere": false
+      },
+      "derivedTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidates[0]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-69c9f905705356af]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-8abb4ca38b6d",
+      "kind": "proposal",
+      "candidateId": "p-fcabb1cf103b2636",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 8,
+        "entryPct": 0.8,
+        "exitPct": -0.8,
+        "cooldownBars": 6
+      },
+      "rationale": "演示候选 B（中周期动量）",
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.02689181439088455,
+        "sharpeAnnualized": 0.42689431908953057,
+        "isSharpePerPeriod": 0.014065493963858304,
+        "oosSharpePerPeriod": 0.04969434238127256,
+        "turnover": 0.08370702541106129,
+        "maxDrawdownPct": 24.958864714251703,
+        "psrZero": 0.7583397267688176,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": true,
+        "signConsistent": true,
+        "profitableEverywhere": true
+      },
+      "derivedTags": [
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidates[1]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-fcabb1cf103b2636]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-c6112bcd0d51",
+      "kind": "proposal",
+      "candidateId": "p-e646ddf3f786a252",
+      "family": "composite-percentile",
+      "params": {
+        "window": 50,
+        "percentile": 75
+      },
+      "rationale": "Slightly wider window with higher percentile threshold for stronger conviction signals.",
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.02760402679367485,
+        "sharpeAnnualized": 0.43820034048016393,
+        "isSharpePerPeriod": -0.011761066754344653,
+        "oosSharpePerPeriod": 0.08506145101828302,
+        "turnover": 0.07772795216741404,
+        "maxDrawdownPct": 25.92106955751177,
+        "psrZero": 0.7657889080437447,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": true,
+        "signConsistent": true,
+        "profitableEverywhere": false
+      },
+      "derivedTags": [
+        "drawdown_too_high",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "drawdown_too_high",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidates[2]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-e646ddf3f786a252]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-d3fe338ec9d1",
+      "kind": "proposal",
+      "candidateId": "p-4446c60af172b4f6",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 15,
+        "smaLong": 80,
+        "entryBandPct": 0.2,
+        "exitBandPct": -0.8
+      },
+      "rationale": "Adds a slower trend filter with wider hysteresis bands to reduce whipsaw while remaining distinct from registered rules.",
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": -0.018644460703498837,
+        "sharpeAnnualized": -0.29597163810224575,
+        "isSharpePerPeriod": -0.040474332666201075,
+        "oosSharpePerPeriod": 0.010112258804592147,
+        "turnover": 0.017937219730941704,
+        "maxDrawdownPct": 42.42119116397816,
+        "psrZero": 0.31544052539840006,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": false,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": false,
+        "profitableEverywhere": false
+      },
+      "derivedTags": [
+        "cross_market_divergence",
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "cross_market_divergence",
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidates[3]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-4446c60af172b4f6]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-0b70495c7d00",
+      "kind": "registered",
+      "candidateId": "sma-cross-hysteresis-a",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 20,
+        "smaLong": 60,
+        "entryBandPct": 0.1,
+        "exitBandPct": -0.5
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.0023740808789574387,
+        "sharpeAnnualized": 0.037687365588450115,
+        "isSharpePerPeriod": -0.032453525888267866,
+        "oosSharpePerPeriod": 0.052256958469327514,
+        "turnover": 0.017937219730941704,
+        "maxDrawdownPct": 33.22811725729249,
+        "psrZero": 0.5244739293835141,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": null,
+        "profitableEverywhere": null
+      },
+      "derivedTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "registered[0]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-b3b9e4dbe9d9",
+      "kind": "registered",
+      "candidateId": "sma-cross-hysteresis-b",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 10,
+        "smaLong": 40,
+        "entryBandPct": 0.05,
+        "exitBandPct": -0.3
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.013942967351092097,
+        "sharpeAnnualized": 0.2213377448956962,
+        "isSharpePerPeriod": -0.013005805438870916,
+        "oosSharpePerPeriod": 0.05801137184090359,
+        "turnover": 0.029895366218236172,
+        "maxDrawdownPct": 27.859436500157177,
+        "psrZero": 0.6412878219943621,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": null,
+        "profitableEverywhere": null
+      },
+      "derivedTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "registered[1]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-94d67a5808ef",
+      "kind": "registered",
+      "candidateId": "momentum-cooldown-a",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 10,
+        "entryPct": 1,
+        "exitPct": -1,
+        "cooldownBars": 5
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": -0.016934929047192272,
+        "sharpeAnnualized": -0.26883366437636863,
+        "isSharpePerPeriod": -0.0461477582861359,
+        "oosSharpePerPeriod": 0.0339383188483956,
+        "turnover": 0.08071748878923767,
+        "maxDrawdownPct": 31.125390415182153,
+        "psrZero": 0.33159704667111967,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": false,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": null,
+        "profitableEverywhere": null
+      },
+      "derivedTags": [
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "registered[2]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-4684ac770bc2",
+      "kind": "registered",
+      "candidateId": "momentum-cooldown-b",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 5,
+        "entryPct": 0.5,
+        "exitPct": -0.5,
+        "cooldownBars": 8
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": -0.0423640938345968,
+        "sharpeAnnualized": -0.6725091408296869,
+        "isSharpePerPeriod": -0.07757271550389383,
+        "oosSharpePerPeriod": 0.011552914263301716,
+        "turnover": 0.10762331838565023,
+        "maxDrawdownPct": 35.73445632748907,
+        "psrZero": 0.13744060867559016,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": false,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": null,
+        "profitableEverywhere": null
+      },
+      "derivedTags": [
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "registered[3]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-98552a982510",
+      "kind": "registered",
+      "candidateId": "composite-percentile-a",
+      "family": "composite-percentile",
+      "params": {
+        "window": 40,
+        "percentile": 70
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.0041168016613049785,
+        "sharpeAnnualized": 0.06535220035674319,
+        "isSharpePerPeriod": -0.036572497189511874,
+        "oosSharpePerPeriod": 0.07834957953441074,
+        "turnover": 0.09865470852017937,
+        "maxDrawdownPct": 32.8821895735174,
+        "psrZero": 0.5424145851604406,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": null,
+        "profitableEverywhere": null
+      },
+      "derivedTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "registered[4]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-ccbf8b366167",
+      "kind": "registered",
+      "candidateId": "composite-percentile-b",
+      "family": "composite-percentile",
+      "params": {
+        "window": 40,
+        "percentile": 60
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.3",
+        "symbol": "BTC-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": -0.00504115544675329,
+        "sharpeAnnualized": -0.08002586179516752,
+        "isSharpePerPeriod": -0.04183320699917966,
+        "oosSharpePerPeriod": 0.06575132638420875,
+        "turnover": 0.11061285500747384,
+        "maxDrawdownPct": 35.522875797772365,
+        "psrZero": 0.44821638232119115,
+        "dsr": null,
+        "nReturns": 669
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.5
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": false,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": false,
+        "signConsistent": null,
+        "profitableEverywhere": null
+      },
+      "derivedTags": [
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "cost_sensitive",
+        "drawdown_too_high",
+        "parameter_fragile",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "registered[5]"
+        },
+        {
+          "path": "quant/data/dataset-v003.json",
+          "locator": "series[first..last]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-b60e7aa71e10",
+      "kind": "proposal",
+      "candidateId": "p-69c9f905705356af",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 14,
+        "smaLong": 65,
+        "entryBandPct": 0.15,
+        "exitBandPct": -0.4
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.4",
+        "symbol": "ETH-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.059561862302100234,
+        "sharpeAnnualized": null,
+        "isSharpePerPeriod": 0.05784439282779461,
+        "oosSharpePerPeriod": 0.06283788183713258,
+        "turnover": null,
+        "maxDrawdownPct": null,
+        "psrZero": 0.9417213462833467,
+        "dsr": null,
+        "nReturns": null
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": true,
+        "signConsistent": true,
+        "profitableEverywhere": false
+      },
+      "derivedTags": [
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-69c9f905705356af].perMarket[market=ETH-USDT · 2y]"
+        },
+        {
+          "path": "quant/data/dataset-v004.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-69c9f905705356af]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-f619f956cacc",
+      "kind": "proposal",
+      "candidateId": "p-fcabb1cf103b2636",
+      "family": "momentum-cooldown",
+      "params": {
+        "momentumLag": 8,
+        "entryPct": 0.8,
+        "exitPct": -0.8,
+        "cooldownBars": 6
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.4",
+        "symbol": "ETH-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.028404281963485482,
+        "sharpeAnnualized": null,
+        "isSharpePerPeriod": 0.03936480174676494,
+        "oosSharpePerPeriod": 0.00453893518306259,
+        "turnover": null,
+        "maxDrawdownPct": null,
+        "psrZero": 0.7719393627702815,
+        "dsr": null,
+        "nReturns": null
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": true,
+        "signConsistent": true,
+        "profitableEverywhere": true
+      },
+      "derivedTags": [
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-fcabb1cf103b2636].perMarket[market=ETH-USDT · 2y]"
+        },
+        {
+          "path": "quant/data/dataset-v004.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-fcabb1cf103b2636]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-a822e86b3222",
+      "kind": "proposal",
+      "candidateId": "p-e646ddf3f786a252",
+      "family": "composite-percentile",
+      "params": {
+        "window": 50,
+        "percentile": 75
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.4",
+        "symbol": "ETH-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.034466562720018384,
+        "sharpeAnnualized": null,
+        "isSharpePerPeriod": 0.016536876622341233,
+        "oosSharpePerPeriod": 0.07709010586896989,
+        "turnover": null,
+        "maxDrawdownPct": null,
+        "psrZero": 0.8185262663828788,
+        "dsr": null,
+        "nReturns": null
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": true,
+        "signConsistent": true,
+        "profitableEverywhere": false
+      },
+      "derivedTags": [
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-e646ddf3f786a252].perMarket[market=ETH-USDT · 2y]"
+        },
+        {
+          "path": "quant/data/dataset-v004.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-e646ddf3f786a252]"
+        }
+      ]
+    },
+    {
+      "experimentId": "exp-6669e9a8d992",
+      "kind": "proposal",
+      "candidateId": "p-4446c60af172b4f6",
+      "family": "sma-cross-hysteresis",
+      "params": {
+        "smaShort": 15,
+        "smaLong": 80,
+        "entryBandPct": 0.2,
+        "exitBandPct": -0.8
+      },
+      "rationale": null,
+      "dataset": {
+        "version": "quant-dataset/v0.0.4",
+        "symbol": "ETH-USDT",
+        "exchange": "okx",
+        "marketType": "spot",
+        "timeframe": "1D",
+        "span": [
+          "2024-11-11",
+          "2026-11-10"
+        ],
+        "nature": "real_market_data",
+        "rows": 730,
+        "qualityStatus": null
+      },
+      "costModel": {
+        "effectiveOneSideRate": 0.00134735,
+        "effectiveSource": "calibrated",
+        "commissionBps": 2,
+        "slippageBps": 5
+      },
+      "metrics": {
+        "sharpePerPeriod": 0.03462137684145035,
+        "sharpeAnnualized": null,
+        "isSharpePerPeriod": 0.03665582312678446,
+        "oosSharpePerPeriod": 0.030099098196912238,
+        "turnover": null,
+        "maxDrawdownPct": null,
+        "psrZero": 0.8165084567341342,
+        "dsr": null,
+        "nReturns": null
+      },
+      "robustness": {
+        "segments": 4,
+        "positiveRatio": 0.75
+      },
+      "nTrials": {
+        "nominal": 10,
+        "registered": 6,
+        "proposed": 4,
+        "effective": 2.5327075085543105,
+        "method": "A.3 等权平均非对角相关"
+      },
+      "machineVerdict": {
+        "ppPositive": true,
+        "oosPositive": true,
+        "psrPass": false,
+        "robustPass": true,
+        "signConsistent": false,
+        "profitableEverywhere": false
+      },
+      "derivedTags": [
+        "cross_market_divergence",
+        "psr_below_threshold"
+      ],
+      "humanTags": [],
+      "reasonTags": [
+        "cross_market_divergence",
+        "psr_below_threshold"
+      ],
+      "evidence": [
+        {
+          "path": "quant/proposals/adjudication-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-4446c60af172b4f6].perMarket[market=ETH-USDT · 2y]"
+        },
+        {
+          "path": "quant/data/dataset-v004.json",
+          "locator": "series[first..last]"
+        },
+        {
+          "path": "quant/proposals/adjudication-multi-latest.json",
+          "locator": "candidatesConsistency[proposalId=p-4446c60af172b4f6]"
+        }
+      ]
+    }
+  ],
+  "knowledge": [
+    {
+      "id": "kb-f9bd0670999d",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "strategy_pattern",
+      "title": "composite-percentile：4 次观察中 3 次正 pp-Sharpe（75% 正向）",
+      "content": "族 composite-percentile 在 BTC-USDT/ETH-USDT 的 4 次确定性裁决观察中，正 pp-Sharpe 占比 75%。平均 PSR(0)=0.644（阈值 0.95）。 存在方向分歧。 口径：净收益、校准成本、2024-11-11 .. 2026-11-10。局限：样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime；PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准；跨市场观测存在方向分歧，不能外推为普适模式。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "multiReport": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "exp-c6112bcd0d51",
+          "exp-98552a982510",
+          "exp-ccbf8b366167",
+          "exp-a822e86b3222"
+        ]
+      },
+      "confidence": 0.25,
+      "tags": [
+        "composite-percentile",
+        "direction-divergent",
+        "positive-skew",
+        "cost-calibrated"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "sampleRange": "2024-11-11 .. 2026-11-10",
+        "observationCount": 4,
+        "limitations": [
+          "样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime",
+          "PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准",
+          "跨市场观测存在方向分歧，不能外推为普适模式"
+        ]
+      }
+    },
+    {
+      "id": "kb-bab905108796",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "strategy_pattern",
+      "title": "momentum-cooldown：4 次观察中 2 次正 pp-Sharpe（50% 正向）",
+      "content": "族 momentum-cooldown 在 BTC-USDT/ETH-USDT 的 4 次确定性裁决观察中，正 pp-Sharpe 占比 50%。平均 PSR(0)=0.500（阈值 0.95）。 存在方向分歧。 口径：净收益、校准成本、2024-11-11 .. 2026-11-10。局限：样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime；PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准；跨市场观测存在方向分歧，不能外推为普适模式。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "multiReport": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "exp-8abb4ca38b6d",
+          "exp-94d67a5808ef",
+          "exp-4684ac770bc2",
+          "exp-f619f956cacc"
+        ]
+      },
+      "confidence": 0.25,
+      "tags": [
+        "momentum-cooldown",
+        "direction-divergent",
+        "negative-skew",
+        "cost-calibrated"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "sampleRange": "2024-11-11 .. 2026-11-10",
+        "observationCount": 4,
+        "limitations": [
+          "样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime",
+          "PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准",
+          "跨市场观测存在方向分歧，不能外推为普适模式"
+        ]
+      }
+    },
+    {
+      "id": "kb-83c1c75db131",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "strategy_pattern",
+      "title": "sma-cross-hysteresis：6 次观察中 5 次正 pp-Sharpe（83% 正向）",
+      "content": "族 sma-cross-hysteresis 在 BTC-USDT/ETH-USDT 的 6 次确定性裁决观察中，正 pp-Sharpe 占比 83%。平均 PSR(0)=0.628（阈值 0.95）。 存在方向分歧。 口径：净收益、校准成本、2024-11-11 .. 2026-11-10。局限：样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime；PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准；跨市场观测存在方向分歧，不能外推为普适模式。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "multiReport": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "exp-a4c0a41e6a8a",
+          "exp-d3fe338ec9d1",
+          "exp-0b70495c7d00",
+          "exp-b3b9e4dbe9d9",
+          "exp-b60e7aa71e10",
+          "exp-6669e9a8d992"
+        ]
+      },
+      "confidence": 0.375,
+      "tags": [
+        "sma-cross-hysteresis",
+        "direction-divergent",
+        "positive-skew",
+        "cost-calibrated"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "sampleRange": "2024-11-11 .. 2026-11-10",
+        "observationCount": 6,
+        "limitations": [
+          "样本仅 2 年日线（BTC/ETH 现货），未覆盖其他行情 regime",
+          "PSR(0) 未做选优折减；选优偏差以 DSR 主口径为准",
+          "跨市场观测存在方向分歧，不能外推为普适模式"
+        ]
+      }
+    },
+    {
+      "id": "kb-361588c71c98",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "cost_finding",
+      "title": "校准成本 13.47bps/边 高于冻结口径 7bps",
+      "content": "本报告使用校准后的单边成本 13.47bps（costModel.effectiveSource=calibrated；构成见 quant/data/cost-calibration.json：taker 费率 + 半价差 + √参与率冲击，冲击系数 K=25 为冻结假设，未经真实成交重校准）。报告中的 commissionBps/slippageBps（2/5）是冻结 V002 口径的拆分，不是 13.47bps 的构成——两者不可混用。冻结口径 7bps 会低估成本、使净 Sharpe 偏乐观。局限：跨交易所/永续未覆盖；无真实成交样本校验。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-latest.json",
+        "costCalibration": "quant/data/cost-calibration.json",
+        "records": [
+          "exp-a4c0a41e6a8a",
+          "exp-8abb4ca38b6d",
+          "exp-c6112bcd0d51",
+          "exp-d3fe338ec9d1",
+          "exp-0b70495c7d00",
+          "exp-b3b9e4dbe9d9",
+          "exp-94d67a5808ef",
+          "exp-4684ac770bc2",
+          "exp-98552a982510",
+          "exp-ccbf8b366167",
+          "exp-b60e7aa71e10",
+          "exp-f619f956cacc",
+          "exp-a822e86b3222",
+          "exp-6669e9a8d992"
+        ]
+      },
+      "confidence": 0.7,
+      "tags": [
+        "cost",
+        "calibration",
+        "must-disclose"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "costBasis": "calibrated"
+      }
+    },
+    {
+      "id": "kb-eecff2e0581d",
+      "timestamp": "2026-11-13T17:44:40.466Z",
+      "type": "market_insight",
+      "title": "跨市场一致性：3/4 候选方向一致，显著性 全部未达标",
+      "content": "候选在 BTC/ETH 双市场逐一对照：方向一致 3/4；分歧项：p-4446c60af172b4f6（sma-cross-hysteresis）。PSR(0)≥0.95 跨市场达标：0/4。 局限：两市场同属加密现货风险因子，非真正独立样本；方向一致不等于显著性。",
+      "source": {
+        "kind": "adjudication-report",
+        "report": "quant/proposals/adjudication-multi-latest.json",
+        "records": [
+          "candidate:p-69c9f905705356af",
+          "candidate:p-fcabb1cf103b2636",
+          "candidate:p-e646ddf3f786a252",
+          "candidate:p-4446c60af172b4f6"
+        ]
+      },
+      "confidence": 0.4,
+      "tags": [
+        "cross-market",
+        "divergence-detected",
+        "no-significance"
+      ],
+      "scope": {
+        "markets": [
+          "BTC-USDT",
+          "ETH-USDT"
+        ],
+        "timeframe": "1D",
+        "marketType": "spot",
+        "costBasis": "calibrated",
+        "observationCount": 4
+      }
+    }
+  ],
+  "recurring": {
+    "successes": [
+      {
+        "candidateId": "p-69c9f905705356af",
+        "family": "sma-cross-hysteresis",
+        "symbol": "BTC-USDT",
+        "ppSharpe": 0.0027272066423119482,
+        "oos": 0.04618326426813973
+      },
+      {
+        "candidateId": "p-fcabb1cf103b2636",
+        "family": "momentum-cooldown",
+        "symbol": "BTC-USDT",
+        "ppSharpe": 0.02689181439088455,
+        "oos": 0.04969434238127256
+      },
+      {
+        "candidateId": "p-e646ddf3f786a252",
+        "family": "composite-percentile",
+        "symbol": "BTC-USDT",
+        "ppSharpe": 0.02760402679367485,
+        "oos": 0.08506145101828302
+      },
+      {
+        "candidateId": "sma-cross-hysteresis-a",
+        "family": "sma-cross-hysteresis",
+        "symbol": "BTC-USDT",
+        "ppSharpe": 0.0023740808789574387,
+        "oos": 0.052256958469327514
+      },
+      {
+        "candidateId": "sma-cross-hysteresis-b",
+        "family": "sma-cross-hysteresis",
+        "symbol": "BTC-USDT",
+        "ppSharpe": 0.013942967351092097,
+        "oos": 0.05801137184090359
+      },
+      {
+        "candidateId": "composite-percentile-a",
+        "family": "composite-percentile",
+        "symbol": "BTC-USDT",
+        "ppSharpe": 0.0041168016613049785,
+        "oos": 0.07834957953441074
+      },
+      {
+        "candidateId": "p-69c9f905705356af",
+        "family": "sma-cross-hysteresis",
+        "symbol": "ETH-USDT",
+        "ppSharpe": 0.059561862302100234,
+        "oos": 0.06283788183713258
+      },
+      {
+        "candidateId": "p-fcabb1cf103b2636",
+        "family": "momentum-cooldown",
+        "symbol": "ETH-USDT",
+        "ppSharpe": 0.028404281963485482,
+        "oos": 0.00453893518306259
+      },
+      {
+        "candidateId": "p-e646ddf3f786a252",
+        "family": "composite-percentile",
+        "symbol": "ETH-USDT",
+        "ppSharpe": 0.034466562720018384,
+        "oos": 0.07709010586896989
+      },
+      {
+        "candidateId": "p-4446c60af172b4f6",
+        "family": "sma-cross-hysteresis",
+        "symbol": "ETH-USDT",
+        "ppSharpe": 0.03462137684145035,
+        "oos": 0.030099098196912238
+      }
+    ],
+    "failures": [
+      {
+        "candidateId": "p-4446c60af172b4f6",
+        "family": "sma-cross-hysteresis",
+        "symbol": "BTC-USDT",
+        "ppSharpe": -0.018644460703498837,
+        "reasonTags": [
+          "cross_market_divergence",
+          "cost_sensitive",
+          "drawdown_too_high",
+          "parameter_fragile",
+          "psr_below_threshold"
+        ]
+      },
+      {
+        "candidateId": "momentum-cooldown-a",
+        "family": "momentum-cooldown",
+        "symbol": "BTC-USDT",
+        "ppSharpe": -0.016934929047192272,
+        "reasonTags": [
+          "cost_sensitive",
+          "drawdown_too_high",
+          "parameter_fragile",
+          "psr_below_threshold"
+        ]
+      },
+      {
+        "candidateId": "momentum-cooldown-b",
+        "family": "momentum-cooldown",
+        "symbol": "BTC-USDT",
+        "ppSharpe": -0.0423640938345968,
+        "reasonTags": [
+          "cost_sensitive",
+          "drawdown_too_high",
+          "parameter_fragile",
+          "psr_below_threshold"
+        ]
+      },
+      {
+        "candidateId": "composite-percentile-b",
+        "family": "composite-percentile",
+        "symbol": "BTC-USDT",
+        "ppSharpe": -0.00504115544675329,
+        "reasonTags": [
+          "cost_sensitive",
+          "drawdown_too_high",
+          "parameter_fragile",
+          "psr_below_threshold"
+        ]
+      }
+    ],
+    "divergences": [
+      {
+        "candidateId": "p-4446c60af172b4f6",
+        "family": "sma-cross-hysteresis",
+        "perMarket": [
+          {
+            "market": "BTC-USDT · 2y",
+            "ppSharpe": -0.018644460703498837,
+            "psr": 0.31544052539840006
+          },
+          {
+            "market": "ETH-USDT · 2y",
+            "ppSharpe": 0.03462137684145035,
+            "psr": 0.8165084567341342
+          }
+        ]
+      }
+    ]
+  },
+  "humanReviews": [],
+  "cannotInfer": [
+    "不能推断未来收益：所有指标是历史样本的回顾性统计，不是预测。",
+    "不能推断跨 regime 普适：样本仅 2 年日线、BTC/ETH 现货、单一校准成本口径。",
+    "不能把 PSR(0)<0.95 的观察当作有效策略；方向一致 ≠ 统计显著。",
+    "不能把本预览当作晋升或部署依据：晋升 = 人工 review + 注册表版本升级。",
+    "不能把知识条目当作因果结论：它们只是可复核观察的聚合，且带适用范围。",
+    "不能推断永续 / 其他交易所行为：相关数据因许可与口径原因未收集。"
+  ],
+  "nextQuestions": [
+    "当前 14 条观察中 PSR(0)≥0.95 为 0：在更长样本 / 更多市场（SOL、永续）上复核现候选，而不是在 2 年 BTC/ETH 上继续调参。",
+    "对 p-4446c60af172b4f6 做相邻参数脆弱性扫描（参数网格 + 分段一致性），确认分歧来自市场还是参数边界。",
+    "有 4 条观察在零净收益附近受校准成本压制：用真实成交/盘口样本重校准冲击系数 K=25（当前为冻结假设）。",
+    "尚无人工作出的结构化评审：请对至少一个候选在 reviews-v001.json 写入理由标签（如 out_of_sample_fail / cross_market_divergence）。"
+  ]
+}

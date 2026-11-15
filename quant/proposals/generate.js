@@ -24,9 +24,12 @@ import { loadDotEnv } from "../agent/server.js";
 import { validateCandidateBatch, listFamilies, PROPOSALS_VERSION } from "./schema.js";
 import { listRules } from "../strategy/rules-v002.js";
 import { loadEntries, summarize, buildMemoryContext } from "../journal/journal.js";
+import { loadKnowledge, queryKnowledge, buildKnowledgeContext } from "../knowledge/knowledge.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const CANDIDATES_PATH = join(HERE, "candidates.json");
+export const JOURNAL_PATH = join(HERE, "..", "journal", "entries.jsonl");
+export const KNOWLEDGE_PATH = join(HERE, "..", "knowledge", "knowledge-v001.json");
 
 /** 现有候选库（无文件 → 空库）。 */
 export function loadCandidates(path = CANDIDATES_PATH) {
@@ -39,7 +42,7 @@ export function loadCandidates(path = CANDIDATES_PATH) {
   }
 }
 
-function buildPrompt(count, registered, memoryContext) {
+export function buildPrompt(count, registered, memoryContext = "", knowledgeContext = "") {
   return [
     "You are proposing parameter candidates for deterministic backtesting in a quant governance pipeline.",
     "Families and REQUIRED param fields (values must respect these bounds):",
@@ -48,10 +51,10 @@ function buildPrompt(count, registered, memoryContext) {
     '- "composite-percentile": window int [20,80], percentile [50,95]',
     "Output STRICT JSON — an array of exactly " + count + " objects: {\"family\":\"...\",\"params\":{...},\"rationale\":\"one short sentence\"}.",
     "No markdown fences, no commentary, JSON only.",
-    memoryContext,
     "Already-registered rules (do NOT duplicate these params):",
     JSON.stringify(registered.map(rule => ({ family: rule.family, params: rule.params }))),
-    memoryContext ? "Prior research context (avoid repeating failures):\n" + memoryContext : ""
+    memoryContext ? "Prior research context (avoid repeating failures):\n" + memoryContext : "",
+    knowledgeContext ? "Accumulated knowledge (scoped observations from prior adjudications; may be incomplete):\n" + knowledgeContext : ""
   ].filter(Boolean).join("\n");
 }
 
@@ -81,9 +84,12 @@ export async function generateCandidates({ count = 4, consent = false, fromFile 
     }
     const client = createAgentClient({ transport, apiKey, model, baseUrl });
     if (!client.configured()) return { ok: false, code: "HARNESS_UNCONFIGURED", added: 0, rejected: [], error: "DEEPSEEK_API_KEY is not configured" };
-    const journalPath = join(HERE, "..", "journal", "entries.jsonl");
-    const memoryContext = buildMemoryContext(summarize(loadEntries(journalPath)));
-    const response = await client.chat({ messages: [{ role: "user", content: buildPrompt(count, registered) + "\n\n" + memoryContext }] });
+    // 双层研究记忆：episodic（journal 汇总）+ semantic（research-memory 生成的知识库）。
+    // 知识库缺失/为空时静默省略——绝不因记忆缺失阻塞提案；两者都只是 prompt 材料。
+    const memoryContext = buildMemoryContext(summarize(loadEntries(JOURNAL_PATH)));
+    const knowledgeEntries = queryKnowledge(loadKnowledge(KNOWLEDGE_PATH), { minConfidence: 0.3 });
+    const knowledgeContext = knowledgeEntries.length ? buildKnowledgeContext(knowledgeEntries) : "";
+    const response = await client.chat({ messages: [{ role: "user", content: buildPrompt(count, registered, memoryContext, knowledgeContext) }] });
     rawList = extractJsonArray(response.message?.content ?? "");
     source = "model:" + client.model;
   }

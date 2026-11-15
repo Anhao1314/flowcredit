@@ -5,6 +5,9 @@ Thumbs.db
 # local scratch
 *.local
 
+# local raw market data — never committed (see quant/data/LICENSING.md)
+quant/data/raw/
+
 # deployment secrets and private credentials
 .env
 .env.*
