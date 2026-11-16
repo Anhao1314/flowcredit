@@ -7,7 +7,7 @@ import { HarnessBrain } from "../src/harness.js";
 import { createAssessmentService } from "../src/assessment-service.js";
 import { createChatPipeline } from "../src/chat-pipeline.js";
 import { createRiskToolRegistry } from "../src/risk-tools.js";
-import { createRiskAssistant, MAX_STEPS_RISK } from "../src/risk-assistant.js";
+import { createRiskAssistant, MAX_STEPS_RISK, SYSTEM_PROMPT_RISK } from "../src/risk-assistant.js";
 import { getPresetV021 } from "../src/presets.js";
 
 const connectors = createConnectorRegistry([createCsvConnector()]);
@@ -227,6 +227,20 @@ test("stream path emits delta/tool/done with identical authority semantics", asy
   assert.deepEqual(events.map(event => event.type), ["delta", "reset", "tool", "done"]);
   assert.equal(events.at(-1).result.ok, true);
   assert.equal(result.toolCalls[0].result.authoritative.CCI, 929);
+});
+
+test("system prompt keeps the engineered routing, boundary and language rules", () => {
+  for (const directive of [
+    "call assess_prompt ONCE with the raw user text",
+    "Never pre-extract or pre-validate first",
+    "never retype arrays or figures from memory",
+    "validate_draft alone; do not run an assessment",
+    "Never output PD, expected loss, credit limit or approval decisions",
+    "If it contains ANY Chinese characters, reply in Chinese",
+    "Pure-JSON input defaults to Chinese"
+  ]) {
+    assert.ok(SYSTEM_PROMPT_RISK.includes(directive), `system prompt lost directive: ${directive}`);
+  }
 });
 
 test("invalid prompt is rejected before any gate", async () => {

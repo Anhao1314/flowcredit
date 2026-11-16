@@ -30,7 +30,8 @@
     "propose": "node ../quant/proposals/generate.js",
     "adjudicate": "node ../quant/proposals/run-adjudication.js",
     "memory": "node ../quant/research-memory/build.js",
-    "mcp": "node ../quant/agent/mcp-server.js"
+    "mcp": "node ../quant/agent/mcp-server.js",
+    "prompt-probe": "node scripts/risk-agent-prompt-probe.mjs"
   },
   "dependencies": {
     "ajv": "8.20.0",

@@ -94,7 +94,7 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
     },
     {
       name: "what_if",
-      description: "Deterministic sensitivity: re-run the assessment with numeric field overrides applied on top of the draft. Returns baseline vs after (TAI/CCI/riskGrade/decisionStatus) and deltas. Overrides accept only scalar numeric intake fields.",
+      description: "Deterministic sensitivity: re-run the assessment with numeric field overrides applied on top of the draft. Returns baseline vs after (TAI/CCI/riskGrade/decisionStatus) and deltas. Overrides accept only scalar numeric intake fields. If the full draft is not in hand, rebuild it first via assess_prompt/extract_from_text on the earlier user text; never retype arrays or figures from memory.",
       parameters: { draft: { type: "object", required: true }, overrides: { type: "object", required: true } },
       execute(args) {
         assertArgs(args, ["draft", "overrides"]);
@@ -192,7 +192,7 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
     },
     {
       name: "assess_prompt",
-      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. Prefer this for long or JSON-shaped prompts instead of retyping the draft.",
+      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. PREFER THIS whenever the user text already contains the facts (JSON object or any prompt with concrete figures), regardless of length; do not pre-extract or pre-validate.",
       parameters: { text: { type: "string", required: true } },
       execute(args) {
         assertArgs(args, ["text"]);
