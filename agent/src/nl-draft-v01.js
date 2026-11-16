@@ -41,7 +41,7 @@ const GROUPED_NUMBER = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)`;
 const NUMBER_TOKEN = String.raw`(${GROUPED_NUMBER}(?:\.\d+)?)`;
 // Short, digit-free gap between a label and its value. It cannot cross another number or a
 // percent sign, so a value can never be attributed to a later label.
-const GAP = String.raw`[^\d%]{0,12}?`;
+const GAP = String.raw`[^\d%.,，。;；、]{0,12}?`;
 const MONEY_TAIL = String.raw`(?:US\$|\$)?\s*` + NUMBER_TOKEN + String.raw`\s*(万|千|亿|百万|k|K|m|M)?\s*(?:美元|美金|USD|usd|人民币|元)?`;
 const PERCENT_NUMBER = String.raw`(\d+(?:\.\d+)?)`;
 const PERCENT_TAIL = PERCENT_NUMBER + String.raw`\s*[%％]`;
@@ -53,11 +53,15 @@ function globalRegex(pattern) { return new RegExp(pattern.source, pattern.flags.
 
 const MONEY_FIELDS = Object.freeze({
   revenueUsd: [
+    { rank: 2, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总收入|总营收|总流水|total\s+revenue|gross\s+revenue)`, "i")] },
     { rank: 2, patterns: [labeled("总收入|总营收|总流水|total\\s+revenue|gross\\s+revenue", MONEY_TAIL)] },
+    { rank: 1, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:月收入|月营收|月流水|每月收入|营业收入|收入|monthly\s+revenue|revenue)`, "i")] },
     { rank: 1, patterns: [labeled("月收入|月营收|月流水|每月收入|营业收入|收入|monthly\\s+revenue|revenue", MONEY_TAIL)] }
   ],
   computeSpendUsd: [
+    { rank: 2, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总算力\s*(?:支出|成本|花费|费用)|total\s+compute\s+(?:spend|cost))`, "i")] },
     { rank: 2, patterns: [labeled("总算力\\s*(?:支出|成本|花费|费用)|total\\s+compute\\s+(?:spend|cost)", MONEY_TAIL)] },
+    { rank: 1, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:算力支出|算力成本|算力花费|算力费用|计算支出|compute\s+spend|compute\s+cost)`, "i")] },
     { rank: 1, patterns: [labeled("算力支出|算力成本|算力花费|算力费用|计算支出|compute\\s+spend|compute\\s+cost", MONEY_TAIL)] }
   ]
 });
@@ -72,8 +76,8 @@ const PERCENT_FIELDS = Object.freeze({
     labeled("30\\s*(?:天|日)\\s*(?:以上)?\\s*逾期率|30\\s*天以上逾期|逾期率|30[-\\s]?day\\s+overdue(?:\\s+rate)?|overdue(?:\\s+rate)?", PERCENT_TAIL)
   ],
   top5ConcentrationPct: [
-    new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:top\s*-?\s*5\s*customers?|前\s*5\s*大客户|前五大客户)`, "i"),
-    labeled("前\\s*5\\s*大客户|前\\s*五\\s*大客户|前五大客户|top\\s*-?\\s*5\\s*customers?|top\\s*-?\\s*5|top5", PERCENT_TAIL)
+    new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:top\s*-?\s*5(?:\s*-?\s*(?:customer|client)s?)?\s*concentration|top\s*-?\s*5\s*customers?|前\s*5\s*大客户|前五大客户)`, "i"),
+    labeled("前\\s*5\\s*大客户|前\\s*五\\s*大客户|前五大客户|top\\s*-?\\s*5(?:\\s*-?\\s*(?:customer|client)s?)?\\s*concentration|top\\s*-?\\s*5\\s*customers?|top\\s*-?\\s*5|top5", PERCENT_TAIL)
   ],
   validRatePct: [
     new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:有效率|valid\s+rate)`, "i"),
@@ -81,11 +85,26 @@ const PERCENT_FIELDS = Object.freeze({
   ]
 });
 
+const GPU_HOURS_K_PATTERNS = Object.freeze([
+  new RegExp(String.raw`(?:GPU|显卡)\s*(?:hours?|小时)?\s*(?:约|:)?\s*${NUMBER_TOKEN}\s*(k|K|千)\s*(?:hours?|小时)?`, "i"),
+  new RegExp(String.raw`${NUMBER_TOKEN}\s*(k|K|千)\s*(?:GPU\s*hours?|hours?|小时)`, "i"),
+  new RegExp(String.raw`(?:GPU\s*hours?|gpu[-\s]?hours?)\s*(?:约|:)?\s*${NUMBER_TOKEN}\s*(k|K|千)`, "i")
+]);
 const GPU_HOURS_PATTERNS = Object.freeze([
   new RegExp(String.raw`(?:GPU|显卡)\s*(?:使用量|使用时长|运行时长|使用|运行时间|时长)?\s*(?:约|大约|约为|为|:)?\s*${NUMBER_TOKEN}\s*(?:个)?\s*(?:小时|hours?\b|hrs?\b|h\b)`, "i"),
   new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:个)?\s*(?:GPU\s*小时|GPU\s*hours?|gpu[-\s]?hours?)`, "i"),
-  new RegExp(String.raw`(?:GPU\s*hours?|gpu[-\s]?hours?)\s*(?:约|:)?\s*${NUMBER_TOKEN}`, "i")
+  new RegExp(String.raw`(?:GPU\s*hours?|gpu[-\s]?hours?)\s*(?:约|:)?\s*${NUMBER_TOKEN}`, "i"),
+  new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:个)?\s*(?:小时|hours?)\s*(?:的)?\s*(?:GPU|显卡)\s*(?:使用量|使用时长|运行时长|使用|运行时间|时长)?`, "i")
 ]);
+function readGpuHours(source) {
+  for (const pattern of GPU_HOURS_K_PATTERNS) {
+    const match = pattern.exec(source);
+    if (!match) continue;
+    const amount = toNumber(match[1]);
+    if (amount != null) return Math.round(amount * 1000 * 1e6) / 1e6;
+  }
+  return readNumber(source, GPU_HOURS_PATTERNS);
+}
 
 const PAYING_CUSTOMER_PATTERNS = Object.freeze([
   new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:个|名|家)?\s*付费\s*客户`),
@@ -140,6 +159,7 @@ function readNumber(source, patterns) {
  */
 function readMoneyBest(source, groups) {
   let best = null;
+  const seen = [];
   for (const group of groups) {
     for (const pattern of group.patterns) {
       const rx = globalRegex(pattern);
@@ -152,17 +172,24 @@ function readMoneyBest(source, groups) {
         if (/^\s*(?:\/|per\b|每)/i.test(tail)) continue;
         const before = source.slice(Math.max(0, match.index - 28), match.index);
         let rank = group.rank;
-        if (/推理|inference|segment|子项|业务线|product\s+line/i.test(before)) rank -= 2;
+        if (/(?:推理|inference)\s*(?:收入|revenue)|segment\s+revenue|子项\s*收入|业务线\s*收入|product\s+line\s+revenue/i.test(before)) rank -= 2;
         const scale = match[2] ? MONEY_UNIT_SCALE[match[2]] : 1;
         const value = scale === 1 ? amount : Math.round(amount * scale);
         if (!Number.isFinite(value)) continue;
-        if (!best || rank > best.rank || (rank === best.rank && match.index < best.index)) {
-          best = { value, rank, index: match.index };
+        seen.push({ value, rank });
+        const reverse = group.reverse === true;
+        if (!best
+          || rank > best.rank
+          || (rank === best.rank && reverse && !best.reverse)
+          || (rank === best.rank && reverse === best.reverse && match.index < best.index)) {
+          best = { value, rank, index: match.index, reverse };
         }
       }
     }
   }
-  return best;
+  if (!best) return null;
+  const conflicting = seen.some(item => item.rank === best.rank && item.value !== best.value);
+  return { ...best, conflicting };
 }
 
 function tokenValueToM(amount, unit, field, warnings) {
@@ -352,8 +379,11 @@ function parseEmbeddedJson(source, warnings) {
   let parsed;
   try { parsed = JSON.parse(candidate.text); }
   catch {
-    if (candidate.strict) warnings.push("JSON input could not be parsed; no fields were extracted.");
-    return { draft: {}, parseFailed: candidate.strict };
+    if (candidate.strict) {
+      warnings.push("JSON input could not be parsed; no fields were extracted.");
+      return { draft: {}, parseFailed: true };
+    }
+    return null;
   }
   const draft = jsonDraft(parsed, warnings);
   if (!Object.keys(draft).length) warnings.push("JSON object contained no supported intake fields.");
@@ -392,7 +422,7 @@ function extractNaturalLanguageValues(source, warnings) {
     if (date) values[field] = date;
   }
 
-  const gpuHours = readNumber(source, GPU_HOURS_PATTERNS);
+  const gpuHours = readGpuHours(source);
   if (gpuHours != null && values.gpuHours === undefined) values.gpuHours = gpuHours;
 
   for (const [field, groups] of Object.entries(MONEY_FIELDS)) {
@@ -400,6 +430,7 @@ function extractNaturalLanguageValues(source, warnings) {
     const best = readMoneyBest(source, groups);
     if (!best) continue;
     if (best.rank < 0) warnings.push(`The ${field} match came from a segment label; verify it is the total.`);
+    if (best.conflicting) warnings.push(`Multiple ${field} values were stated; ${best.value} was used. Confirm the total.`);
     values[field] = best.value;
   }
   for (const [field, patterns] of Object.entries(PERCENT_FIELDS)) {
@@ -474,7 +505,7 @@ export function extractNaturalLanguageDraft(text) {
   const source = typeof text === "string" ? text : "";
   const warnings = [];
   const json = parseEmbeddedJson(source, warnings);
-  const values = json && !json.parseFailed ? json.draft : extractNaturalLanguageValues(source, warnings);
+  const values = json ? json.draft : extractNaturalLanguageValues(source, warnings);
   const draft = {};
   for (const field of NL_DRAFT_FIELDS) if (values[field] !== undefined) draft[field] = values[field];
   return { draft, matchedFields: Object.keys(draft), warnings };

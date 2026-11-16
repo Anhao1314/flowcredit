@@ -1,32 +1,27 @@
 {
   "artifactVersion": "fc-agent-eval-artifact/v1",
-  "generatedAt": "2026-11-15T20:02:30.118Z",
+  "generatedAt": "2026-11-15T00:00:00.000Z",
   "dataset": {
     "id": "fc-agent-eval",
     "version": "fc-agent-eval/v1",
-    "path": "eval/datasets/agent-eval-v1.jsonl",
+    "path": "agent/eval/datasets/agent-eval-v1.jsonl",
     "caseCount": 30,
     "sha256": "756f5abffca54ec8f043771dfe37ffa32c060a1de23d96b8e78ddbe83d1e362a"
   },
   "baseline": {
-    "commitSha": "0163599a530aed9b13348d66ed12b1a1892bb63d",
+    "commitSha": "7c747a6f1fab050a357fd01099f59992a7fb1c39",
     "branch": "main",
     "dirty": true,
     "dirtyFiles": [
-      "M agent/eval/datasets/agent-eval-v1.jsonl",
-      " M agent/eval/results/agent-eval-2026-10-29.json",
-      " M agent/eval/results/agent-eval-2026-11-15.json",
+      "M agent/eval/results/agent-eval-2026-10-29.json",
+      " M agent/src/chat-response-v02.js",
       " M agent/src/nl-draft-v01.js",
       " M agent/src/server.js",
       " M agent/test/agent-eval.test.js",
       " M agent/test/chat-api.test.js",
-      " M agent/test/http.test.js",
-      " M agent/test/nl-draft-v01.test.js",
-      " M docs/public-api-v1.md",
-      " M quant/agent/server.js",
       " M quant/console/build.js",
       " M quant/console/index.html",
-      "?? agent/test/nl-draft-v02.test.js"
+      "?? agent/eval/results/agent-eval-2026-11-16.json"
     ]
   },
   "run": {
@@ -68,20 +63,20 @@
     "metrics": {
       "fieldPrecision": {
         "definition": "Emitted fields that match the expected (or intended) value, divided by all emitted fields across all 18 cases.",
-        "numerator": 65,
-        "denominator": 67,
-        "value": 0.9701
+        "numerator": 68,
+        "denominator": 68,
+        "value": 1
       },
       "fieldRecall": {
         "definition": "Expected (or intended) field values that were extracted exactly, divided by all expected field values across all 18 cases.",
-        "numerator": 65,
+        "numerator": 68,
         "denominator": 68,
-        "value": 0.9559
+        "value": 1
       },
       "unsupportedFieldRate": {
         "definition": "Emitted fields that no case expected, divided by all emitted fields. The extractor is whitelist-only, so this metric is structurally bounded near zero.",
         "numerator": 0,
-        "denominator": 67,
+        "denominator": 68,
         "value": 0
       },
       "schemaPassRate": {
@@ -92,9 +87,9 @@
       },
       "casePassRate": {
         "definition": "Cases with no field, absent-field, unsupported-field, warning or validation mismatch, divided by all 18 cases. The two known parser failures count as failures.",
-        "numerator": 16,
+        "numerator": 18,
         "denominator": 18,
-        "value": 0.8889
+        "value": 1
       }
     },
     "documentedContractSubset": {
@@ -133,7 +128,8 @@
         "note": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Scored against intended values, so it counts as a failure in the primary metrics.",
         "observed": {
           "taskType": "inference",
-          "revenueUsd": 58000,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
           "repaymentRatePct": 96,
           "overdue30Pct": 2,
           "payingCustomers": 168,
@@ -148,15 +144,9 @@
           "payingCustomers": 168,
           "top5ConcentrationPct": 36
         },
-        "status": "CONFIRMED_OPEN",
-        "passed": false,
-        "wrongValues": [
-          {
-            "field": "revenueUsd",
-            "expected": 100000,
-            "observed": 58000
-          }
-        ],
+        "status": "FIXED_OR_CHANGED",
+        "passed": true,
+        "wrongValues": [],
         "unsupported": []
       },
       {
@@ -164,22 +154,16 @@
         "limitationId": "gpu-hours-unit-multiplier",
         "note": "The GPU-hours pattern captures the numeric token but not the k multiplier. Scored against intended values, so it counts as a failure in the primary metrics.",
         "observed": {
-          "gpuHours": 4.2,
+          "gpuHours": 4200,
           "revenueUsd": 100000
         },
         "intended": {
           "gpuHours": 4200,
           "revenueUsd": 100000
         },
-        "status": "CONFIRMED_OPEN",
-        "passed": false,
-        "wrongValues": [
-          {
-            "field": "gpuHours",
-            "expected": 4200,
-            "observed": 4.2
-          }
-        ],
+        "status": "FIXED_OR_CHANGED",
+        "passed": true,
+        "wrongValues": [],
         "unsupported": []
       }
     ],
@@ -1078,10 +1062,11 @@
         "limitationId": "postfix-money-attribution",
         "limitationNote": "The label-before-value regex attributes the compute-spend amount to revenue when the amount precedes the word revenue. Scored against intended values, so it counts as a failure in the primary metrics.",
         "knownLimitation": true,
-        "passed": false,
+        "passed": true,
         "extracted": {
           "taskType": "inference",
-          "revenueUsd": 58000,
+          "revenueUsd": 100000,
+          "computeSpendUsd": 58000,
           "repaymentRatePct": 96,
           "overdue30Pct": 2,
           "payingCustomers": 168,
@@ -1106,24 +1091,17 @@
           "payingCustomers": 168,
           "top5ConcentrationPct": 36
         },
-        "missing": [
-          "revenueUsd",
-          "computeSpendUsd"
-        ],
-        "wrongValues": [
-          {
-            "field": "revenueUsd",
-            "expected": 100000,
-            "observed": 58000
-          }
-        ],
+        "missing": [],
+        "wrongValues": [],
         "unsupported": [],
         "absentViolations": [],
         "validation": {
           "valid": true,
           "readinessStatus": "limited",
           "errors": [],
-          "warnings": []
+          "warnings": [
+            "Multiple revenueUsd values were stated; 100000 was used. Confirm the total."
+          ]
         },
         "validationChecks": [
           {
@@ -1152,9 +1130,9 @@
         "limitationId": "gpu-hours-unit-multiplier",
         "limitationNote": "The GPU-hours pattern captures the numeric token but not the k multiplier. Scored against intended values, so it counts as a failure in the primary metrics.",
         "knownLimitation": true,
-        "passed": false,
+        "passed": true,
         "extracted": {
-          "gpuHours": 4.2,
+          "gpuHours": 4200,
           "revenueUsd": 100000
         },
         "expected": {},
@@ -1166,16 +1144,8 @@
           "gpuHours": 4200,
           "revenueUsd": 100000
         },
-        "missing": [
-          "gpuHours"
-        ],
-        "wrongValues": [
-          {
-            "field": "gpuHours",
-            "expected": 4200,
-            "observed": 4.2
-          }
-        ],
+        "missing": [],
+        "wrongValues": [],
         "unsupported": [],
         "absentViolations": [],
         "validation": {

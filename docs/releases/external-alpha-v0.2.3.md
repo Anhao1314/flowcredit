@@ -49,9 +49,14 @@ empty or out-of-scope input. Parser v0.2 addresses that:
   history and data coverage; `回款率` is accepted alongside `还款率`; English number-before-label
   percentages work.
 - **Numeric safety**: total revenue/spend outrank segment labels; `US$2.2 per GPU-hour` is rejected;
-  grouped numbers no longer borrow a value across a comma (`overdue30Pct 2, payingCustomers 168`).
-- **Guidance**: greetings return `status=help` with the supported field list and a complete template;
-  non-inference businesses return `status=unsupported-scope` instead of a fake assessment.
+  postfix money (`100000 美元的月收入`) and `4.2k GPU hours` are attributed correctly; grouped
+  numbers no longer borrow a value across a comma (`overdue30Pct 2, payingCustomers 168`).
+- **Language**: English prompts receive an English assessment message; English number-before-label
+  percentages and `top 5 concentration` are recognized.
+- **Guidance**: greetings and field questions (`R 和 C 应该怎么给？`) return `status=help` with the
+  supported field list, R/C definition, session guidance and a complete template; non-inference
+  businesses return `status=unsupported-scope`; invalid periods or malformed JSON return
+  `status=invalid-input` with a readable answer instead of a raw 400.
 - **Multi-turn**: `sessionId` carries the merged draft for 30 minutes; `draftId` remains an
   invocation identifier and is not a resume handle.
 - **Docs**: the supported 19-field list, text/JSON templates, R/C definition and response statuses are

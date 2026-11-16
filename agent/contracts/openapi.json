@@ -559,9 +559,10 @@
                   "assessed",
                   "insufficient-evidence",
                   "help",
-                  "unsupported-scope"
+                  "unsupported-scope",
+                  "invalid-input"
                 ],
-                "description": "help and unsupported-scope return a deterministic answer without running an assessment."
+                "description": "help, unsupported-scope and invalid-input return a deterministic answer without running an assessment."
               },
               "message": {
                 "type": "string",

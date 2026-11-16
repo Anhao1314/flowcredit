@@ -360,6 +360,7 @@ body[data-view="chat"] .footer{display:none}
 /* ── Finch 模拟（与 Direct API 同构：只发 {prompt}）──────────────────────── */
 body[data-view="finch"] main{padding:16px 24px}
 body[data-view="finch"] .footer{display:none}
+body[data-view="finch"] #history-label,body[data-view="finch"] #chat-history{display:none}
 .finch-diag{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
 .finch-diag .badge{font-size:10.5px}
 .finch-raw{margin-top:8px;font-size:11px;color:var(--muted)}
@@ -429,7 +430,7 @@ body[data-view="finch"] .footer{display:none}
   <button class="nav-btn" data-view="dsr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r=".5"/><circle cx="15" cy="15" r=".5"/></svg><span>DSR &amp; Promotion</span></button>
   <button class="nav-btn" data-view="quality"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v12c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9v-12"/><path d="M4.5 11.5c0 1.6 3.4 2.9 7.5 2.9s7.5-1.3 7.5-2.9"/></svg><span>Data Quality</span></button>
   <button class="nav-btn" data-view="agent"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M9 12h7M9 16h7"/></svg><span>Agent &amp; Audit</span></button>
-  <div class="sidebar-group">历史会话</div>
+  <div class="sidebar-group" id="history-label">历史会话</div>
   <div id="chat-history" class="history-list"></div>
   <div class="sidebar-footer">
     <span>👤</span>
@@ -1499,6 +1500,11 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     else renderHistory();
   }
   function startNewChat() {
+    if (document.body.getAttribute("data-view") === "finch") {
+      var finchReset = document.getElementById("finch-reset");
+      if (finchReset) finchReset.click();
+      return;
+    }
     if (streaming && streaming.requestSession === chatSession) streaming.controller.abort();
     thread.innerHTML = "";
     thread.style.display = "none";
@@ -1927,6 +1933,9 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         ["parsed " + parsed, parsed ? "badge-good" : "badge-bad"],
         ["missing " + missing, missing ? "badge-warn" : "badge-good"]
       ];
+      if (data.status === "help" || data.status === "unsupported-scope" || data.status === "invalid-input") {
+        out.unshift(["status " + data.status, "badge-warn"]);
+      }
       if (data.readinessStatus) out.push(["readiness " + data.readinessStatus, data.readinessStatus === "ready" ? "badge-good" : "badge-warn"]);
       if (data.decisionStatus) out.push(["decision " + data.decisionStatus, data.decisionStatus === "insufficient-evidence" ? "badge-warn" : ""]);
       if (data.draftId) out.push([data.draftId, "badge-mono"]);

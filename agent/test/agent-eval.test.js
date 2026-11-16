@@ -39,7 +39,7 @@ test("eval dataset covers every required scenario class", () => {
   assert.deepEqual([...modes].sort(), ["deterministic_extractor", "offline_scripted_model"]);
 });
 
-test("deterministic extractor scores all 18 cases and keeps known failures visible", () => {
+test("deterministic extractor scores all 18 cases and tracks formerly known limitations", () => {
   const artifact = runEval({ datasetPath: DATASET, now: new Date("2026-10-29T00:00:00Z") });
   assert.equal(artifact.deterministicExtractor.caseCount, 18);
   assert.equal(artifact.deterministicExtractor.knownLimitationCaseCount, 2);
@@ -47,15 +47,13 @@ test("deterministic extractor scores all 18 cases and keeps known failures visib
   const known = artifact.deterministicExtractor.knownLimitationCases;
   assert.equal(known.length, 2);
   for (const limitation of known) {
-    assert.equal(limitation.status, "CONFIRMED_OPEN");
-    assert.equal(limitation.passed, false);
-    assert.ok(limitation.observed && limitation.intended);
-    assert.ok(limitation.wrongValues.length > 0 || limitation.unsupported.length > 0);
+    assert.equal(limitation.status, "FIXED_OR_CHANGED");
+    assert.equal(limitation.passed, true);
   }
   const metrics = artifact.deterministicExtractor.metrics;
-  assert.deepEqual([metrics.fieldPrecision.numerator, metrics.fieldPrecision.denominator], [65, 67]);
-  assert.deepEqual([metrics.fieldRecall.numerator, metrics.fieldRecall.denominator], [65, 68]);
-  assert.deepEqual([metrics.casePassRate.numerator, metrics.casePassRate.denominator], [16, 18]);
+  assert.deepEqual([metrics.fieldPrecision.numerator, metrics.fieldPrecision.denominator], [68, 68]);
+  assert.deepEqual([metrics.fieldRecall.numerator, metrics.fieldRecall.denominator], [68, 68]);
+  assert.deepEqual([metrics.casePassRate.numerator, metrics.casePassRate.denominator], [18, 18]);
   assert.deepEqual([metrics.schemaPassRate.numerator, metrics.schemaPassRate.denominator], [18, 18]);
   const subset = artifact.deterministicExtractor.documentedContractSubset;
   assert.deepEqual([subset.fieldPrecision.numerator, subset.fieldPrecision.denominator], [59, 59]);

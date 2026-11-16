@@ -142,13 +142,13 @@ test("chat rejects invalid prompt input with the standard client-error envelope"
   }, { env: NO_MODEL_ENV });
 });
 
-test("a prompt outside the intake scope returns guidance instead of a fake assessment", async () => {
+test("a vague prompt returns help instead of a fake assessment", async () => {
   await withServer(async base => {
     const response = await chat(base, { prompt: "帮我看看这家公司风险怎么样" });
     const { data } = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(data.status, "unsupported-scope");
-    assert.match(data.message, /只评估 AI 推理/);
+    assert.equal(data.status, "help");
+    assert.match(data.message, /支持的字段/);
     assert.equal((data.parsedFields ?? []).length, 0);
     assert.equal((data.missingInputs ?? []).length, 0);
     assert.equal(data.assessment ?? null, null);
@@ -194,6 +194,44 @@ test("a JSON prompt with exact keys is parsed without wrong values", async () =>
     assert.equal(data.extractedDraft.payingCustomers, 168);
     assert.equal(data.extractedDraft.inputTokensM, 12000);
     assert.notEqual(data.extractedDraft.computeSpendUsd, 2);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("English prompts get an English assessment message", async () => {
+  await withServer(async base => {
+    const { data } = await chat(base, { prompt: "Assess an AI inference provider: period 2026-08-01 to 2026-08-31, input tokens 64 million, output tokens 16 million, valid rate 94%, H100 GPU 4200 hours, monthly revenue 100000 USD, compute spend 58000 USD, repayment rate 96%, 30-day overdue rate 2%, 168 paying customers, top 5 concentration 36%, operating history 720 days, data coverage 100%." }).then(response => response.json());
+    assert.match(data.answer, /FlowCredit preliminary risk assessment/);
+    assert.match(data.answer, /Identified \(user-provided\):/);
+    assert.doesNotMatch(data.answer, /[\u4e00-\u9fff]/);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("a six-month period returns a readable invalid-input answer, not a raw 400", async () => {
+  await withServer(async base => {
+    const response = await chat(base, { prompt: JSON.stringify({ periodStart: "2026-01-01", periodEnd: "2026-06-30", inputTokensM: 64, outputTokensM: 16, validRatePct: 94 }) });
+    assert.equal(response.status, 200);
+    const { data } = await response.json();
+    assert.equal(data.status, "invalid-input");
+    assert.match(data.answer, /natural month|27–31/);
+    assert.equal(data.assessment ?? null, null);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("malformed JSON is rejected as invalid-input with guidance", async () => {
+  await withServer(async base => {
+    const { data } = await chat(base, { prompt: '{"revenueUsd": 100000, "periodStart": "2026-08-01"' }).then(response => response.json());
+    assert.equal(data.status, "invalid-input");
+    assert.match(data.answer, /could not be parsed/);
+    assert.equal((data.parsedFields ?? []).length, 0);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("R/C questions return field guidance", async () => {
+  await withServer(async base => {
+    const { data } = await chat(base, { prompt: "R 和 C 应该怎么给？" }).then(response => response.json());
+    assert.equal(data.status, "help");
+    assert.match(data.message, /申报 vs 可信/);
+    assert.match(data.message, /sessionId/);
   }, { env: NO_MODEL_ENV });
 });
 

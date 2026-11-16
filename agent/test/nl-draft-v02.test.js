@@ -87,3 +87,17 @@ test("v0.2 key list is the published parser surface", () => {
   assert.ok(NL_DRAFT_FIELDS.includes("periodStart"));
   assert.ok(NL_DRAFT_FIELDS.includes("monthlySeries"));
 });
+
+test("v0.2 postfix money and k GPU hours are attributed correctly", () => {
+  const zh = extractNaturalLanguageDraft("某 AI 推理服务商，100000 美元的月收入，4200 小时的 GPU 使用量，58000 美元的算力支出。").draft;
+  assert.deepEqual({ revenueUsd: zh.revenueUsd, gpuHours: zh.gpuHours, computeSpendUsd: zh.computeSpendUsd }, { revenueUsd: 100000, gpuHours: 4200, computeSpendUsd: 58000 });
+  const en = extractNaturalLanguageDraft("An inference provider with 100000 USD revenue and 58000 USD compute spend, 4200 GPU hours.").draft;
+  assert.deepEqual({ revenueUsd: en.revenueUsd, gpuHours: en.gpuHours, computeSpendUsd: en.computeSpendUsd }, { revenueUsd: 100000, gpuHours: 4200, computeSpendUsd: 58000 });
+  assert.equal(extractNaturalLanguageDraft("GPU hours 4.2k. Monthly revenue 100k USD.").draft.gpuHours, 4200);
+});
+
+test("v0.2 reports conflicting totals instead of silently choosing one", () => {
+  const { draft, warnings } = extractNaturalLanguageDraft("某 AI 推理服务商，月收入 100000 美元，另一份材料显示月收入 50000 美元。");
+  assert.equal(draft.revenueUsd, 100000);
+  assert.ok(warnings.some(warning => /Multiple revenueUsd values/.test(warning)));
+});

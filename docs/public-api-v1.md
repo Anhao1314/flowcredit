@@ -193,14 +193,14 @@ Response fields under `data.*`:
 
 | Field | Meaning |
 | --- | --- |
-| `status` | `assessed`, `insufficient-evidence`, `help`, or `unsupported-scope` |
+| `status` | `assessed`, `insufficient-evidence`, `help`, `unsupported-scope`, or `invalid-input` |
 | `message` | deterministic template text suitable for a chat surface; it explains no score |
 | `extractedDraft` | exactly the whitelisted fields read from the prompt (`taskType` included when the text states an inference business); it is omitted when the prompt states no whitelisted field |
 | `parsedFields` | which whitelisted fields the prompt stated |
 | `assessment` | the complete deterministic payload that `/api/v1/assess` returns under `data`, with identical field names |
 | `readinessStatus`, `decisionStatus`, `missingInputs`, `missingByGroup`, `requiredActions` | echoed from the runtime for convenient consumption |
 
-Insufficient information is a business result, not a client or server error: it returns HTTP 200 with `data.status = insufficient-evidence`. `help` and `unsupported-scope` also return HTTP 200 with a deterministic `answer`. `TAI`, `CCI` and `riskGrade` are omitted whenever the runtime cannot compute them, exactly as in the assessment response.
+Insufficient information is a business result, not a client or server error: it returns HTTP 200 with `data.status = insufficient-evidence`. `help`, `unsupported-scope` and `invalid-input` also return HTTP 200 with a deterministic `answer`. `TAI`, `CCI` and `riskGrade` are omitted whenever the runtime cannot compute them, exactly as in the assessment response.
 
 ## Representative Request
 

@@ -11,7 +11,10 @@ const amount = value => {
 const FIELD_LABELS = {
   taskType: "业务类型", gpuModel: "GPU", gpuHours: "GPU 使用量", revenueUsd: "收入",
   computeSpendUsd: "算力支出", repaymentRatePct: "历史还款率", overdue30Pct: "30 天以上逾期率",
-  payingCustomers: "付费客户", top5ConcentrationPct: "Top 5 客户收入占比"
+  payingCustomers: "付费客户", top5ConcentrationPct: "Top 5 客户收入占比",
+  inputTokensM: "输入 Token", outputTokensM: "输出 Token", validRatePct: "有效率",
+  periodStart: "评估周期起", periodEnd: "评估周期止", operatingHistoryDays: "经营历史",
+  dataCoveragePct: "数据覆盖率", monthlySeries: "月度序列", R: "申报活动序列", C: "可信活动序列"
 };
 const DIMENSION_LABELS = {
   customer: "客户结构", repayment: "偿付表现", tokenActivity: "Token 活跃度",
@@ -36,6 +39,37 @@ const STATE_LABELS = {
   "insufficient-evidence": "信息或证据不足", "enhanced-review": "需要进一步复核",
   "manual-review": "需要人工复核"
 };
+const FIELD_LABELS_EN = {
+  taskType: "Business type", gpuModel: "GPU", gpuHours: "GPU usage", revenueUsd: "Revenue",
+  computeSpendUsd: "Compute spend", repaymentRatePct: "Historical repayment rate", overdue30Pct: "30-day overdue rate",
+  payingCustomers: "Paying customers", top5ConcentrationPct: "Top-5 customer share",
+  inputTokensM: "Input tokens", outputTokensM: "Output tokens", validRatePct: "Valid rate",
+  periodStart: "Period start", periodEnd: "Period end", operatingHistoryDays: "Operating history",
+  dataCoveragePct: "Data coverage", monthlySeries: "Monthly series", R: "Declared activity series", C: "Credible activity series"
+};
+const DIMENSION_LABELS_EN = {
+  customer: "Customer structure", repayment: "Repayment performance", tokenActivity: "Token activity",
+  economics: "Operating economics", continuity: "Operating continuity"
+};
+const GROUP_LABELS_EN = {
+  Scope: "Counterparty identity and assessment period",
+  "Token activity": "Token usage and valid rate",
+  "Compute and business": "GPU usage and operating data",
+  "Credit profile": "Repayment performance and customer structure",
+  "History and cross-check": "Operating history, data coverage and cross-checks",
+  "Evidence action": "Field-level source evidence for supplied data"
+};
+const ACTION_LABELS_EN = {
+  evidence: GROUP_LABELS_EN["Evidence action"], "invalid-input": "Fix the invalid input reported by the runtime",
+  "token-metering": "Complete or review token metering", "credit-screen": "Complete the remaining risk dimensions",
+  integrity: "Review the data-consistency issues reported by the runtime"
+};
+const STATE_LABELS_EN = {
+  limited: "Limited", ready: "Ready", "not-ready": "Not ready",
+  low: "Low", medium: "Medium", high: "High",
+  "insufficient-evidence": "Insufficient evidence", "enhanced-review": "Enhanced review",
+  "manual-review": "Manual review"
+};
 
 function identifiedFacts(draft) {
   return Object.entries(FIELD_LABELS).flatMap(([key, label]) => {
@@ -46,8 +80,14 @@ function identifiedFacts(draft) {
         key === "gpuModel" && value === "h100-equivalent" ? "H100（等效类别）" : value;
       return [`${label}：${display}`];
     }
+    if (Array.isArray(value)) {
+      if (!value.length) return [];
+      return [`${label}：${value.length} 期`];
+    }
+    if (typeof value === "string") return text(value) ? [`${label}：${value}`] : [];
     if (!finite(value)) return [];
-    const unit = key.endsWith("Usd") ? " 美元" : key.endsWith("Pct") ? "%" : key === "gpuHours" ? " 小时" : "";
+    const unit = key.endsWith("Usd") ? " 美元" : key.endsWith("Pct") ? "%" : key === "gpuHours" ? " 小时" :
+      key.endsWith("TokensM") ? " 百万 tokens" : key === "operatingHistoryDays" ? " 天" : "";
     return [`${label}：${amount(value)}${unit}`];
   });
 }
@@ -107,5 +147,63 @@ export function buildChatUserMessage({ extractedDraft = {}, assessment = {}, mis
   if (presentation.nextSteps.length) sections.push(`建议优先补充或复核：\n${presentation.nextSteps.map((step, index) => `${index + 1}. ${step}`).join("\n")}`);
   sections.push(`${presentation.summary}\nFlowCredit 不会自行补全或编造缺失数据。`);
   sections.push("仅供风险评估参考，不构成授信批准、投资建议或法定审计意见。");
+  return sections.join("\n\n");
+}
+
+
+function identifiedFactsEnglish(draft) {
+  return Object.entries(FIELD_LABELS_EN).flatMap(([key, label]) => {
+    const value = draft[key];
+    if (key === "taskType" || key === "gpuModel") {
+      if (!text(value)) return [];
+      const display = key === "taskType" && value === "inference" ? "AI inference" :
+        key === "gpuModel" && value === "h100-equivalent" ? "H100 (equivalent)" : value;
+      return [`${label}: ${display}`];
+    }
+    if (Array.isArray(value)) {
+      if (!value.length) return [];
+      return [`${label}: ${value.length} periods`];
+    }
+    if (typeof value === "string") return text(value) ? [`${label}: ${value}`] : [];
+    if (!finite(value)) return [];
+    const unit = key.endsWith("Usd") ? " USD" : key.endsWith("Pct") ? "%" : key === "gpuHours" ? " hours" :
+      key.endsWith("TokensM") ? "M tokens" : key === "operatingHistoryDays" ? " days" : "";
+    return [`${label}: ${amount(value)}${unit}`];
+  });
+}
+
+/** English chat message. Same deterministic data as the Chinese template, no additional scoring. */
+export function buildChatUserMessageEnglish({ extractedDraft = {}, assessment = {}, missingByGroup = {}, requiredActions = [] } = {}) {
+  const presentation = buildChatPresentation({ assessment, missingByGroup, requiredActions });
+  const sections = ["FlowCredit preliminary risk assessment"];
+  const facts = identifiedFactsEnglish(extractedDraft);
+  if (facts.length) sections.push(`Identified (user-provided):\n${facts.map(line => `- ${line}`).join("\n")}`);
+  const dimensions = Object.entries(presentation.availableScores ?? {});
+  if (dimensions.length) {
+    const qualification = assessment.evidenceStrength === "low" && assessment.decisionStatus === "insufficient-evidence"
+      ? "data supplied, declared and not independently verified" : "data supplied";
+    sections.push(`Based on the ${qualification}, computable dimensions:\n${dimensions.map(([key, value]) => `- ${DIMENSION_LABELS_EN[key] ?? key}: ${value}`).join("\n")}\n\nThese are partial values, not a full risk rating.`);
+  }
+  const states = [];
+  for (const [key, label] of [["assessmentStatus", "Readiness"], ["evidenceStrength", "Evidence strength"], ["decisionStatus", "Decision"]]) {
+    if (presentation[key]) states.push(`${label}: ${STATE_LABELS_EN[presentation[key]] ?? presentation[key]}`);
+  }
+  const fullScores = Object.entries(presentation.fullScores ?? {});
+  if (fullScores.length < 3) states.push("Full TAI / CCI / Risk Grade: not computable");
+  for (const [key, value] of fullScores) states.push(`${key === "riskGrade" ? "Risk Grade" : key}: ${value}`);
+  sections.push(`Current status:\n${states.map(line => `- ${line}`).join("\n")}`);
+  const nextSteps = [];
+  for (const [group, fields] of Object.entries(missingByGroup)) {
+    if (Array.isArray(fields) && fields.length) nextSteps.push(`Supply: ${GROUP_LABELS_EN[group] ?? "the missing data reported by the runtime"}`);
+  }
+  for (const action of requiredActions) {
+    if (action.category === "missing-data") {
+      if (!nextSteps.length) nextSteps.push("Supply the missing data reported by the runtime");
+    } else if (ACTION_LABELS_EN[action.category]) nextSteps.push(ACTION_LABELS_EN[action.category]);
+    else nextSteps.push("Address the runtime's follow-up requirements");
+  }
+  if (nextSteps.length) sections.push(`Suggested next steps:\n${[...new Set(nextSteps)].map((step, index) => `${index + 1}. ${step}`).join("\n")}`);
+  sections.push("Insufficient information or evidence for a complete risk rating; supply more data or field-level evidence.\nFlowCredit never fills or invents missing data.");
+  sections.push("For risk assessment reference only; not a credit approval, investment advice, or statutory audit opinion.");
   return sections.join("\n\n");
 }

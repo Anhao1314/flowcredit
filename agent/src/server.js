@@ -20,7 +20,7 @@ import {
   isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, PUBLIC_SCHEMA_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
 import { NL_DRAFT_PARSER_VERSION, NL_DRAFT_FIELDS, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
-import { buildChatPresentation, buildChatUserMessage } from "./chat-response-v02.js";
+import { buildChatPresentation, buildChatUserMessage, buildChatUserMessageEnglish } from "./chat-response-v02.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { groundExtractedDraft } from "./grounding.js";
 import { createConnectorRegistry } from "./connectors/contract.js";
@@ -333,6 +333,7 @@ const CHAT_JSON_EXAMPLE = JSON.stringify({
 function isHelpIntent(prompt) {
   const text = String(prompt || "").trim();
   if (!text || text.length > 160) return false;
+  if (/R\s*(?:和|and|&)\s*C|怎么给|怎么填|什么意思|what\s+(?:is|are)\s+(?:R|C)\b|how\s+(?:do\s+i|to)\s+(?:provide|give)/i.test(text)) return true;
   if (/\d/.test(text) || /评估|风险|assess|risk|revenue|收入|逾期|回款|现金流/i.test(text)) return false;
   return /^(?:你好|您好|hi|hello|hey|help)\b/i.test(text)
     || /你能做什么|你会什么|怎么用|如何使用|what can you do|how does this work|what is this/i.test(text);
@@ -353,6 +354,8 @@ function helpMessage(english) {
       `JSON example: ${CHAT_JSON_EXAMPLE}`,
       "",
       `Supported keys: ${fields}.`,
+      "R and C are declared vs credible monthly activity series: same length (at least 6), same units, used for deviation and volatility.",
+      "draftId identifies one invocation. To continue a conversation, send the same sessionId back; draftId is not a resume handle.",
       "Missing fields are reported, never estimated. Data you provide is declared/self-reported; this alpha cannot independently verify it.",
       "Outside AI inference / GPU compute operators? This intake cannot represent that business yet."
     ].join("\n");
@@ -364,6 +367,8 @@ function helpMessage(english) {
     `JSON 示例：${CHAT_JSON_EXAMPLE}`,
     "",
     `支持的字段：${fields}。`,
+    "R / C 是申报 vs 可信的月度活动序列：两者等长（至少 6 期）、同单位，用于偏离和波动计算。",
+    "draftId 标识单次调用。要继续对话，请回传同一个 sessionId；draftId 不是续传句柄。",
     "缺失字段会如实列出，绝不估算。你提供的数据属于申报/自报口径，本 alpha 无法独立核验。",
     "如果你的业务不是 AI 推理 / GPU 算力运营商，当前 intake 无法表达，请勿强行套用模板。"
   ].join("\n");
@@ -386,10 +391,18 @@ function scopeMessage(english, extraction) {
   ].join("\n");
 }
 
+function looksOutOfScope(prompt) {
+  return /arweave|storage|存储|protocol|协议|saas|e-?commerce|电商|marketplace|advertis|广告|bank|银行|lending|借贷|game|游戏|defi|nft/i.test(prompt);
+}
+
 function buildChatGuidance(prompt, extraction) {
   const english = !/[\u4e00-\u9fff]/.test(prompt);
   if (isHelpIntent(prompt)) return { status: "help", message: helpMessage(english) };
-  if (!isInferenceContext(prompt, extraction.draft)) return { status: "unsupported-scope", message: scopeMessage(english, extraction) };
+  if (!isInferenceContext(prompt, extraction.draft)) {
+    if (looksOutOfScope(prompt)) return { status: "unsupported-scope", message: scopeMessage(english, extraction) };
+    if (prompt.trim().length < 20 && !/\d/.test(prompt)) return { status: "help", message: helpMessage(english) };
+    return null;
+  }
   return null;
 }
 
@@ -400,6 +413,20 @@ async function buildChatPayload(body, requestId, context) {
   }
   const extraction = extractNaturalLanguageDraft(request.prompt);
   const draftId = `nl-${requestId}`;
+  const jsonError = extraction.warnings.find(warning => /JSON input could not be parsed|JSON object contained no supported intake fields/.test(warning));
+  if (jsonError) {
+    const english = !/[\u4e00-\u9fff]/.test(request.prompt);
+    const answer = english
+      ? `${jsonError}\nSend "help" for a complete JSON template with exact intake keys.`
+      : `${jsonError}\n发送“help”可查看使用精确字段名的完整 JSON 模板。`;
+    return { status: 200, body: {
+      status: "invalid-input", message: answer, answer,
+      parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
+      extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
+      missingInputs: [], missingByGroup: {}, requiredActions: [], fieldErrors: [],
+      assessment: null, sessionId: request.sessionId || null
+    } };
+  }
   const sessionKey = request.sessionId ? `chat:${request.sessionId}` : null;
   const carried = sessionKey ? sessions.get(sessionKey) : null;
   const combinedDraft = { ...(carried && carried.draft ? carried.draft : {}), ...extraction.draft };
@@ -420,6 +447,31 @@ async function buildChatPayload(body, requestId, context) {
     context.security.invocationTimeoutMs
   );
   if (assessment.status !== 200) {
+    const details = assessment.body?.error?.details || assessment.body?.fieldErrors || [];
+    if (assessment.status === 400 && Array.isArray(details) && details.length) {
+      const english = !/[\u4e00-\u9fff]/.test(request.prompt);
+      const lines = details.map(item => `${item.field || "input"}: ${item.message || "invalid"}`);
+      const answer = english
+        ? [
+            "The intake rejected these fields:",
+            ...lines.map(line => `- ${line}`),
+            "",
+            "periodStart/periodEnd must cover one natural month or a rolling 27–31 day window. Send \"help\" for a complete template."
+          ].join("\n")
+        : [
+            "输入未通过 intake 校验：",
+            ...lines.map(line => `- ${line}`),
+            "",
+            "periodStart/periodEnd 必须是一个自然月，或 27–31 天的滚动窗口。发送“help”查看完整模板。"
+          ].join("\n");
+      return { status: 200, body: {
+        status: "invalid-input", message: answer, answer,
+        parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
+        extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
+        missingInputs: [], missingByGroup: {}, requiredActions: [], fieldErrors: details,
+        assessment: null, sessionId: request.sessionId || null
+      } };
+    }
     return { status: assessment.status, body: { ...assessment.body, draftId, extractedDraft: extraction.draft, parserVersion: NL_DRAFT_PARSER_VERSION } };
   }
   const result = assessment.body;
@@ -429,7 +481,12 @@ async function buildChatPayload(body, requestId, context) {
     extractedDraft: extraction.draft, assessment: result,
     missingByGroup: result.missingByGroup, requiredActions: result.requiredActions
   };
-  const message = buildChatUserMessage(presentationInput);
+  const english = !/[\u4e00-\u9fff]/.test(request.prompt);
+  let message = english ? buildChatUserMessageEnglish(presentationInput) : buildChatUserMessage(presentationInput);
+  if (extraction.warnings.length) {
+    const notes = [...new Set(extraction.warnings)].map(warning => `- ${warning}`).join("\n");
+    message += english ? `\n\nParser notes:\n${notes}` : `\n\n解析提示：\n${notes}`;
+  }
   const data = {
     status, message, answer: message, presentation: buildChatPresentation(presentationInput),
     parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
