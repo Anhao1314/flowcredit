@@ -191,6 +191,35 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
       }
     },
     {
+      name: "assess_prompt",
+      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. Prefer this for long or JSON-shaped prompts instead of retyping the draft.",
+      parameters: { text: { type: "string", required: true } },
+      execute(args) {
+        assertArgs(args, ["text"]);
+        const text = typeof args.text === "string" ? args.text : "";
+        if (!text.trim() || text.length > INTAKE_SCHEMA_V03.maxTextLength) throw new TypeError(`text must contain 1 to ${INTAKE_SCHEMA_V03.maxTextLength} characters`);
+        const extraction = extractNaturalLanguageDraft(text);
+        const grounded = groundExtractedDraft(text, extraction.draft);
+        const warnings = [...extraction.warnings, ...grounded.report.warnings];
+        const outcome = assessDraftPure(grounded.draft, { connectors });
+        if (!outcome.ok) {
+          return {
+            assessed: false, extracted: grounded.draft, matchedFields: Object.keys(grounded.draft), warnings,
+            validation: {
+              valid: false, errors: outcome.validation.errors, warnings: outcome.validation.warnings,
+              missingByGroup: outcome.validation.missingByGroup, missingInputs: outcome.validation.missingInputs
+            },
+            authoritative: null
+          };
+        }
+        return {
+          assessed: true, extracted: grounded.draft, matchedFields: Object.keys(grounded.draft), warnings,
+          ...outcome.payload,
+          authoritative: outcome.payload.authoritative
+        };
+      }
+    },
+    {
       name: "preset_draft",
       description: "Return one of the synthetic example drafts (healthy | watch | sybil) so the user can try a complete assessment. These are fixtures, not real companies.",
       parameters: { key: { type: "string", required: true, enum: ["healthy", "watch", "sybil"] } },

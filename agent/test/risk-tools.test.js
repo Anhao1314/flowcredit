@@ -17,7 +17,7 @@ const CSV = [
 test("risk tool registry is closed, schema-safe and exposes the six deterministic tools", () => {
   const registry = createRiskToolRegistry({ connectors });
   assert.deepEqual(registry.list.map(tool => tool.name).sort(), [
-    "assess_draft", "extract_from_text", "import_csv", "preset_draft", "validate_draft", "what_if"
+    "assess_draft", "assess_prompt", "extract_from_text", "import_csv", "preset_draft", "validate_draft", "what_if"
   ]);
   for (const schema of registry.schemas) {
     assert.equal(schema.type, "function");
@@ -130,4 +130,33 @@ test("assessDraftPure is deterministic for identical input", () => {
   const second = assessDraftPure(draft, { connectors });
   assert.equal(first.assessmentFingerprint, second.assessmentFingerprint);
   assert.equal(first.payload.CCI, second.payload.CCI);
+});
+
+test("assess_prompt: one-shot JSON prompt reaches Grade A without the model echoing the draft", () => {
+  const registry = createRiskToolRegistry({ connectors });
+  const prompt = JSON.stringify({
+    taskType: "inference", gpuModel: "h100-equivalent",
+    periodStart: "2026-08-01", periodEnd: "2026-08-31",
+    inputTokensM: 64, outputTokensM: 16, validRatePct: 94,
+    gpuHours: 4200, revenueUsd: 100000, computeSpendUsd: 58000,
+    repaymentRatePct: 96, overdue30Pct: 2, payingCustomers: 168, top5ConcentrationPct: 36,
+    operatingHistoryDays: 720, dataCoveragePct: 100,
+    monthlySeries: [
+      { period: "2026-03", rawTokensM: 72, validRatePct: 92, revenueUsd: 94000, computeSpendUsd: 55000 },
+      { period: "2026-04", rawTokensM: 75, validRatePct: 93, revenueUsd: 96000, computeSpendUsd: 56000 },
+      { period: "2026-05", rawTokensM: 77, validRatePct: 93, revenueUsd: 97000, computeSpendUsd: 56500 },
+      { period: "2026-06", rawTokensM: 79, validRatePct: 94, revenueUsd: 99000, computeSpendUsd: 57500 },
+      { period: "2026-07", rawTokensM: 81, validRatePct: 94, revenueUsd: 101000, computeSpendUsd: 59000 },
+      { period: "2026-08", rawTokensM: 80, validRatePct: 94, revenueUsd: 100000, computeSpendUsd: 58000 }
+    ],
+    R: [64, 65, 63, 67, 68, 66, 70, 71],
+    C: [62, 63, 62, 65, 66, 65, 68, 69]
+  });
+  const result = registry.get("assess_prompt").execute({ text: prompt });
+  assert.equal(result.assessed, true);
+  assert.equal(result.matchedFields.length, 19, "grounding keeps all 19 fields incl. R/C arrays");
+  const authoritative = result.authoritative;
+  assert.equal(authoritative.TAI, 93.8);
+  assert.equal(authoritative.CCI, 929);
+  assert.equal(authoritative.riskGrade, "A");
 });

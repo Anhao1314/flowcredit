@@ -1138,8 +1138,8 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         { label: "Missing", value: r.validation && r.validation.missingInputs ? r.validation.missingInputs.length : "n/a" }
       ];
       note = errors.slice(0, 2).map(e => (e.field || "") + ": " + (e.message || "")).join(" · ");
-    } else if (call.name === "assess_draft" && (r.authoritative || r.assessmentFingerprint)) {
-      title = "裁决结果"; view = null;
+    } else if ((call.name === "assess_draft" || call.name === "assess_prompt") && (r.authoritative || r.assessmentFingerprint)) {
+      title = call.name === "assess_prompt" ? "一站式评估" : "裁决结果"; view = null;
       const a = r.authoritative || {
         TAI: r.TAI, CCI: r.CCI, riskGrade: r.riskGrade, decisionStatus: r.decisionStatus,
         assessmentFingerprint: r.assessmentFingerprint

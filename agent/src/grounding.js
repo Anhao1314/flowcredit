@@ -36,6 +36,16 @@ export function numericCandidates(text) {
     const suffix = String(match[2] || "").toLowerCase();
     const scale = suffix === "thousand" ? 1e3 : suffix === "million" ? 1e6 : suffix === "billion" ? 1e9 : SUFFIX[suffix] || 1;
     out.push({ raw: match[0].trim(), value: base * scale });
+    // JSON 数组/逗号列表（"[64,65,...]"）与千分位（"1,234,567"）共用逗号：
+    // 千分位要求每个后组恰为 3 位数字；否则视为独立数值列表，逐段产出候选，
+    // 否则 R/C 等数组 grounding 会因 "70,71" 被并成 7071 而整体丢弃。
+    const groups = String(match[1]).split(",");
+    if (groups.length > 1 && !groups.slice(1).every(group => group.length === 3)) {
+      for (const group of groups) {
+        const part = Number(group);
+        if (Number.isFinite(part)) out.push({ raw: group, value: part });
+      }
+    }
   }
   return out;
 }
