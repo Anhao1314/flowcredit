@@ -1,6 +1,6 @@
 {
   "artifactVersion": "fc-agent-eval-artifact/v1",
-  "generatedAt": "2026-11-16T06:40:06.742Z",
+  "generatedAt": "2026-11-16T16:16:19.047Z",
   "dataset": {
     "id": "fc-agent-eval",
     "version": "fc-agent-eval/v1",
@@ -9,24 +9,30 @@
     "sha256": "756f5abffca54ec8f043771dfe37ffa32c060a1de23d96b8e78ddbe83d1e362a"
   },
   "baseline": {
-    "commitSha": "7c747a6f1fab050a357fd01099f59992a7fb1c39",
+    "commitSha": "f40c9f89a08799a8a95395e42c87600caa200cd0",
     "branch": "main",
     "dirty": true,
     "dirtyFiles": [
-      "M agent/contracts/openapi.json",
-      " M agent/eval/results/agent-eval-2026-10-29.json",
-      " M agent/eval/results/agent-eval-2026-11-15.json",
-      " M agent/src/chat-response-v02.js",
+      "M agent/README.md",
+      " M agent/src/grounding.js",
       " M agent/src/nl-draft-v01.js",
+      " M agent/src/security.js",
       " M agent/src/server.js",
-      " M agent/test/agent-eval.test.js",
-      " M agent/test/chat-api.test.js",
       " M agent/test/nl-draft-v02.test.js",
-      " M docs/public-api-v1.md",
       " M docs/releases/external-alpha-v0.2.3.md",
+      " M quant/agent/server.js",
       " M quant/console/build.js",
       " M quant/console/index.html",
-      "?? agent/eval/results/agent-eval-2026-11-16.json"
+      " M quant/test/quant-server.test.js",
+      "?? agent/src/assessment-service.js",
+      "?? agent/src/audit-risk.js",
+      "?? agent/src/chat-pipeline.js",
+      "?? agent/src/risk-assistant.js",
+      "?? agent/src/risk-client.js",
+      "?? agent/src/risk-tools.js",
+      "?? agent/test/risk-agent-http.test.js",
+      "?? agent/test/risk-assistant.test.js",
+      "?? agent/test/risk-tools.test.js"
     ]
   },
   "run": {

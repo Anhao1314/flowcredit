@@ -767,7 +767,8 @@ npm run mcp                                                       # 质检能力
       <div class="composer">
         <textarea id="finch-input" rows="2" placeholder="像 Finch 买家一样提问，例如：帮我评估一家 AI 推理服务商…"></textarea>
         <div class="composer-row">
-          <span class="model-label">deterministic · no model call</span>
+          <label class="consent-pill" id="finch-consent-pill" title="开启后 prompt 会经 agent 工具循环编排（需 DEEPSEEK_API_KEY）"><input type="checkbox" id="finch-consent"> agent 模式</label>
+          <span class="model-label" id="finch-mode-label">deterministic · no model call</span>
           <button id="finch-send" class="send-circle" disabled title="发送">↑</button>
         </div>
       </div>
@@ -1129,6 +1130,60 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         { label: "Rows", value: r.stats && r.stats.rows != null ? r.stats.rows : "n/a" }
       ];
       note = (r.findings || []).slice(0, 2).map(function(f) { return f.code || f.message || ""; }).filter(Boolean).join(" · ");
+    } else if (call.name === "assess_draft" && r.assessed === false) {
+      title = "评估未通过"; view = null;
+      const errors = (r.validation && r.validation.errors) || [];
+      metrics = [
+        { label: "FieldErrors", value: errors.length },
+        { label: "Missing", value: r.validation && r.validation.missingInputs ? r.validation.missingInputs.length : "n/a" }
+      ];
+      note = errors.slice(0, 2).map(e => (e.field || "") + ": " + (e.message || "")).join(" · ");
+    } else if (call.name === "assess_draft" && (r.authoritative || r.assessmentFingerprint)) {
+      title = "裁决结果"; view = null;
+      const a = r.authoritative || {
+        TAI: r.TAI, CCI: r.CCI, riskGrade: r.riskGrade, decisionStatus: r.decisionStatus,
+        assessmentFingerprint: r.assessmentFingerprint
+      };
+      metrics = [
+        { label: "TAI", value: a.TAI },
+        { label: "CCI", value: a.CCI },
+        { label: "Grade", value: a.riskGrade },
+        { label: "Decision", value: a.decisionStatus }
+      ];
+      note = a.assessmentFingerprint || "";
+    } else if (call.name === "what_if" && r.assessed) {
+      title = "敏感性分析"; view = null;
+      const overrides = Object.entries(r.overrides || {}).map(([k, v]) => k + "=" + v).join(" ");
+      metrics = [
+        { label: "Override", value: overrides || "n/a" },
+        { label: "CCI", value: (r.baseline ? r.baseline.CCI : "n/a") + " → " + (r.after ? r.after.CCI : "n/a") },
+        { label: "Grade", value: (r.baseline ? r.baseline.riskGrade : "n/a") + " → " + (r.after ? r.after.riskGrade : "n/a") }
+      ];
+      note = r.delta && r.delta.CCI !== undefined ? "ΔCCI " + r.delta.CCI : (r.delta && r.delta.note) || "";
+    } else if (call.name === "validate_draft" && r.missingInputs) {
+      title = "缺失清单"; view = null;
+      metrics = [
+        { label: "Missing", value: r.missingInputs.length },
+        { label: "Readiness", value: r.readinessStatus }
+      ];
+      note = Object.entries(r.missingByGroup || {}).map(([g, f]) => g + ":" + f.length).join(" · ");
+    } else if (call.name === "extract_from_text" && r.matchedFields) {
+      title = "字段抽取"; view = null;
+      metrics = [
+        { label: "Parsed", value: r.matchedFields.length }
+      ];
+      note = r.matchedFields.join(", ");
+    } else if (call.name === "import_csv" && r.imported) {
+      title = "CSV 导入"; view = null;
+      metrics = [
+        { label: "Rows", value: r.draft && r.draft.monthlySeries ? r.draft.monthlySeries.length : "n/a" },
+        { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
+      ];
+      note = r.digest || "";
+    } else if (call.name === "preset_draft" && r.draft) {
+      title = "示例草稿"; view = null;
+      metrics = [{ label: "Key", value: r.key }];
+      note = r.note || "";
     } else {
       metrics = [{ label: "Status", value: "ok" }];
     }
@@ -1894,6 +1949,8 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     var sendBtn = document.getElementById("finch-send");
     var chips = document.getElementById("finch-chips");
     var reset = document.getElementById("finch-reset");
+    var consent = document.getElementById("finch-consent");
+    var modeLabel = document.getElementById("finch-mode-label");
     var STORE = "fc.finchSim.v1";
     var SESSION = "fc.finchSim.session.v1";
     var messages = [];
@@ -1913,7 +1970,7 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
     function persist() {
       try {
         localStorage.setItem(STORE, JSON.stringify(messages.slice(-40).map(function(m) {
-          return { role: m.role, text: m.text, diag: m.diag || null };
+          return { role: m.role, text: m.text, diag: m.diag || null, artifacts: m.artifacts || null, cites: m.cites || null };
         })));
         if (sessionId) localStorage.setItem(SESSION, sessionId); else localStorage.removeItem(SESSION);
       } catch (e) {}
@@ -1952,11 +2009,23 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         m.diag.forEach(function(item) { diag.appendChild(badge(item[0], item[1])); });
         div.appendChild(diag);
       }
+      if (m.artifacts && m.artifacts.length) {
+        var box = renderArtifacts(m.artifacts);
+        if (box) div.appendChild(box);
+      }
+      if (m.cites && m.cites.length) {
+        var cites = document.createElement("div");
+        cites.className = "cites";
+        m.cites.forEach(function(c) {
+          cites.appendChild(badge((c.tool || "tool") + " · " + String(c.assessmentFingerprint || c.evalRunId || "").slice(0, 14), "badge-mono"));
+        });
+        div.appendChild(cites);
+      }
       if (m.raw) {
         var details = document.createElement("details");
         details.className = "finch-raw";
         var summary = document.createElement("summary");
-        var parsed = (m.raw.data && m.raw.data.parsedFields) || [];
+        var parsed = (m.raw.data && m.raw.data.parsedFields) || (m.raw.toolCalls || []).map(function(c) { return c.name; });
         summary.textContent = "诊断：parsedFields = " + (parsed.length ? parsed.join(", ") : "—") + " · 原始响应";
         details.appendChild(summary);
         var pre = document.createElement("pre");
@@ -1984,9 +2053,11 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
       busy = true;
       sendBtn.disabled = true;
       var started = Date.now();
+      var agentMode = consent.checked;
       var payload = { prompt: prompt };
       if (sessionId) payload.sessionId = sessionId;
-      fetch("/api/finch/assess", {
+      if (agentMode) payload.modelConsent = true;
+      fetch(agentMode ? "/api/finch/agent" : "/api/finch/assess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1996,11 +2067,32 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         var body = null;
         try { body = JSON.parse(result.text); } catch (e) {}
         var data = body && body.data ? body.data : null;
-        var answer = data && (data.answer || data.message)
-          ? (data.answer || data.message)
-          : (body && body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
-        if (data && data.sessionId) sessionId = data.sessionId;
-        append({ role: "assistant", text: answer, diag: data ? diagnostic(data, Date.now() - started) : [["HTTP " + result.status, "badge-bad"]], raw: body });
+        var agent = agentMode && data && data.answer !== undefined ? data : null;
+        var answer;
+        var diag;
+        var artifacts = null;
+        var cites = null;
+        if (agent) {
+          answer = agent.answer || (body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
+          diag = [
+            ["agent " + (agent.steps ?? 0) + "步/" + (agent.toolCalls || []).length + "工具", agent.harnessStatus === "ok" ? "badge-good" : "badge-warn"],
+            ["harness " + (agent.harnessStatus || "n/a"), agent.harnessStatus === "ok" ? "badge-good" : "badge-warn"]
+          ];
+          if (agent.usage && agent.usage.total_tokens) diag.push(["tokens " + agent.usage.total_tokens, ""]);
+          if (agent.status) diag.push(["status " + agent.status, agent.status === "insufficient-evidence" ? "badge-warn" : ""]);
+          diag.push([Date.now() - started + " ms", ""]);
+          artifacts = (agent.toolCalls || []).map(function(call) { return artifactFromCall(call); }).filter(Boolean);
+          cites = agent.citations || [];
+          if (agent.sessionId) sessionId = agent.sessionId;
+        } else {
+          data = data || (body && body.data === undefined ? body : null);
+          answer = data && (data.answer || data.message)
+            ? (data.answer || data.message)
+            : (body && body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
+          diag = data ? diagnostic(data, Date.now() - started) : [["HTTP " + result.status, "badge-bad"]];
+          if (data && data.sessionId) sessionId = data.sessionId;
+        }
+        append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: body });
       }).catch(function(error) {
         append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)) });
       }).finally(function() {
@@ -2035,6 +2127,9 @@ var DATA = ${JSON.stringify(payload).replace(/</g, "\\u003c")};
         event.preventDefault();
         send();
       }
+    });
+    if (consent) consent.addEventListener("change", function() {
+      modeLabel.textContent = consent.checked ? "agent loop · tools+LLM" : "deterministic · no model call";
     });
     sendBtn.addEventListener("click", send);
     reset.addEventListener("click", function() {

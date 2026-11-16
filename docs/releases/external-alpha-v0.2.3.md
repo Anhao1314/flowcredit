@@ -66,6 +66,15 @@ A local console mode `Finch` (sidebar) now mirrors the Direct API dialog: it sen
 to `/api/v1/assess` through a loopback proxy and shows the buyer-visible answer plus local diagnostics
 (`parsedFields`, `missing`, `draftId`, latency). It is a test surface, not a new public endpoint.
 
+## Risk agent loop v0.1 (2026-11-17)
+
+The deterministic chat pipeline is now also drivable by a bounded agent loop
+(`agent/src/risk-assistant.js`), exposed additively as `POST /api/v1/agent/ask` and
+`.../ask/stream`. The parser becomes one tool among six (`assess_draft`, `what_if`,
+`validate_draft`, `extract_from_text`, `import_csv`, `preset_draft`); the LLM only
+orchestrates/explains (modelConsent-gated), every number still comes from the deterministic
+runtime, and the no-consent/no-key paths return exactly the previous chat answers.
+
 ## Operator actions (required for the Finch dialog to work)
 
 1. Deploy this release (`GIT_SHA` build arg) so the prompt-compatible endpoint is live.

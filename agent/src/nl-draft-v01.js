@@ -53,15 +53,15 @@ function globalRegex(pattern) { return new RegExp(pattern.source, pattern.flags.
 
 const MONEY_FIELDS = Object.freeze({
   revenueUsd: [
-    { rank: 2, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总收入|总营收|总流水|total\s+revenue|gross\s+revenue)`, "i")] },
+    { rank: 2, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总收入|总营收|总流水|total\s+revenue|gross\s+revenue)`, "i")] },
     { rank: 2, patterns: [labeled("总收入|总营收|总流水|total\\s+revenue|gross\\s+revenue", MONEY_TAIL)] },
-    { rank: 1, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:月收入|月营收|月流水|每月收入|营业收入|收入|monthly\s+revenue|revenue)`, "i")] },
+    { rank: 1, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:月收入|月营收|月流水|每月收入|营业收入|收入|monthly\s+revenue|revenue)`, "i")] },
     { rank: 1, patterns: [labeled("月收入|月营收|月流水|每月收入|营业收入|收入|monthly\\s+revenue|revenue", MONEY_TAIL)] }
   ],
   computeSpendUsd: [
-    { rank: 2, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总算力\s*(?:支出|成本|花费|费用)|total\s+compute\s+(?:spend|cost))`, "i")] },
+    { rank: 2, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总算力\s*(?:支出|成本|花费|费用)|total\s+compute\s+(?:spend|cost))`, "i")] },
     { rank: 2, patterns: [labeled("总算力\\s*(?:支出|成本|花费|费用)|total\\s+compute\\s+(?:spend|cost)", MONEY_TAIL)] },
-    { rank: 1, reverse: true, patterns: [new RegExp(String.raw`${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:算力支出|算力成本|算力花费|算力费用|计算支出|compute\s+spend|compute\s+cost)`, "i")] },
+    { rank: 1, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:算力支出|算力成本|算力花费|算力费用|计算支出|compute\s+spend|compute\s+cost)`, "i")] },
     { rank: 1, patterns: [labeled("算力支出|算力成本|算力花费|算力费用|计算支出|compute\\s+spend|compute\\s+cost", MONEY_TAIL)] }
   ]
 });

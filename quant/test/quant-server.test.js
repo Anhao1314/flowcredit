@@ -327,6 +327,36 @@ test("Finch proxy forwards {prompt} to the local business agent", async () => {
   }
 });
 
+test("Finch agent proxy forwards prompt, sessionId and modelConsent", async () => {
+  const upstream = createServer((req, res) => {
+    let body = "";
+    req.on("data", chunk => { body += chunk; });
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, path: req.url, received: JSON.parse(body) }));
+    });
+  });
+  await new Promise(resolve => upstream.listen(0, "127.0.0.1", resolve));
+  const target = `http://127.0.0.1:${upstream.address().port}`;
+  try {
+    const server = await startServer({
+      env: { FINCH_PROXY_TARGET: target, CONSOLE_AUTH_ENABLED: "false" },
+      apiKey: "sk-test",
+      transport: createScriptedTransport(scripts.scenarios["direct-answer"])
+    });
+    const response = await fetch(`${addressOf(server)}/api/finch/agent`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "评估这家 AI 推理服务商", sessionId: "sim-agent-1", modelConsent: true })
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.path, "/api/v1/agent/ask");
+    assert.deepEqual(body.received, { prompt: "评估这家 AI 推理服务商", sessionId: "sim-agent-1", modelConsent: true });
+  } finally {
+    await new Promise(resolve => upstream.close(resolve));
+  }
+});
+
 test("loadDotEnv fills only missing env vars and never overrides", () => {
   const dir = mkdtempSyncSafe();
   const envPath = join(dir, ".env");

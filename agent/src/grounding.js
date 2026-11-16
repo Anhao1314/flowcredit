@@ -70,7 +70,7 @@ const ENUM_SYNONYMS = {
     flagship: /flagship|frontier|top-tier|large model/i,
     general: /general|standard|mid-tier/i
   },
-  taskType: { inference: /inference|inferencing/i }
+  taskType: { inference: /inference|inferencing|AI\s*推理|人工智能推理|推理服务商|大模型推理/i }
 };
 
 function enumIsGrounded(text, field, value) {

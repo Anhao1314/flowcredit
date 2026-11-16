@@ -8,24 +8,29 @@ import { MODEL, RELEASE_VERSION } from "./constants.js";
 import { RULE_VERSION_V021 } from "./rules-v021.js";
 import { HarnessBrain } from "./harness.js";
 import { SafeLogger } from "./logger.js";
-import { normalizeEvidenceV021 } from "./normalize-v021.js";
-import { computeRiskV021 } from "./risk-core-v021.js";
 import { SessionStore } from "./session-store.js";
-import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, buildEvidenceCoverageV03, buildRequiredActionsV03, sanitizeExtractedDraftV03, validateDraftV03 } from "./intake-v03.js";
+import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, sanitizeExtractedDraftV03, validateDraftV03 } from "./intake-v03.js";
 import { FixedWindowRateLimiter, bearerAuthorized, clientKey, isProtectedApi, networkConfig, securityConfig } from "./security.js";
 import { IdempotencyStore } from "./idempotency-store.js";
 import {
-  FINCH_CONTRACT_HEADER, FINCH_CONTRACT_VERSION, FINCH_RESPONSE_MAX_BYTES, addFinchIdentity, deterministicFingerprintPayload,
-  finchAssessmentFingerprint, finchInputFingerprint, finchRequestFingerprint, finchSchemas, isFinchContractRequest,
+  FINCH_CONTRACT_HEADER, FINCH_CONTRACT_VERSION, FINCH_RESPONSE_MAX_BYTES,
+  finchRequestFingerprint, finchSchemas, isFinchContractRequest,
   isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, PUBLIC_SCHEMA_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
-import { NL_DRAFT_PARSER_VERSION, NL_DRAFT_FIELDS, extractNaturalLanguageDraft } from "./nl-draft-v01.js";
-import { buildChatPresentation, buildChatUserMessage, buildChatUserMessageEnglish } from "./chat-response-v02.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { groundExtractedDraft } from "./grounding.js";
 import { createConnectorRegistry } from "./connectors/contract.js";
 import { createCsvConnector, buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { RunRecord } from "../core/run-record.js";
+import { createAssessmentService } from "./assessment-service.js";
+import { createChatPipeline } from "./chat-pipeline.js";
+import { createRiskToolRegistry } from "./risk-tools.js";
+import { createRiskAssistant } from "./risk-assistant.js";
+import { createRiskClient } from "./risk-client.js";
+import { createRiskAuditLogger } from "./audit-risk.js";
+
+const AGENT_ASK_PATH = "/api/v1/agent/ask";
+const AGENT_STREAM_PATH = "/api/v1/agent/ask/stream";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
@@ -164,76 +169,6 @@ function withTimeout(promise, timeoutMs, code = "INVOCATION_TIMEOUT") {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function factsForV021(data, result) {
-  return [
-    `F1 window=${data.periodStart ?? "missing"}..${data.periodEnd ?? "missing"}, normalizationProfile=${data.normalizationProfileId ?? "missing"}`,
-    `F2 rawTokensM=${result.tokenMetrics.meteredRawTokensM ?? "not-computable"}, inputTokensM=${data.inputTokensM ?? "missing"}, outputTokensM=${data.outputTokensM ?? "missing"}`,
-    `F3 normalizedTokensM=${result.tokenMetrics.normalizedTokensM ?? "not-computable"}`,
-    `F4 validRatePct=${result.tokenMetrics.validRatePct ?? "not-computable"}, validNT_M=${result.tokenMetrics.validNT_M ?? "not-computable"}`,
-    `F5 validEfficiency=${result.tokenMetrics.validEfficiency_NT_per_GPUh ?? "not-computable"}, peer=${data.peerProfileId ?? "missing"}`,
-    `F6 revenuePerValidNTM=${result.tokenMetrics.revenuePerValidNTM ?? "not-computable"}, computeSpendPerValidNTM=${result.tokenMetrics.computeSpendPerValidNTM ?? "not-computable"}`,
-    `F7 tokenVolatilityPct=${result.tokenMetrics.tokenVolatilityPct ?? "not-computable"}, tokenRevenueCorrelation=${result.tokenMetrics.tokenRevenueCorrelation ?? "not-computable"}`,
-    `F8 TAI=${result.TAI ?? "not-computable"}, tokenActivityBand=${result.tokenActivityBand ?? "not-computable"}, meteringStatus=${result.tokenMeteringStatus}`,
-    `F9 CCI=${result.CCI ?? "not-computable"}, riskGrade=${result.riskGrade ?? "not-computable"}`,
-    `F10 repaymentRatePct=${data.repaymentRatePct ?? "missing"}, overdue30Pct=${data.overdue30Pct ?? "missing"}, payingCustomers=${data.payingCustomers ?? "missing"}, top5ConcentrationPct=${data.top5ConcentrationPct ?? "missing"}`,
-    `F11 evidenceStrength=${result.evidenceStrength}, decisionStatus=${result.decisionStatus}, confirmedIntegrityEvents=${result.confirmedIntegrityEvents.length}`,
-    "F12 TAI is activity coherence; PD, expected loss, numeric limit and automatic approval are not produced"
-  ];
-}
-
-async function assessV021WithOptionalBrain(input, requestId, requireModel = false, useModel = true, modelTimeoutMs = null) {
-  const normalized = normalizeEvidenceV021(input);
-  const result = computeRiskV021(normalized);
-  let modelLayer = null;
-  let harnessStatus = useModel ? "unconfigured" : "not-requested";
-  if (!useModel) return { normalized, result, modelLayer, harnessStatus };
-  try {
-    modelLayer = modelTimeoutMs
-      ? await withTimeout(brain.assessV021(normalized, result, requestId), modelTimeoutMs, "MODEL_TIMEOUT")
-      : await brain.assessV021(normalized, result, requestId);
-    harnessStatus = "ok";
-  } catch (error) {
-    if (requireModel) throw error;
-    harnessStatus = error.code === "HARNESS_BUSY" ? "busy" : "unavailable";
-  }
-  return { normalized, result, modelLayer, harnessStatus };
-}
-
-async function buildV03Assessment(body, requestId, context) {
-  if (!body.draft || typeof body.draft !== "object" || Array.isArray(body.draft)) return { status: 400, body: { error: "draft must be an object" } };
-  const validation = validateDraftV03(body.draft);
-  if (validation.errors.length) return {
-    status: 400,
-    body: {
-      error: "Review the highlighted assessment fields", fieldErrors: validation.errors,
-      missingByGroup: validation.missingByGroup, warnings: validation.warnings, ignoredInputs: validation.ignoredInputs
-    }
-  };
-
-  const useModel = body.modelConsent === true;
-  const modelBudgetMs = Math.max(1, context.security.invocationTimeoutMs - 250);
-  const runner = context.assessmentRunner || assessV021WithOptionalBrain;
-  const { normalized, result, modelLayer, harnessStatus } = await runner(validation.draft, requestId, false, useModel, modelBudgetMs);
-  const evidenceCoverage = buildEvidenceCoverageV03(validation.draft);
-  const requiredActions = buildRequiredActionsV03(validation, result, evidenceCoverage);
-  // 证据分级：声明级 vs 独立验证（当前无连接器 → independentlyVerified 恒为 0）。
-  // 说明：该字段不参与 assessmentFingerprint（与模型注记同理），保持 v0.2.1 确定性身份稳定。
-  const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence, { connectors });
-  const sessionId = typeof body.sessionId === "string" && body.sessionId.length <= 80 ? body.sessionId : requestId;
-  sessions.set(`v03:${sessionId}`, { version: "v0.3.1", input: normalized, assessment: result, modelLayer, facts: factsForV021(normalized, result) });
-
-  const inputFingerprint = finchInputFingerprint(validation.draft);
-  const assessmentFingerprint = finchAssessmentFingerprint(deterministicFingerprintPayload({ result, validation, evidenceCoverage, requiredActions }));
-  const payload = addFinchIdentity({
-    ...result, productVersion: PRODUCT_VERSION_V03, draftId: body.draftId || sessionId, model: MODEL,
-    modelAnalysis: modelLayer?.analysis || null, modelReview: modelLayer?.review || null,
-    validation: { authoritative: "deterministic-v0.2.1", modelConflicts: modelLayer?.review?.conflicts || [], ignoredInputs: validation.ignoredInputs },
-    readinessStatus: validation.readinessStatus, missingByGroup: validation.missingByGroup,
-    evidenceCoverage, requiredActions, evidenceStatus, harnessStatus, sessionId
-  }, inputFingerprint, assessmentFingerprint);
-  return { status: 200, body: payload };
-}
-
 async function handleV03Assessment(req, requestId, context) {
   const body = await readJson(req);
   const contractMode = isFinchContractRequest(req);
@@ -245,7 +180,7 @@ async function handleV03Assessment(req, requestId, context) {
     if (publicMode && typeof body.prompt === "string" && body.draft === undefined) {
       const chatBody = { prompt: body.prompt };
       if (typeof body.sessionId === "string" && body.sessionId) chatBody.sessionId = body.sessionId;
-      const chat = await buildChatPayload(chatBody, requestId, context);
+      const chat = await context.chatPipeline.buildChatPayload(chatBody, requestId);
       return { status: chat.status, body: chat.body, requestId, timestamp: new Date().toISOString() };
     }
     if (contractMode || publicMode) {
@@ -259,46 +194,13 @@ async function handleV03Assessment(req, requestId, context) {
         }
       };
     }
-    const response = await buildV03Assessment(body, requestId, context);
+    const response = await context.assessmentService.assess(body, requestId);
     return { ...response, requestId, timestamp: new Date().toISOString() };
   };
   if (!key) return operation();
   const scope = publicMode ? "public-v1" : contractMode ? "finch-v01" : "internal-v03";
   const stored = await context.idempotency.execute(`${scope}:${key}`, finchRequestFingerprint(body), operation);
   return { ...stored.value, replayed: stored.replayed };
-}
-
-// Natural Language Adapter v0.1. The prompt is read deterministically and non-authoritatively,
-// then handed to the same internal assessment service that POST /api/v1/assess uses. There is no
-// model provider on this path: scoring, readiness and decisions stay with the FlowCredit runtime.
-//
-// Two drafts exist and must not be confused:
-//   - extracted facts: exactly the whitelisted fields the parser read from the prompt. This is what
-//     the response reports as extractedDraft, so consumers can audit what the user actually stated.
-//   - effective draft: the extracted facts plus the deterministic server-derived metadata that the
-//     shared sanitizer adds (assessmentMode, modelTier, normalizationProfileId, peerProfileId).
-//     It stays internal and is all the runtime ever sees.
-const CHAT_REQUEST_FIELDS = Object.freeze(["prompt", "sessionId"]);
-const CHAT_PROMPT_MAX_CHARS = INTAKE_SCHEMA_V03.maxTextLength;
-
-function validateChatRequest(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { valid: false, errors: [{ path: "/", keyword: "type", message: "Request body must be a JSON object." }] };
-  }
-  const errors = [];
-  for (const key of Object.keys(value)) {
-    if (!CHAT_REQUEST_FIELDS.includes(key)) errors.push({ path: `/${key}`, keyword: "additionalProperties", message: "must NOT have additional properties" });
-  }
-  const prompt = value.prompt;
-  if (prompt === undefined) errors.push({ path: "/prompt", keyword: "required", message: "must have required property 'prompt'" });
-  else if (typeof prompt !== "string") errors.push({ path: "/prompt", keyword: "type", message: "must be string" });
-  else if (!prompt.trim()) errors.push({ path: "/prompt", keyword: "minLength", message: "must not be empty or whitespace only" });
-  else if (prompt.length > CHAT_PROMPT_MAX_CHARS) errors.push({ path: "/prompt", keyword: "maxLength", message: `must NOT have more than ${CHAT_PROMPT_MAX_CHARS} characters` });
-  const sessionId = value.sessionId;
-  if (sessionId !== undefined && (typeof sessionId !== "string" || !sessionId.trim() || sessionId.length > 80)) {
-    errors.push({ path: "/sessionId", keyword: "type", message: "must be a non-empty string of at most 80 characters" });
-  }
-  return errors.length ? { valid: false, errors } : { valid: true, prompt: prompt.trim(), sessionId: typeof sessionId === "string" ? sessionId.trim() : null };
 }
 
 function responseMeta(body) {
@@ -311,200 +213,10 @@ function responseMeta(body) {
   };
 }
 
-const CHAT_JSON_EXAMPLE = JSON.stringify({
-  taskType: "inference", gpuModel: "h100-equivalent",
-  periodStart: "2026-08-01", periodEnd: "2026-08-31",
-  inputTokensM: 64, outputTokensM: 16, validRatePct: 94,
-  gpuHours: 4200, revenueUsd: 100000, computeSpendUsd: 58000,
-  repaymentRatePct: 96, overdue30Pct: 2, payingCustomers: 168, top5ConcentrationPct: 36,
-  operatingHistoryDays: 720, dataCoveragePct: 100,
-  monthlySeries: [
-    { period: "2026-03", rawTokensM: 72, validRatePct: 92, revenueUsd: 94000, computeSpendUsd: 55000 },
-    { period: "2026-04", rawTokensM: 75, validRatePct: 93, revenueUsd: 96000, computeSpendUsd: 56000 },
-    { period: "2026-05", rawTokensM: 77, validRatePct: 93, revenueUsd: 97000, computeSpendUsd: 56500 },
-    { period: "2026-06", rawTokensM: 79, validRatePct: 94, revenueUsd: 99000, computeSpendUsd: 57500 },
-    { period: "2026-07", rawTokensM: 81, validRatePct: 94, revenueUsd: 101000, computeSpendUsd: 59000 },
-    { period: "2026-08", rawTokensM: 80, validRatePct: 94, revenueUsd: 100000, computeSpendUsd: 58000 }
-  ],
-  R: [64, 65, 63, 67, 68, 66, 70, 71],
-  C: [62, 63, 62, 65, 66, 65, 68, 69]
-});
-
-function isHelpIntent(prompt) {
-  const text = String(prompt || "").trim();
-  if (!text || text.length > 160) return false;
-  if (/R\s*(?:和|and|&)\s*C|怎么给|怎么填|什么意思|what\s+(?:is|are)\s+(?:R|C)\b|how\s+(?:do\s+i|to)\s+(?:provide|give)/i.test(text)) return true;
-  if (/\d/.test(text) || /评估|风险|assess|risk|revenue|收入|逾期|回款|现金流/i.test(text)) return false;
-  return /^(?:你好|您好|hi|hello|hey|help)\b/i.test(text)
-    || /你能做什么|你会什么|怎么用|如何使用|what can you do|how does this work|what is this/i.test(text);
-}
-
-function isInferenceContext(prompt, draft) {
-  if (draft.taskType === "inference" || draft.gpuModel || draft.gpuHours != null || draft.inputTokensM != null) return true;
-  return /\bAI\b|推理|inference|大模型|GPU|token|算力/i.test(prompt);
-}
-
-function helpMessage(english) {
-  const fields = NL_DRAFT_FIELDS.join(", ");
-  if (english) {
-    return [
-      "FlowCredit assesses AI inference / GPU compute operators as counterparties. The intake is deterministic: no model call, no invented values.",
-      "",
-      "Send either a plain-language description or a JSON object with exact keys.",
-      `JSON example: ${CHAT_JSON_EXAMPLE}`,
-      "",
-      `Supported keys: ${fields}.`,
-      "R and C are declared vs credible monthly activity series: same length (at least 6), same units, used for deviation and volatility.",
-      "draftId identifies one invocation. To continue a conversation, send the same sessionId back; draftId is not a resume handle.",
-      "Missing fields are reported, never estimated. Data you provide is declared/self-reported; this alpha cannot independently verify it.",
-      "Outside AI inference / GPU compute operators? This intake cannot represent that business yet."
-    ].join("\n");
-  }
-  return [
-    "FlowCredit 评估 AI 推理 / GPU 算力运营商的交易对手风险。intake 是确定性的：不调用模型、不编造缺失值。",
-    "",
-    "你可以直接描述业务，或发送一个使用精确字段名的 JSON 对象。",
-    `JSON 示例：${CHAT_JSON_EXAMPLE}`,
-    "",
-    `支持的字段：${fields}。`,
-    "R / C 是申报 vs 可信的月度活动序列：两者等长（至少 6 期）、同单位，用于偏离和波动计算。",
-    "draftId 标识单次调用。要继续对话，请回传同一个 sessionId；draftId 不是续传句柄。",
-    "缺失字段会如实列出，绝不估算。你提供的数据属于申报/自报口径，本 alpha 无法独立核验。",
-    "如果你的业务不是 AI 推理 / GPU 算力运营商，当前 intake 无法表达，请勿强行套用模板。"
-  ].join("\n");
-}
-
-function scopeMessage(english, extraction) {
-  const found = extraction.matchedFields.length
-    ? `已识别 ${extraction.matchedFields.length} 个字段（${extraction.matchedFields.join(", ")}），但业务类型不在评估范围。`
-    : "没有识别到可评估的 AI 推理业务字段。";
-  if (english) {
-    return [
-      "This agent only assesses AI inference / GPU compute operators. The business you described is outside the current intake schema, so I will not force it into a template or invent fields.",
-      "If this is an AI inference operator, send GPU/token/revenue facts or a JSON object with exact keys. Reply \"help\" for the supported field list and template."
-    ].join("\n");
-  }
-  return [
-    "FlowCredit 目前只评估 AI 推理 / GPU 算力运营商。你描述的业务不在当前 intake schema 内，我不会把它硬套进模板或编造字段。",
-    found,
-    "如果这是 AI 推理服务商，请提供 GPU/Token/收入等事实，或发送使用精确字段名的 JSON 对象。发送“help”可查看支持的字段和模板。"
-  ].join("\n");
-}
-
-function looksOutOfScope(prompt) {
-  return /arweave|storage|存储|protocol|协议|saas|e-?commerce|电商|marketplace|advertis|广告|bank|银行|lending|借贷|game|游戏|defi|nft/i.test(prompt);
-}
-
-function buildChatGuidance(prompt, extraction) {
-  const english = !/[\u4e00-\u9fff]/.test(prompt);
-  if (isHelpIntent(prompt)) return { status: "help", message: helpMessage(english) };
-  if (!isInferenceContext(prompt, extraction.draft)) {
-    if (looksOutOfScope(prompt)) return { status: "unsupported-scope", message: scopeMessage(english, extraction) };
-    if (prompt.trim().length < 20 && !/\d/.test(prompt)) return { status: "help", message: helpMessage(english) };
-    return null;
-  }
-  return null;
-}
-
-async function buildChatPayload(body, requestId, context) {
-  const request = validateChatRequest(body);
-  if (!request.valid) {
-    return { status: 400, body: { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit chat input schema.", errorDetails: request.errors } };
-  }
-  const extraction = extractNaturalLanguageDraft(request.prompt);
-  const draftId = `nl-${requestId}`;
-  const jsonError = extraction.warnings.find(warning => /JSON input could not be parsed|JSON object contained no supported intake fields/.test(warning));
-  if (jsonError) {
-    const english = !/[\u4e00-\u9fff]/.test(request.prompt);
-    const answer = english
-      ? `${jsonError}\nSend "help" for a complete JSON template with exact intake keys.`
-      : `${jsonError}\n发送“help”可查看使用精确字段名的完整 JSON 模板。`;
-    return { status: 200, body: {
-      status: "invalid-input", message: answer, answer,
-      parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
-      extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
-      missingInputs: [], missingByGroup: {}, requiredActions: [], fieldErrors: [],
-      assessment: null, sessionId: request.sessionId || null
-    } };
-  }
-  const sessionKey = request.sessionId ? `chat:${request.sessionId}` : null;
-  const carried = sessionKey ? sessions.get(sessionKey) : null;
-  const combinedDraft = { ...(carried && carried.draft ? carried.draft : {}), ...extraction.draft };
-  const guidance = buildChatGuidance(request.prompt, { ...extraction, draft: combinedDraft });
-  if (guidance) {
-    return { status: 200, body: {
-      status: guidance.status, message: guidance.message, answer: guidance.message,
-      presentation: { kind: guidance.status, supportedFields: NL_DRAFT_FIELDS.slice() },
-      parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
-      extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
-      missingInputs: [], missingByGroup: {}, requiredActions: [],
-      assessment: null, sessionId: request.sessionId || null
-    } };
-  }
-  const effectiveDraft = sanitizeExtractedDraftV03(combinedDraft).draft;
-  const assessment = await withTimeout(
-    buildV03Assessment({ draft: effectiveDraft, draftId, modelConsent: false }, requestId, context),
-    context.security.invocationTimeoutMs
-  );
-  if (assessment.status !== 200) {
-    const details = assessment.body?.error?.details || assessment.body?.fieldErrors || [];
-    if (assessment.status === 400 && Array.isArray(details) && details.length) {
-      const english = !/[\u4e00-\u9fff]/.test(request.prompt);
-      const lines = details.map(item => `${item.field || "input"}: ${item.message || "invalid"}`);
-      const answer = english
-        ? [
-            "The intake rejected these fields:",
-            ...lines.map(line => `- ${line}`),
-            "",
-            "periodStart/periodEnd must cover one natural month or a rolling 27–31 day window. Send \"help\" for a complete template."
-          ].join("\n")
-        : [
-            "输入未通过 intake 校验：",
-            ...lines.map(line => `- ${line}`),
-            "",
-            "periodStart/periodEnd 必须是一个自然月，或 27–31 天的滚动窗口。发送“help”查看完整模板。"
-          ].join("\n");
-      return { status: 200, body: {
-        status: "invalid-input", message: answer, answer,
-        parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
-        extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
-        missingInputs: [], missingByGroup: {}, requiredActions: [], fieldErrors: details,
-        assessment: null, sessionId: request.sessionId || null
-      } };
-    }
-    return { status: assessment.status, body: { ...assessment.body, draftId, extractedDraft: extraction.draft, parserVersion: NL_DRAFT_PARSER_VERSION } };
-  }
-  const result = assessment.body;
-  if (sessionKey) sessions.set(sessionKey, { draft: combinedDraft });
-  const status = result.decisionStatus === "insufficient-evidence" ? "insufficient-evidence" : "assessed";
-  const presentationInput = {
-    extractedDraft: extraction.draft, assessment: result,
-    missingByGroup: result.missingByGroup, requiredActions: result.requiredActions
-  };
-  const english = !/[\u4e00-\u9fff]/.test(request.prompt);
-  let message = english ? buildChatUserMessageEnglish(presentationInput) : buildChatUserMessage(presentationInput);
-  if (extraction.warnings.length) {
-    const notes = [...new Set(extraction.warnings)].map(warning => `- ${warning}`).join("\n");
-    message += english ? `\n\nParser notes:\n${notes}` : `\n\n解析提示：\n${notes}`;
-  }
-  const data = {
-    status, message, answer: message, presentation: buildChatPresentation(presentationInput),
-    parserVersion: NL_DRAFT_PARSER_VERSION, draftId,
-    extractedDraft: extraction.draft, parsedFields: extraction.matchedFields, parserWarnings: extraction.warnings,
-    assessment: result,
-    readinessStatus: result.readinessStatus, decisionStatus: result.decisionStatus,
-    TAI: result.TAI, CCI: result.CCI, riskGrade: result.riskGrade, verdict: result.verdict,
-    evidenceStrength: result.evidenceStrength, suggestedCreditBand: result.suggestedCreditBand,
-    missingInputs: result.missingInputs, missingByGroup: result.missingByGroup, requiredActions: result.requiredActions,
-    sessionId: request.sessionId || result.sessionId, assessmentId: result.assessmentId
-  };
-  return { status: 200, body: data };
-}
-
 async function serveChat(req, res, requestId, context) {
   const canonical = { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 };
   const body = await readJson(req);
-  const result = await buildChatPayload(body, requestId, context);
+  const result = await context.chatPipeline.buildChatPayload(body, requestId);
   if (result.status !== 200) {
     return sendJson(res, result.status, result.body, requestId, canonical);
   }
@@ -524,6 +236,88 @@ async function serveAssessment(req, res, requestId, context, { publicApi = false
     maxBytes: FINCH_RESPONSE_MAX_BYTES,
     meta: canonical && response.status === 200 ? responseMeta(response.body) : undefined
   });
+}
+
+function validateAgentBody(body, chatPipeline) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { valid: false, errors: [{ path: "/", keyword: "type", message: "Request body must be a JSON object." }] };
+  }
+  const errors = [];
+  for (const key of Object.keys(body)) {
+    if (!["prompt", "sessionId", "modelConsent"].includes(key)) {
+      errors.push({ path: `/${key}`, keyword: "additionalProperties", message: "must NOT have additional properties" });
+    }
+  }
+  const chatCheck = chatPipeline.validateChatRequest({
+    prompt: body.prompt,
+    ...(body.sessionId !== undefined ? { sessionId: body.sessionId } : {})
+  });
+  if (!chatCheck.valid) errors.push(...chatCheck.errors);
+  if (body.modelConsent !== undefined && typeof body.modelConsent !== "boolean") {
+    errors.push({ path: "/modelConsent", keyword: "type", message: "must be boolean" });
+  }
+  if (errors.length) return { valid: false, errors };
+  return { valid: true, prompt: chatCheck.prompt, sessionId: chatCheck.sessionId, modelConsent: body.modelConsent === true };
+}
+
+function agentCanonical() {
+  return { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03, maxBytes: FINCH_RESPONSE_MAX_BYTES };
+}
+
+async function serveAgentAsk(req, res, requestId, context) {
+  const body = await readJson(req);
+  const parsed = validateAgentBody(body, context.chatPipeline);
+  if (!parsed.valid) {
+    return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit agent input schema.", errorDetails: parsed.errors }, requestId, agentCanonical());
+  }
+  const result = await withTimeout(
+    context.riskAgent.askRisk({ prompt: parsed.prompt, modelConsent: parsed.modelConsent, sessionId: parsed.sessionId }),
+    context.security.invocationTimeoutMs, "INVOCATION_TIMEOUT"
+  );
+  return sendJson(res, result.ok === false ? 400 : 200, result, requestId, agentCanonical());
+}
+
+async function serveAgentAskStream(req, res, requestId, context) {
+  const body = await readJson(req);
+  const parsed = validateAgentBody(body, context.chatPipeline);
+  if (!parsed.valid) {
+    return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit agent input schema.", errorDetails: parsed.errors }, requestId, agentCanonical());
+  }
+  const controller = new AbortController();
+  res.on("close", () => controller.abort());
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store",
+    "Connection": "keep-alive", "X-Accel-Buffering": "no"
+  });
+  let ended = false;
+  const writeEvent = payload => {
+    if (ended) return;
+    try { res.write(`data: ${JSON.stringify(payload)}\n\n`); }
+    catch { ended = true; }
+  };
+  try {
+    await withTimeout(
+      context.riskAgent.askRiskStream({
+        prompt: parsed.prompt, modelConsent: parsed.modelConsent, sessionId: parsed.sessionId,
+        onEvent: event => writeEvent(event), signal: controller.signal
+      }),
+      context.security.invocationTimeoutMs, "INVOCATION_TIMEOUT"
+    );
+  } catch (error) {
+    writeEvent({
+      type: "done",
+      result: {
+        ok: false, harnessStatus: "unavailable",
+        code: error.code === "INVOCATION_TIMEOUT" ? "INVOCATION_TIMEOUT" : "STREAM_ERROR",
+        answer: "", toolCalls: [], steps: 0, citations: [], usage: null,
+        sessionId: parsed.sessionId ?? null, agentVersion: "risk-agent/v0.1.0", model: null,
+        note: "流式请求失败：" + String(error?.message || error)
+      }
+    });
+  }
+  ended = true;
+  res.end();
+  return null;
 }
 
 async function serveStatic(req, res) {
@@ -564,7 +358,7 @@ async function route(req, res, requestId, context = {}) {
     return sendJson(res, 200, {
       service: "FlowCredit Risk Intelligence API", release: RELEASE_VERSION, apiVersion: PUBLIC_API_VERSION,
       intakeVersion: PRODUCT_VERSION_V03, riskEngineVersion: RULE_VERSION_V021,
-      endpoints: { assess: PUBLIC_ASSESS_PATH, chat: PUBLIC_CHAT_PATH, schema: PUBLIC_SCHEMA_PATH, health: "/health", ready: "/ready" }
+      endpoints: { assess: PUBLIC_ASSESS_PATH, chat: PUBLIC_CHAT_PATH, agentAsk: AGENT_ASK_PATH, agentStream: AGENT_STREAM_PATH, schema: PUBLIC_SCHEMA_PATH, health: "/health", ready: "/ready" }
     }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: RULE_VERSION_V021 });
   }
   if (req.method === "GET" && url.pathname === PUBLIC_SCHEMA_PATH) {
@@ -595,6 +389,12 @@ async function route(req, res, requestId, context = {}) {
   }
   if (req.method === "POST" && url.pathname === PUBLIC_ASSESS_PATH) {
     return serveAssessment(req, res, requestId, context, { publicApi: true });
+  }
+  if (req.method === "POST" && url.pathname === AGENT_ASK_PATH) {
+    return serveAgentAsk(req, res, requestId, context);
+  }
+  if (req.method === "POST" && url.pathname === AGENT_STREAM_PATH) {
+    return serveAgentAskStream(req, res, requestId, context);
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/extract") {
     const body = await readJson(req);
@@ -671,7 +471,22 @@ export function createFlowCreditServer(options = {}) {
   const security = securityConfig(options.env || process.env);
   const limiter = new FixedWindowRateLimiter({ windowMs: security.rateLimitWindowMs, maxRequests: security.rateLimitMaxRequests, now: options.now || Date.now });
   const idempotency = options.idempotencyStore || new IdempotencyStore({ ttlMs: security.idempotencyTtlMs, maxEntries: security.idempotencyMaxEntries, now: options.now || Date.now });
-  const context = { security, idempotency, assessmentRunner: options.assessmentRunner };
+  const assessmentService = createAssessmentService({
+    brain, connectors, sessions, invocationTimeoutMs: security.invocationTimeoutMs,
+    assessmentRunner: options.assessmentRunner
+  });
+  const chatPipeline = createChatPipeline({
+    sessions, connectors, invocationTimeoutMs: security.invocationTimeoutMs,
+    assess: (body, requestId) => assessmentService.assess(body, requestId)
+  });
+  const riskAgent = options.riskAssistant || createRiskAssistant({
+    client: options.riskAgentClient || createRiskClient({ env: options.env || process.env }),
+    registry: createRiskToolRegistry({ connectors }),
+    audit: options.riskAudit || createRiskAuditLogger(),
+    deterministicChat: ({ prompt, sessionId, requestId }) =>
+      chatPipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)
+  });
+  const context = { security, idempotency, assessmentRunner: options.assessmentRunner, assessmentService, chatPipeline, riskAgent };
   const server = createServer(async (req, res) => {
     const requestId = `fc-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const started = Date.now();
@@ -686,7 +501,8 @@ export function createFlowCreditServer(options = {}) {
       const contractMode = isFinchContractRequest(req);
       const publicMode = isPublicAssessRequest(req);
       const chatMode = isPublicChatRequest(req);
-      const canonicalOptions = { canonical: contractMode || publicMode || chatMode, apiVersion: publicMode || chatMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode ? PRODUCT_VERSION_V03 : undefined };
+      const agentMode = url.pathname === AGENT_ASK_PATH || url.pathname === AGENT_STREAM_PATH;
+      const canonicalOptions = { canonical: contractMode || publicMode || chatMode || agentMode, apiVersion: publicMode || chatMode || agentMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode || agentMode ? PRODUCT_VERSION_V03 : undefined };
       if (isProtectedApi(req.method, url.pathname)) {
         const rate = limiter.consume(clientKey(req, security));
         res.setHeader("RateLimit-Limit", String(rate.limit));
@@ -707,14 +523,16 @@ export function createFlowCreditServer(options = {}) {
     }
     catch (error) {
       errorClass = error.code || error.name;
+      const catchUrl = new URL(req.url, "http://localhost");
       const contractMode = isFinchContractRequest(req);
       const publicMode = isPublicAssessRequest(req);
       const chatMode = isPublicChatRequest(req);
+      const agentMode = catchUrl.pathname === AGENT_ASK_PATH || catchUrl.pathname === AGENT_STREAM_PATH;
       status = error.code === "BODY_TOO_LARGE" ? 413
         : error.code === "IDEMPOTENCY_CONFLICT" ? 409
           : error.code === "HARNESS_BUSY" ? 429
             : error.code === "INVOCATION_TIMEOUT" || /timeout/i.test(error.message) ? 504
-              : ["INVALID_JSON", "INVALID_IDEMPOTENCY_KEY"].includes(error.code) ? 400 : publicMode || chatMode ? 500 : 502;
+              : ["INVALID_JSON", "INVALID_IDEMPOTENCY_KEY"].includes(error.code) ? 400 : publicMode || chatMode || agentMode ? 500 : 502;
       const code = error.code === "BODY_TOO_LARGE" ? "PAYLOAD_TOO_LARGE"
         : error.code === "INVALID_JSON" ? "INVALID_JSON"
           : error.code === "IDEMPOTENCY_CONFLICT" ? "IDEMPOTENCY_CONFLICT"
@@ -725,7 +543,7 @@ export function createFlowCreditServer(options = {}) {
         : status === 502 ? "Model service unavailable."
         : error.code === "INVOCATION_TIMEOUT" ? "Assessment invocation timed out."
           : status === 504 ? "Model service timed out." : error.message;
-      output = sendJson(res, status, { errorCode: code, error: message }, requestId, { canonical: contractMode || publicMode || chatMode, apiVersion: publicMode || chatMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode ? PRODUCT_VERSION_V03 : undefined });
+      output = sendJson(res, status, { errorCode: code, error: message }, requestId, { canonical: contractMode || publicMode || chatMode || agentMode, apiVersion: publicMode || chatMode || agentMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode || agentMode ? PRODUCT_VERSION_V03 : undefined });
     } finally {
       const url = new URL(req.url, "http://localhost");
       status = res.statusCode || status;

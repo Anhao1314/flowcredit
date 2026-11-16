@@ -101,3 +101,12 @@ test("v0.2 reports conflicting totals instead of silently choosing one", () => {
   assert.equal(draft.revenueUsd, 100000);
   assert.ok(warnings.some(warning => /Multiple revenueUsd values/.test(warning)));
 });
+
+test("v0.2 does not mistake a date suffix for a revenue amount", () => {
+  const text = "某 AI 推理服务商，2026-08 收入 100000 美元，GPU 4200 小时，回款率 94%";
+  const { draft, warnings } = extractNaturalLanguageDraft(text);
+  assert.equal(draft.revenueUsd, 100000);
+  assert.equal(draft.gpuHours, 4200);
+  assert.equal(draft.repaymentRatePct, 94);
+  assert.deepEqual(warnings, []);
+});

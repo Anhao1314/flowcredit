@@ -106,6 +106,22 @@ invocation or returns HTTP 409 on reuse with a different payload.
 The idempotency store is single-instance memory, bounded by `IDEMPOTENCY_TTL_MS` /
 `IDEMPOTENCY_MAX_ENTRIES`.
 
+## Risk agent loop (v0.1)
+
+`POST /api/v1/agent/ask` and `POST /api/v1/agent/ask/stream` (Bearer-protected, additive to v1.1)
+run a bounded tool-calling loop over the same deterministic runtime:
+
+- Tools (all deterministic, whitelist-arg-validated): `assess_draft`, `what_if`, `validate_draft`,
+  `extract_from_text`, `import_csv`, `preset_draft`. Every tool result carries an
+  `authoritative` block (TAI/CCI/riskGrade/decisionStatus + input/assessment fingerprints) —
+  citations can only come from these fingerprints, never from model text.
+- `modelConsent=false` (default) never touches the transport: the answer is the deterministic
+  chat pipeline, with `toolCalls` (extract_from_text → assess_draft) attached for UI artifact cards.
+- `modelConsent=true` + `DEEPSEEK_API_KEY` enables LLM orchestration (max 4 tool steps, retry
+  budget 1); model errors/timeout/max-steps degrade to the deterministic pipeline answer.
+- Sessions: `sessionId` carries chat draft state (pipeline) and agent turn memory (30 min TTL).
+- Audit: `~/.flowcredit-agent/audit/agent-audit.jsonl` — metadata only (question/answer hashed).
+
 ## Model layer (optional)
 
 OpenAI-compatible REST, configured by env:
