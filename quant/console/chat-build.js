@@ -1,0 +1,436 @@
+/*
+ * quant/console/chat-build.js — 独立对话前端生成器（只有一个对话区）。
+ *
+ * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
+ *   1. 单文件静态页：无框架、无 CDN、无构建依赖；JS 全内联 ES5 风格。
+ *   2. 页面只有对话区：无仪表盘、无导航、无 Paper、无历史侧栏。
+ *   3. 后端端点 = console 同源代理（/api/finch/assess 与 /api/finch/agent），
+ *      不直连业务 agent、不接触公网凭证。
+ *   4. 与 index.html 共用同一套 Kimi 设计令牌，但独立生成（byte-stable：无时钟）。
+ * 输出：quant/console/chat.html
+ */
+import { writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+const css = `
+:root{--bg:#f7f7f8;--card:#fff;--card2:#f2f2f4;--text:#1a1a1e;--muted:#6e6e73;--faint:#8e8e93;--border:#e6e6ea;--border-strong:#d8d8de;--track:#e8e8ec;--hover:#f0f0f2;--user-bubble:#e8e8ec;--accent:#2e5cf6;--good:#2e9e5b;--bad:#dd4b4f;--warn:#d99118;--shadow:0 1px 3px rgba(20,21,26,.08);--shadow-lg:0 10px 30px rgba(20,21,26,.06)}
+@media (prefers-color-scheme:dark){:root{--bg:#0d0d0f;--card:#17171a;--card2:#1f1f23;--text:#f2f2f4;--muted:#a0a0a8;--faint:#6e6e76;--border:#2a2a2f;--border-strong:#3a3a41;--track:#2a2a2f;--hover:#1f1f23;--user-bubble:#2a2a2f;--shadow:0 1px 3px rgba(0,0,0,.4);--shadow-lg:0 10px 30px rgba(0,0,0,.35)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif;height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:750;letter-spacing:-.02em}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);align-self:flex-start;margin-top:4px}
+.brand-sub{color:var(--muted);font-size:12px}
+.mode-label{margin-left:auto;font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px;padding:26px 24px 14px;max-width:820px;margin:0 auto;width:100%}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding-bottom:40px}
+.wordmark{font-size:40px;font-weight:800;letter-spacing:-1.1px;display:flex;align-items:center;gap:7px;line-height:1}
+.wordmark .dot{width:13px;height:13px;border-radius:50%;background:var(--accent);align-self:flex-start;margin-top:7px}
+.wordmark-sub{color:var(--muted);font-size:13px}
+.msg{max-width:78%;border-radius:18px;padding:10px 14px;white-space:pre-wrap;font-size:14px}
+.msg.user{align-self:flex-end;background:var(--user-bubble);color:var(--text)}
+.msg.assistant{align-self:flex-start;background:transparent;padding:6px 0}
+.msg code{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:1px 5px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;border:1px solid var(--border);background:var(--card);font-size:11px;color:var(--muted)}
+.badge-good{color:var(--good);border-color:rgba(46,158,91,.30);background:rgba(46,158,91,.08)}
+.badge-bad{color:var(--bad);border-color:rgba(221,75,79,.30);background:rgba(221,75,79,.07)}
+.badge-warn{color:#a16c0c;border-color:rgba(217,145,24,.35);background:rgba(217,145,24,.10)}
+.badge-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px}
+.diag{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.raw{margin-top:8px;font-size:11px;color:var(--muted)}
+.raw summary{cursor:pointer;user-select:none}
+.raw pre{max-height:220px;overflow:auto;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
+.artifacts{display:flex;flex-direction:column;gap:8px;margin-top:10px;width:100%}
+.artifact{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:10px 12px}
+.artifact-head{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.artifact-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.artifact-dot.bad{background:var(--bad)}
+.artifact-title{font-size:12px;font-weight:600}
+.artifact-tool{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;color:var(--faint)}
+.artifact-grid{display:flex;flex-wrap:wrap;gap:6px 18px}
+.artifact-kv{font-size:11.5px;color:var(--muted);line-height:1.5}
+.artifact-kv b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.artifact-note{font-size:10.5px;color:var(--faint);margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.composer-wrap{padding:0 24px 18px}
+.composer{background:var(--card);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow-lg);padding:12px 16px 10px;margin:0 auto;width:100%;max-width:820px}
+.composer:focus-within{border-color:var(--border-strong)}
+.composer textarea{width:100%;border:none;outline:none;resize:none;background:transparent;color:var(--text);font:inherit;font-size:14px;min-height:46px}
+.composer textarea::placeholder{color:var(--faint)}
+.composer-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+.consent-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--card2);border:1px solid var(--border);border-radius:999px;padding:5px 11px;cursor:pointer}
+.consent-pill input{accent-color:var(--accent);margin:0}
+.model-label{margin-left:auto;font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.send-circle{width:34px;height:34px;border-radius:50%;border:none;background:var(--text);color:var(--bg);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+.send-circle:disabled{background:var(--track);color:var(--faint);cursor:not-allowed}
+.quick-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px auto 0;max-width:820px;width:100%;padding:0 24px}
+.quick-chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:7px 14px;font-size:12.5px;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
+.quick-chip:hover{background:var(--card2)}
+.hint{font-size:11.5px;color:var(--muted);margin:10px auto 14px;max-width:820px;width:100%;text-align:center;padding:0 24px}
+.finch-reset{color:var(--accent);cursor:pointer;background:none;border:none;font-size:11.5px;padding:0;margin-left:8px}
+body.has-messages .quick-chips{display:none}
+`;
+
+const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FlowCredit · Business Risk Intelligence</title>
+<style>${css}</style>
+</head>
+<body>
+<header>
+  <div class="brand">FlowCredit<span class="dot"></span></div>
+  <div class="brand-sub">Business Risk Intelligence · 评估 AI 推理 / GPU 算力运营商</div>
+  <span class="mode-label" id="mode-label">deterministic · no model call</span>
+</header>
+<div class="thread" id="thread">
+  <div class="empty" id="empty">
+    <div class="wordmark">FlowCredit<span class="dot"></span></div>
+    <div class="wordmark-sub">评估一家 AI 推理 / GPU 算力运营商的交易对手风险</div>
+  </div>
+</div>
+<div class="quick-chips" id="chips">
+  <button class="quick-chip" data-fq="官方模板">官方模板</button>
+  <button class="quick-chip" data-fq="纯 JSON 字段">纯 JSON 字段</button>
+  <button class="quick-chip" data-fq="问候">问候</button>
+  <button class="quick-chip" data-fq="Arweave 范围外">Arweave 范围外</button>
+</div>
+<div class="composer-wrap">
+  <div class="composer">
+    <textarea id="input" rows="2" placeholder="描述你的 AI 推理 / GPU 算力业务，或直接粘贴 JSON…"></textarea>
+    <div class="composer-row">
+      <label class="consent-pill" title="开启后 prompt 会经 agent 工具循环编排（需 DEEPSEEK_API_KEY）"><input type="checkbox" id="consent"> agent 模式</label>
+      <span class="model-label" id="consent-label">deterministic · no model call</span>
+      <button id="send" class="send-circle" disabled title="发送">↑</button>
+    </div>
+  </div>
+</div>
+<div class="hint">
+  Enter 发送 · Shift+Enter 换行 · 对话与草稿仅保存在本机浏览器
+  <button class="finch-reset" id="reset" type="button">清空会话</button>
+</div>
+<script>
+(function () {
+  var thread = document.getElementById("thread");
+  var empty = document.getElementById("empty");
+  var input = document.getElementById("input");
+  var sendBtn = document.getElementById("send");
+  var chips = document.getElementById("chips");
+  var reset = document.getElementById("reset");
+  var consent = document.getElementById("consent");
+  var consentLabel = document.getElementById("consent-label");
+  var modeLabel = document.getElementById("mode-label");
+  var STORE = "fc.chat.v1";
+  var SESSION = "fc.chat.session.v1";
+  var messages = [];
+  var sessionId = null;
+  var busy = false;
+
+  function newSessionId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return "chat-" + crypto.randomUUID();
+    return "chat-" + Date.now();
+  }
+  try {
+    messages = JSON.parse(localStorage.getItem(STORE) || "[]");
+    if (!Array.isArray(messages)) messages = [];
+    sessionId = localStorage.getItem(SESSION) || newSessionId();
+    if (!localStorage.getItem(SESSION)) localStorage.setItem(SESSION, sessionId);
+  } catch (e) { messages = []; sessionId = newSessionId(); }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify(messages.slice(-40).map(function(m) {
+        return { role: m.role, text: m.text, diag: m.diag || null, artifacts: m.artifacts || null, cites: m.cites || null };
+      })));
+      if (sessionId) localStorage.setItem(SESSION, sessionId); else localStorage.removeItem(SESSION);
+    } catch (e) {}
+  }
+  function scroll() { thread.scrollTop = thread.scrollHeight; }
+  function updateSend() { sendBtn.disabled = busy || !input.value.trim(); }
+  function badge(text, cls) {
+    var b = document.createElement("span");
+    b.className = "badge" + (cls ? " " + cls : "");
+    b.textContent = text;
+    return b;
+  }
+  function diagnostic(data, ms) {
+    var parsed = (data.parsedFields || []).length;
+    var missing = (data.missingInputs || []).length;
+    var out = [
+      ["parsed " + parsed, parsed ? "badge-good" : "badge-bad"],
+      ["missing " + missing, missing ? "badge-warn" : "badge-good"]
+    ];
+    if (data.status === "help" || data.status === "unsupported-scope" || data.status === "invalid-input") {
+      out.unshift(["status " + data.status, "badge-warn"]);
+    }
+    if (data.readinessStatus) out.push(["readiness " + data.readinessStatus, data.readinessStatus === "ready" ? "badge-good" : "badge-warn"]);
+    if (data.decisionStatus) out.push(["decision " + data.decisionStatus, data.decisionStatus === "insufficient-evidence" ? "badge-warn" : ""]);
+    if (data.draftId) out.push([data.draftId, "badge-mono"]);
+    out.push([ms + " ms", ""]);
+    return out;
+  }
+  function agentDiag(data, ms) {
+    var out = [
+      ["agent " + (data.steps ?? 0) + "步/" + (data.toolCalls || []).length + "工具", data.harnessStatus === "ok" ? "badge-good" : "badge-warn"],
+      ["harness " + (data.harnessStatus || "n/a"), data.harnessStatus === "ok" ? "badge-good" : "badge-warn"]
+    ];
+    if (data.usage && data.usage.total_tokens) out.push(["tokens " + data.usage.total_tokens, ""]);
+    if (data.status) out.push(["status " + data.status, data.status === "insufficient-evidence" ? "badge-warn" : ""]);
+    out.push([ms + " ms", ""]);
+    return out;
+  }
+  function artifactFromCall(call) {
+    if (!call) return null;
+    if (!call.ok || !call.result) {
+      return { tool: call.name || "tool", title: "工具调用失败", ok: false, metrics: [{ label: "错误", value: (call.error && call.error.code) || "FAILED" }], note: (call.error && call.error.message) || "" };
+    }
+    var r = call.result || {};
+    var title = call.name || "tool", metrics = [], note = "";
+    if ((call.name === "assess_draft" || call.name === "assess_prompt") && (r.assessed === false)) {
+      title = "评估未通过";
+      var errors = (r.validation && r.validation.errors) || [];
+      metrics = [
+        { label: "FieldErrors", value: errors.length },
+        { label: "Missing", value: r.validation && r.validation.missingInputs ? r.validation.missingInputs.length : "n/a" }
+      ];
+      note = errors.slice(0, 2).map(function(e) { return (e.field || "") + ": " + (e.message || ""); }).join(" · ");
+    } else if ((call.name === "assess_draft" || call.name === "assess_prompt") && (r.authoritative || r.assessmentFingerprint)) {
+      title = call.name === "assess_prompt" ? "一站式评估" : "裁决结果";
+      var a = r.authoritative || { TAI: r.TAI, CCI: r.CCI, riskGrade: r.riskGrade, decisionStatus: r.decisionStatus, assessmentFingerprint: r.assessmentFingerprint };
+      metrics = [
+        { label: "TAI", value: a.TAI },
+        { label: "CCI", value: a.CCI },
+        { label: "Grade", value: a.riskGrade },
+        { label: "Decision", value: a.decisionStatus }
+      ];
+      note = a.assessmentFingerprint || "";
+    } else if (call.name === "what_if" && r.assessed) {
+      title = "敏感性分析";
+      var overrides = Object.entries(r.overrides || {}).map(function(kv) { return kv[0] + "=" + kv[1]; }).join(" ");
+      metrics = [
+        { label: "Override", value: overrides || "n/a" },
+        { label: "CCI", value: (r.baseline ? r.baseline.CCI : "n/a") + " → " + (r.after ? r.after.CCI : "n/a") },
+        { label: "Grade", value: (r.baseline ? r.baseline.riskGrade : "n/a") + " → " + (r.after ? r.after.riskGrade : "n/a") }
+      ];
+      note = r.delta && r.delta.CCI !== undefined ? "ΔCCI " + r.delta.CCI : ((r.delta && r.delta.note) || "");
+    } else if (call.name === "validate_draft" && r.missingInputs) {
+      title = "缺失清单";
+      metrics = [
+        { label: "Missing", value: r.missingInputs.length },
+        { label: "Readiness", value: r.readinessStatus }
+      ];
+      note = Object.entries(r.missingByGroup || {}).map(function(kv) { return kv[0] + ":" + kv[1].length; }).join(" · ");
+    } else if (call.name === "extract_from_text" && r.matchedFields) {
+      title = "字段抽取";
+      metrics = [{ label: "Parsed", value: r.matchedFields.length }];
+      note = r.matchedFields.join(", ");
+    } else if (call.name === "import_csv" && r.imported) {
+      title = "CSV 导入";
+      metrics = [
+        { label: "Rows", value: r.draft && r.draft.monthlySeries ? r.draft.monthlySeries.length : "n/a" },
+        { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
+      ];
+      note = r.digest || "";
+    } else if (call.name === "preset_draft" && r.draft) {
+      title = "示例草稿";
+      metrics = [{ label: "Key", value: r.key }];
+      note = r.note || "";
+    } else {
+      metrics = [{ label: "Status", value: "ok" }];
+    }
+    return { tool: call.name || "tool", title: title, ok: true, metrics: metrics, note: note };
+  }
+  function renderArtifacts(artifacts) {
+    var box = document.createElement("div");
+    box.className = "artifacts";
+    (artifacts || []).forEach(function(a) {
+      var card = document.createElement("div");
+      card.className = "artifact";
+      var head = document.createElement("div");
+      head.className = "artifact-head";
+      var dot = document.createElement("span");
+      dot.className = "artifact-dot" + (a.ok ? "" : " bad");
+      head.appendChild(dot);
+      var t = document.createElement("span");
+      t.className = "artifact-title";
+      t.textContent = a.title;
+      head.appendChild(t);
+      var tool = document.createElement("span");
+      tool.className = "artifact-tool";
+      tool.textContent = a.tool;
+      head.appendChild(tool);
+      card.appendChild(head);
+      var grid = document.createElement("div");
+      grid.className = "artifact-grid";
+      (a.metrics || []).forEach(function(m) {
+        var kv = document.createElement("div");
+        kv.className = "artifact-kv";
+        kv.textContent = m.label + " ";
+        var b = document.createElement("b");
+        b.textContent = String(m.value == null ? "n/a" : m.value);
+        kv.appendChild(b);
+        grid.appendChild(kv);
+      });
+      card.appendChild(grid);
+      if (a.note) {
+        var note = document.createElement("div");
+        note.className = "artifact-note";
+        note.textContent = a.note;
+        card.appendChild(note);
+      }
+      box.appendChild(card);
+    });
+    return box;
+  }
+  function renderMessage(m) {
+    var div = document.createElement("div");
+    div.className = "msg " + (m.role === "user" ? "user" : "assistant");
+    div.textContent = m.text;
+    if (m.artifacts && m.artifacts.length) div.appendChild(renderArtifacts(m.artifacts));
+    if (m.cites && m.cites.length) {
+      var cites = document.createElement("div");
+      cites.className = "cites";
+      m.cites.forEach(function(c) {
+        cites.appendChild(badge((c.tool || "tool") + " · " + String(c.assessmentFingerprint || c.evalRunId || "").slice(0, 14), "badge-mono"));
+      });
+      div.appendChild(cites);
+    }
+    if (m.diag && m.diag.length) {
+      var diag = document.createElement("div");
+      diag.className = "diag";
+      m.diag.forEach(function(item) { diag.appendChild(badge(item[0], item[1])); });
+      div.appendChild(diag);
+    }
+    if (m.raw) {
+      var details = document.createElement("details");
+      details.className = "raw";
+      var summary = document.createElement("summary");
+      var parsed = (m.raw.data && m.raw.data.parsedFields) || (m.raw.toolCalls || []).map(function(c) { return c.name; });
+      summary.textContent = "诊断：parsedFields = " + (parsed.length ? parsed.join(", ") : "—") + " · 原始响应";
+      details.appendChild(summary);
+      var pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(m.raw, null, 1);
+      details.appendChild(pre);
+      div.appendChild(details);
+    }
+    thread.appendChild(div);
+    thread.style.display = "flex";
+    empty.style.display = "none";
+    document.body.classList.add("has-messages");
+    scroll();
+  }
+  function append(m) {
+    messages.push(m);
+    persist();
+    renderMessage(m);
+  }
+  function send() {
+    var prompt = input.value.trim();
+    if (!prompt || busy) return;
+    append({ role: "user", text: prompt });
+    input.value = "";
+    updateSend();
+    busy = true;
+    sendBtn.disabled = true;
+    var started = Date.now();
+    var agentMode = consent.checked;
+    var payload = { prompt: prompt };
+    if (sessionId) payload.sessionId = sessionId;
+    if (agentMode) payload.modelConsent = true;
+    fetch(agentMode ? "/api/finch/agent" : "/api/finch/assess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(function(response) {
+      return response.text().then(function(text) { return { status: response.status, text: text }; });
+    }).then(function(result) {
+      var body = null;
+      try { body = JSON.parse(result.text); } catch (e) {}
+      var data = body && body.data ? body.data : null;
+      var agent = agentMode && data && data.answer !== undefined ? data : null;
+      var answer, diag, artifacts = null, cites = null;
+      if (!agent && body && (body.code || body.error) && result.status !== 200) {
+        var code = body.code || (body.error && body.error.code) || "UNKNOWN";
+        var message = body.error && typeof body.error === "string" ? body.error : (body.error && body.error.message) || (body.error || "");
+        answer = "ERROR " + code + ": " + message;
+      }
+      if (agent) {
+        answer = agent.answer || (body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
+        diag = agentDiag(agent, Date.now() - started);
+        artifacts = (agent.toolCalls || []).map(function(call) { return artifactFromCall(call); }).filter(Boolean);
+        cites = agent.citations || [];
+        if (agent.sessionId) sessionId = agent.sessionId;
+      } else {
+        data = data || (body && body.data === undefined ? body : null);
+        answer = data && (data.answer || data.message)
+          ? (data.answer || data.message)
+          : (body && body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
+        diag = data ? diagnostic(data, Date.now() - started) : [["HTTP " + result.status, "badge-bad"]];
+        if (data && data.sessionId) sessionId = data.sessionId;
+      }
+      append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: body });
+    }).catch(function(error) {
+      append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)) });
+    }).finally(function() {
+      busy = false;
+      updateSend();
+    });
+  }
+
+  if (messages.length) {
+    var restored = messages.slice();
+    messages = [];
+    restored.forEach(function(m) { messages.push(m); renderMessage(m); });
+    persist();
+  }
+
+  var samples = {
+    "官方模板": "请帮我评估一家 AI 推理服务商的交易对手风险。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。请根据这些信息给出风险评估，如果信息不足，请明确告诉我还缺哪些数据，不要自行编造",
+    "纯 JSON 字段": '{"taskType":"inference","gpuModel":"h100-equivalent","periodStart":"2026-08-01","periodEnd":"2026-08-31","inputTokensM":64,"outputTokensM":16,"validRatePct":94,"gpuHours":4200,"revenueUsd":100000,"computeSpendUsd":58000,"repaymentRatePct":96,"overdue30Pct":2,"payingCustomers":168,"top5ConcentrationPct":36,"operatingHistoryDays":720,"dataCoveragePct":100,"monthlySeries":[{"period":"2026-03","rawTokensM":72,"validRatePct":92,"revenueUsd":94000,"computeSpendUsd":55000},{"period":"2026-04","rawTokensM":75,"validRatePct":93,"revenueUsd":96000,"computeSpendUsd":56000},{"period":"2026-05","rawTokensM":77,"validRatePct":93,"revenueUsd":97000,"computeSpendUsd":56500},{"period":"2026-06","rawTokensM":79,"validRatePct":94,"revenueUsd":99000,"computeSpendUsd":57500},{"period":"2026-07","rawTokensM":81,"validRatePct":94,"revenueUsd":101000,"computeSpendUsd":59000},{"period":"2026-08","rawTokensM":80,"validRatePct":94,"revenueUsd":100000,"computeSpendUsd":58000}],"R":[64,65,63,67,68,66,70,71],"C":[62,63,62,65,66,65,68,69]}',
+    "问候": "你好，你能做什么？",
+    "Arweave 范围外": "Arweave 过去 30 天存储收入 1,200,000 美元，付费用户 4,800 个，协议收入环比增长 12%"
+  };
+  chips.addEventListener("click", function(event) {
+    var btn = event.target.closest("button[data-fq]");
+    if (!btn) return;
+    var key = btn.getAttribute("data-fq");
+    input.value = samples[key] || key;
+    input.focus();
+    updateSend();
+  });
+  input.addEventListener("input", updateSend);
+  input.addEventListener("keydown", function(event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send();
+    }
+  });
+  consent.addEventListener("change", function() {
+    var label = consent.checked ? "agent loop · tools+LLM" : "deterministic · no model call";
+    consentLabel.textContent = label;
+    modeLabel.textContent = label;
+  });
+  sendBtn.addEventListener("click", send);
+  reset.addEventListener("click", function() {
+    messages = [];
+    sessionId = newSessionId();
+    thread.innerHTML = "";
+    thread.style.display = "none";
+    empty.style.display = "flex";
+    document.body.classList.remove("has-messages");
+    try { localStorage.removeItem(STORE); localStorage.removeItem(SESSION); } catch (e) {}
+    updateSend();
+  });
+  updateSend();
+})();
+</script>
+</body>
+</html>`;
+
+writeFileSync(join(HERE, "chat.html"), html);
+process.stdout.write(`console chat built: quant/console/chat.html (${(html.length / 1024).toFixed(1)} KB)\n`);

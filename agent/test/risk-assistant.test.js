@@ -201,6 +201,38 @@ test("what_if reaches the loop and changes the numbers via the tool only", async
   assert.equal(result.citations.length, 1);
 });
 
+test("assess_prompt args.text is overridden with the raw user prompt (echo fidelity is not trusted)", async () => {
+  const fullPrompt = JSON.stringify({
+    taskType: "inference", gpuModel: "h100-equivalent",
+    periodStart: "2026-08-01", periodEnd: "2026-08-31",
+    inputTokensM: 64, outputTokensM: 16, validRatePct: 94,
+    gpuHours: 4200, revenueUsd: 100000, computeSpendUsd: 58000,
+    repaymentRatePct: 96, overdue30Pct: 2, payingCustomers: 168, top5ConcentrationPct: 36,
+    operatingHistoryDays: 720, dataCoveragePct: 100,
+    monthlySeries: [
+      { period: "2026-03", rawTokensM: 72, validRatePct: 92, revenueUsd: 94000, computeSpendUsd: 55000 },
+      { period: "2026-04", rawTokensM: 75, validRatePct: 93, revenueUsd: 96000, computeSpendUsd: 56000 },
+      { period: "2026-05", rawTokensM: 77, validRatePct: 93, revenueUsd: 97000, computeSpendUsd: 56500 },
+      { period: "2026-06", rawTokensM: 79, validRatePct: 94, revenueUsd: 99000, computeSpendUsd: 57500 },
+      { period: "2026-07", rawTokensM: 81, validRatePct: 94, revenueUsd: 101000, computeSpendUsd: 59000 },
+      { period: "2026-08", rawTokensM: 80, validRatePct: 94, revenueUsd: 100000, computeSpendUsd: 58000 }
+    ],
+    R: [64, 65, 63, 67, 68, 66, 70, 71],
+    C: [62, 63, 62, 65, 66, 65, 68, 69]
+  });
+  const scenarios = [
+    { message: { tool_calls: [{ id: "c1", function: { name: "assess_prompt", arguments: JSON.stringify({ text: '{"taskType":"inference"}' }) } }] } },
+    { message: { content: "Assessment complete." } }
+  ];
+  const { assistant } = buildAssistant(scenarios);
+  const result = await assistant.askRisk({ prompt: fullPrompt, modelConsent: true });
+  const assess = result.toolCalls[0].result;
+  assert.equal(assess.assessed, true);
+  assert.equal(assess.matchedFields.length, 19, "server injected the FULL raw prompt; R/C arrays survive");
+  assert.equal(assess.authoritative.CCI, 929);
+  assert.equal(assess.authoritative.riskGrade, "A");
+});
+
 test("replay determinism: identical prompt + transport gives identical fingerprints and answer", async () => {
   function run() {
     const toolCallTurn = {

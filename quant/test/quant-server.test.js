@@ -54,6 +54,11 @@ test("health and static console are served; data endpoint returns both datasets"
   assert.match(consoleResponse.headers.get("content-type") || "", /text\/html/);
   const html = await consoleResponse.text();
   assert.match(html, /FlowCredit Quant/);
+  const chatResponse = await fetch(`${base}/chat`);
+  assert.equal(chatResponse.status, 200);
+  const chatHtml = await chatResponse.text();
+  assert.match(chatHtml, /Business Risk Intelligence/);
+  assert.doesNotMatch(chatHtml, /data-view="overview"/, "standalone chat must not embed dashboards");
   const data = await (await fetch(`${base}/api/data`)).json();
   assert.equal(data.ok, true);
   assert.equal(data.data.datasets.v002.nature, "real_market_data");

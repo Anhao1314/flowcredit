@@ -243,7 +243,11 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
             result = { ok: false, error: "TOOL_NOT_IN_REGISTRY", message: "only registered deterministic tools are callable" };
           } else {
             try {
-              result = { ok: true, tool: tool.name, result: tool.execute(parseToolArguments(call?.function?.arguments)) };
+              let toolArgs = parseToolArguments(call?.function?.arguments);
+              // assess_prompt 的 text 由服务端注入用户原始 prompt：模型回显可能截断或改写
+              // 大 JSON（R/C 数组曾因此丢失），工具输入必须以用户原文为准。
+              if (tool.name === "assess_prompt") toolArgs = { ...toolArgs, text: prompt };
+              result = { ok: true, tool: tool.name, result: tool.execute(toolArgs) };
             } catch (error) {
               result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
             }
@@ -390,7 +394,11 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
             result = { ok: false, error: "TOOL_NOT_IN_REGISTRY", message: "only registered deterministic tools are callable" };
           } else {
             try {
-              result = { ok: true, tool: tool.name, result: tool.execute(parseToolArguments(call?.function?.arguments)) };
+              let toolArgs = parseToolArguments(call?.function?.arguments);
+              // assess_prompt 的 text 由服务端注入用户原始 prompt：模型回显可能截断或改写
+              // 大 JSON（R/C 数组曾因此丢失），工具输入必须以用户原文为准。
+              if (tool.name === "assess_prompt") toolArgs = { ...toolArgs, text: prompt };
+              result = { ok: true, tool: tool.name, result: tool.execute(toolArgs) };
             } catch (error) {
               result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
             }

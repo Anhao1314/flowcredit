@@ -192,8 +192,8 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
     },
     {
       name: "assess_prompt",
-      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. PREFER THIS whenever the user text already contains the facts (JSON object or any prompt with concrete figures), regardless of length; do not pre-extract or pre-validate.",
-      parameters: { text: { type: "string", required: true } },
+      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. The text is injected server-side with the user's raw prompt — never retype it. PREFER THIS whenever the user prompt already contains the facts, regardless of length; do not pre-extract or pre-validate.",
+      parameters: { text: { type: "string" } },
       execute(args) {
         assertArgs(args, ["text"]);
         const text = typeof args.text === "string" ? args.text : "";

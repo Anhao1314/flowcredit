@@ -249,6 +249,7 @@ export function createQuantConsoleServer(options = {}) {
   }
 
   const consolePath = join(QUANT, "console", "index.html");
+  const chatPath = join(QUANT, "console", "chat.html");
 
   const server = createServer(async (req, res) => {
     const startedAt = nowMs();
@@ -277,6 +278,17 @@ export function createQuantConsoleServer(options = {}) {
           return res.end(html);
         } catch {
           return send(500, { ok: false, error: "console artifact missing — run npm run console" });
+        }
+      }
+
+      // 独立对话前端：只有对话区（chat.html），同源走 /api/finch/* 代理。
+      if (req.method === "GET" && (url.pathname === "/chat" || url.pathname === "/chat.html")) {
+        try {
+          const html = readFileSync(chatPath);
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" });
+          return res.end(html);
+        } catch {
+          return send(500, { ok: false, error: "chat artifact missing — run node quant/console/chat-build.js" });
         }
       }
 
