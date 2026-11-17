@@ -23,7 +23,7 @@ import { createAuditLogger, defaultAuditDir, AUDIT_BASE_DIR } from "./audit.js";
 import { computeConsolePayload } from "../console/payload.js";
 import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/engine-adapter.js";
 import { createInspectionWorkflow, startInspection, signInspection } from "./workflow/inspection.js";
-import { JsonFileSaver, loadCaseIndex, saveCaseIndex, nextCaseSeq } from "./workflow/case-store.js";
+import { CaseFileStore, loadCaseIndex, saveCaseIndex, nextCaseSeq } from "./workflow/case-store.js";
 import { RunRecord } from "../../agent/core/run-record.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -162,9 +162,9 @@ export function createQuantConsoleServer(options = {}) {
   const casesFile = join(casesDir, "checkpoints.json");
   const indexFile = join(casesDir, "index.json");
   // ── 质检员 Agent（W1/W2）：案件 = LangGraph 状态机实例；检查点随进程（PoC 内存版）──
-  const inspectionGraph = createInspectionWorkflow({
+  const inspectionWorkflow = createInspectionWorkflow({
     dataset: loadFrozen().dataset, registry, client,
-    checkpointer: new JsonFileSaver(casesFile)
+    store: new CaseFileStore(casesFile)
   });
   // 案件档案持久化（W4）：检查点 + 索引落盘，重启后签字门可恢复（CONSOLE_CASES_DIR 可覆盖）
   const cases = new Map(); // caseId -> { caseId, threadId, kind, submittedBy, createdAtUtc, summary }
@@ -452,7 +452,7 @@ export function createQuantConsoleServer(options = {}) {
         let result;
         try {
           result = await withTimeout(
-            startInspection(inspectionGraph, { caseId: threadId, submission, client, audit }),
+            startInspection(inspectionWorkflow, { caseId: threadId, submission, client, audit }),
             security.askTimeoutMs, "CASE_TIMEOUT"
           );
         } catch (error) {
@@ -481,13 +481,14 @@ export function createQuantConsoleServer(options = {}) {
       }
       const caseGetMatch = /^\/api\/cases\/(case-\d+)$/.exec(url.pathname);
       if (req.method === "GET" && caseGetMatch) {
-        // P1：详情包含 LangGraph checkpoint values（完整送检内容），必须鉴权。
+        // P1：详情包含案件状态 values（完整送检内容），必须鉴权。
         if (!authorized(req.headers.authorization, security)) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
         const entry = cases.get(caseGetMatch[1]);
         if (!entry) return send(404, { ok: false, code: "NO_SUCH_CASE", error: caseGetMatch[1] });
-        const snapshot = await inspectionGraph.getState({ configurable: { thread_id: entry.threadId } });
+        const snapshot = await inspectionWorkflow.getState({ configurable: { thread_id: entry.threadId } });
+        if (!snapshot) return send(404, { ok: false, code: "CASE_STATE_MISSING", error: "案件状态不存在（存储升级或文件缺失）" });
         return send(200, { ok: true, caseId: entry.caseId, ...caseSummary(entry.caseId), values: snapshot.values ?? {}, next: snapshot.next ?? [] });
       }
       const caseSignMatch = /^\/api\/cases\/(case-\d+)\/sign$/.exec(url.pathname);
@@ -517,8 +518,8 @@ export function createQuantConsoleServer(options = {}) {
             return send(403, { ok: false, code: "SIGNER_NOT_AUTHORIZED", error: "signedBy must match the authenticated operator identity" });
           }
         }
-        const state = await inspectionGraph.getState({ configurable: { thread_id: entry.threadId } });
-        if (!(Array.isArray(state.next) && state.next.includes("await_sign"))) {
+        const state = await inspectionWorkflow.getState({ configurable: { thread_id: entry.threadId } });
+        if (!state || !(Array.isArray(state.next) && state.next.includes("await_sign"))) {
           return send(409, { ok: false, code: "CASE_NOT_AWAITING_SIGNATURE", error: "案件不在签字门（当前 next: " + JSON.stringify(state.next) + "）" });
         }
         const signStartedAt = nowMs();
@@ -529,7 +530,7 @@ export function createQuantConsoleServer(options = {}) {
         let result;
         try {
           result = await withTimeout(
-            signInspection(inspectionGraph, { caseId: entry.threadId, signedBy, decision: body.decision === "RELEASED" ? "RELEASED" : "REJECTED", reason: typeof body.reason === "string" ? body.reason : null, client, audit }),
+            signInspection(inspectionWorkflow, { caseId: entry.threadId, signedBy, decision: body.decision === "RELEASED" ? "RELEASED" : "REJECTED", reason: typeof body.reason === "string" ? body.reason : null, client, audit }),
             security.askTimeoutMs, "CASE_TIMEOUT"
           );
         } catch (error) {

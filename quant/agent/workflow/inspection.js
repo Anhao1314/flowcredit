@@ -1,39 +1,32 @@
 /*
- * quant/agent/workflow/inspection.js — 质检员 Agent v0.1（W1：LangGraph 确定性编排转正后的第一个产品工作流）
+ * quant/agent/workflow/inspection.js — 质检员 Agent 状态机 v0.2（去框架：vanilla 确定性编排）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 编排是确定性状态机：流转顺序在代码里写死（SOP），LLM 没有任何流程决定权——
- *      LLM 只出现在 EXTRACT 类"注记节点"（本案：report 叙述），且输出必须过结构化校验，
- *      解析/调用失败 → 降级为确定性叙述（fail-closed，永不中断案件）。
- *   2. 判定字段（metrics/verdict/status）全部来自确定性工具（adjudicateCandidates）；
- *      LLM 叙述只是注记层，与本文件对"策略送检"的判定无权限关系。
- *   3. 人工签字门 = LangGraph interrupt：案件停在 AWAIT_SIGN，真人 resume 才继续；
- *      职责分离：signedBy === submittedBy 一律 REJECTED（测试锁死）。
- *   4. 本文件不读时钟、不用随机数：案件时间戳由调用方经 config 注入（审计时钟岛）。
+ *      LLM 只出现在"注记节点"（report 叙述），且失败必须降级为确定性叙述（fail-closed，
+ *      永不中断案件）。本文件零依赖、零 LangGraph——v0.2 起为手写状态机。
+ *   2. 判定字段（metrics/verdict/status）全部来自确定性工具（adjudicateCandidates/验货器）；
+ *      LLM 叙述只是注记层，与本文件的判定无权限关系。
+ *   3. 人工签字门 = 状态机的 AWAIT_SIGN 暂停位：案件停在 REPORTED（门内状态不提交），
+ *      `next: ["await_sign"]` 且 `__interrupt__` 携带签字门 payload——与 v0.1 LangGraph
+ *      的对外语义逐字段兼容（测试锁死）；职责分离：signedBy === submittedBy 一律 REJECTED。
+ *   4. 本文件不读时钟、不用随机数：案件时间戳由调用方注入（config.nowMs / nowMs 参数）。
  *   5. 模型无关：LLM 叙述走 agent/client.js（客户自带 key / scripted 测试注入）。
+ *   6. 状态持久化经 store 注入（{loadState, saveState}）；未注入时用进程内 Map——
+ *      跨进程恢复由 CaseFileStore（case-store.js）落盘实现，本文件不碰文件系统。
  */
 
-import { StateGraph, Annotation, MemorySaver, START, END, interrupt, Command } from "@langchain/langgraph";
 import { validateCandidateBatch } from "../../proposals/schema.js";
 import { adjudicateCandidates } from "../../proposals/adjudicate.js";
 import { listRules } from "../../strategy/rules-v002.js";
 import { verifyText } from "./verify-claims.js";
 
-export const INSPECTION_WORKFLOW_VERSION = "quant-inspection-workflow/v0.1.0";
+export const INSPECTION_WORKFLOW_VERSION = "quant-inspection-workflow/v0.2.0";
 
-const lastValue = defaultValue => Annotation({ reducer: (_prev, next) => next, default: () => defaultValue }); // 通道必须经 Annotation() 创建（裸对象会被静默丢弃——已用最小复现验证）
-
-const InspectionState = Annotation.Root({
-  submission: lastValue(null),      // { kind, ruleId?, family?, params?, rationale?, submittedBy }
-  candidate: lastValue(null),       // schema 校验后的候选（确定性）
-  adjudication: lastValue(null),    // 确定性裁决报告（单一候选，全池口径）
-  narrative: lastValue(null),       // LLM 注记层叙述（或确定性兜底）
-  artifactText: lastValue(null),    // report 类送检：AI 产物原文
-  claimReport: lastValue(null),     // report 类送检：逐条数字验货报告
-  status: lastValue("RECEIVED"),    // RECEIVED→VERIFIED→REPORTED→AWAIT_SIGN→RELEASED|REJECTED
-  signature: lastValue(null),       // { signedBy, decision, signedAtMs, reason? }
-  error: lastValue(null)            // fail-closed 时的原因
-});
+/** 签字恢复命令（v0.1 曾从 LangGraph re-export；vanilla 版自带同形实现）。 */
+export class Command {
+  constructor(payload) { this.resume = payload?.resume ?? null; }
+}
 
 /** 确定性叙述兜底（LLM 不可用/失败时的降级路径，数字全部来自裁决报告）。 */
 function deterministicNarrative(adjudication, status) {
@@ -85,31 +78,50 @@ async function narrativeViaLLM(client, adjudication, status) {
   }
 }
 
-/**
- * 构建质检员案件状态机（编译后的 LangGraph）。
- * 注入（invoke/config 时经 config.configurable 传入，LangGraph 顶层键会被丢弃——实验已验证）：
- *   dataset（冻结快照）、client（模型，可 null）、costRate（可选校准费率）、nowMs（审计时钟）、audit（审计器）。
- */
-export function createInspectionWorkflow({ dataset, registry = null, client = null, costRate, audit = null, checkpointer = null } = {}) {
-  if (!dataset?.dataVersion || !Array.isArray(dataset.series)) throw new TypeError("frozen dataset required");
+function signSummary(values) {
+  return values.submission?.kind === "report"
+    ? { kind: "report", claims: values.claimReport.claims.length, matched: values.claimReport.matched, mismatched: values.claimReport.mismatched, verdict: values.claimReport.verdict, status: values.status }
+    : {
+      proposalId: values.adjudication.best.proposalId, family: values.adjudication.best.family,
+      ppSharpe: values.adjudication.best.sharpePerPeriod, dsr: values.adjudication.best.dsr,
+      status: values.status
+    };
+}
 
-  async function receive(state) {
-    const submission = state.submission;
+/**
+ * 构建质检员案件状态机（vanilla；无框架依赖）。
+ * deps 注入：dataset（冻结快照）、registry（report 送检的确定性工具）、client（模型，可 null）、
+ *            costRate（可选校准费率）、audit（审计器）、store（{loadState, saveState}，未注入用进程内 Map）。
+ */
+export function createInspectionWorkflow({ dataset, registry = null, client = null, costRate, audit = null, store = null } = {}) {
+  if (!dataset?.dataVersion || !Array.isArray(dataset.series)) throw new TypeError("frozen dataset required");
+  const memory = new Map();
+  const loadState = threadId => (store ? store.loadState(threadId) : (memory.get(threadId) ?? null));
+  const saveState = (threadId, snapshot) => { if (store) store.saveState(threadId, snapshot); else memory.set(threadId, snapshot); };
+
+  /** receive → verify → report；返回 true 表示到达签字门，false 表示 REJECTED_INVALID 终态。 */
+  async function runPipeline(values, configurable) {
+    const submission = values.submission;
     if (submission?.kind === "report") {
       if (typeof submission.artifactText !== "string" || !submission.artifactText.trim()) {
-        return { status: "REJECTED_INVALID", error: "report 送检必须携带 artifactText（AI 产物原文）" };
+        values.status = "REJECTED_INVALID";
+        values.error = "report 送检必须携带 artifactText（AI 产物原文）";
+        return false;
       }
-      return { artifactText: submission.artifactText, status: "RECEIVED" };
+      values.artifactText = submission.artifactText;
+      values.status = "RECEIVED";
+    } else {
+      const batch = validateCandidateBatch([submission], listRules());
+      if (!batch.ok || batch.candidates.length !== 1) {
+        values.status = "REJECTED_INVALID";
+        values.error = batch.errors?.join("; ") || "invalid submission";
+        return false;
+      }
+      values.candidate = batch.candidates[0];
+      values.status = "RECEIVED";
     }
-    const batch = validateCandidateBatch([submission], listRules());
-    if (!batch.ok || batch.candidates.length !== 1) {
-      return { status: "REJECTED_INVALID", error: batch.errors?.join("; ") || "invalid submission" };
-    }
-    return { candidate: batch.candidates[0], status: "RECEIVED" };
-  }
 
-  async function verify(state) {
-    if (state.submission?.kind === "report") {
+    if (submission.kind === "report") {
       if (!registry) throw new TypeError("report 送检需要 registry（封闭注册表的确定性工具）");
       const assessment = registry.get("assess_frozen_dataset").execute({}).authoritative;
       const trialMetrics = registry.get("trial_metrics").execute({});
@@ -121,102 +133,110 @@ export function createInspectionWorkflow({ dataset, registry = null, client = nu
         sharpePerPeriod: trialMetrics.selected.sharpePerPeriod,
         rows: quality.stats.rows
       };
-      const claimReport = verifyText(state.artifactText, authoritative);
-      return { claimReport, status: "VERIFIED" };
+      values.claimReport = verifyText(values.artifactText, authoritative);
+      values.status = "VERIFIED";
+    } else {
+      values.adjudication = adjudicateCandidates({ dataset, candidates: [values.candidate], costRate });
+      values.status = "VERIFIED";
     }
-    const report = adjudicateCandidates({ dataset, candidates: [state.candidate], costRate });
-    return { adjudication: report, status: "VERIFIED" };
-  }
 
-  async function reportNode(state, cfg) {
-    const configurable = cfg?.configurable ?? {};
-    let llmNarrative = null;
-    if (state.submission?.kind === "report") {
-      const cr = state.claimReport;
+    if (values.submission?.kind === "report") {
+      const cr = values.claimReport;
       const deterministic = [
         `[质检报告 · 数字验货] 声明 ${cr.claims.length} 条：一致 ${cr.matched} · 不一致 ${cr.mismatched} · 无法复验 ${cr.unverifiable}`,
         `总判定：${cr.verdict.toUpperCase()}${cr.mismatched ? "（存在与权威工具输出不一致的数字——详见逐条清单）" : ""}`
       ].join("\n");
-      llmNarrative = await narrativeViaLLMReport(configurable.client, cr, state.status);
+      const llmNarrative = await narrativeViaLLMReport(configurable.client, cr, values.status);
       configurable.audit?.write?.({
         kind: "inspection-narrative", narrativeSource: llmNarrative ? "llm" : "deterministic",
-        caseKind: "report", caseStatus: state.status, verdict: cr.verdict
+        caseKind: "report", caseStatus: values.status, verdict: cr.verdict
       });
-      return { narrative: llmNarrative ?? deterministic, status: "REPORTED" };
+      values.narrative = llmNarrative ?? deterministic;
+      values.status = "REPORTED";
+      return true;
     }
-    llmNarrative = await narrativeViaLLM(configurable.client, state.adjudication, state.status);
-    const narrative = llmNarrative ?? deterministicNarrative(state.adjudication, state.status);
+    const llmNarrative = await narrativeViaLLM(configurable.client, values.adjudication, values.status);
     configurable.audit?.write?.({
       kind: "inspection-narrative", narrativeSource: llmNarrative ? "llm" : "deterministic",
-      proposalId: state.adjudication.best.proposalId, caseStatus: state.status
+      proposalId: values.adjudication.best.proposalId, caseStatus: values.status
     });
-    return { narrative, status: "REPORTED" };
+    values.narrative = llmNarrative ?? deterministicNarrative(values.adjudication, values.status);
+    values.status = "REPORTED";
+    return true;
   }
 
-  async function awaitSign(state, cfg) {
-    const configurable = cfg?.configurable ?? {};
-    const resume = interrupt({
-      requires: "human signature",
-      summary: state.submission?.kind === "report"
-        ? { kind: "report", claims: state.claimReport.claims.length, matched: state.claimReport.matched, mismatched: state.claimReport.mismatched, verdict: state.claimReport.verdict, status: state.status }
-        : {
-          proposalId: state.adjudication.best.proposalId, family: state.adjudication.best.family,
-          ppSharpe: state.adjudication.best.sharpePerPeriod, dsr: state.adjudication.best.dsr,
-          status: state.status
-        }
-    });
-    if (!resume || typeof resume !== "object" || !["RELEASED", "REJECTED"].includes(resume.decision)) {
-      return { status: "REJECTED", signature: { ...resume, reason: "invalid sign-off payload" }, error: "invalid sign-off payload" };
+  /**
+   * invoke 语义（与 v0.1 LangGraph 对外行为逐字段兼容）：
+   *   - input = { submission }：开案，跑到签字门挂起（status 停在 REPORTED，
+   *     values.__interrupt__ 携带签字门 payload，next = ["await_sign"]）；
+   *   - input = Command{resume}（或含 resume 键）：从挂起位恢复，执行签字判定到终态。
+   */
+  async function invoke(input, config = {}) {
+    const configurable = config?.configurable ?? {};
+    const threadId = configurable.thread_id;
+    if (!threadId) throw new TypeError("configurable.thread_id is required");
+
+    const isResume = input instanceof Command || (input && Object.prototype.hasOwnProperty.call(input, "resume"));
+    if (isResume) {
+      const saved = loadState(threadId);
+      const values = saved?.values ?? null;
+      if (!values || !Array.isArray(saved.next) || !saved.next.includes("await_sign")) {
+        throw new TypeError("no paused signature gate for this thread");
+      }
+      const resume = input.resume ?? null;
+      if (!resume || typeof resume !== "object" || !["RELEASED", "REJECTED"].includes(resume.decision)) {
+        values.status = "REJECTED";
+        values.error = "invalid sign-off payload";
+        values.signature = { ...resume, reason: "invalid sign-off payload" };
+      } else if (resume.signedBy && values.submission?.submittedBy && resume.signedBy === values.submission.submittedBy) {
+        // 职责分离：送检人不得自签（不变式 3 的产品化）
+        values.status = "REJECTED";
+        values.error = "separation-of-duties violation";
+        values.signature = { signedBy: resume.signedBy, decision: "REJECTED", reason: "送检人不得自签（职责分离）", signedAtMs: configurable.nowMs?.() ?? null };
+      } else {
+        values.status = resume.decision;
+        values.signature = { signedBy: resume.signedBy ?? null, decision: resume.decision, reason: resume.reason ?? null, signedAtMs: configurable.nowMs?.() ?? null };
+      }
+      const snapshot = { values: { ...values }, next: [] };
+      saveState(threadId, snapshot);
+      return snapshot.values;
     }
-    if (resume.signedBy && state.submission.submittedBy && resume.signedBy === state.submission.submittedBy) {
-      // 职责分离：送检人不得自签（不变式 3 的产品化）
-      return {
-        status: "REJECTED", error: "separation-of-duties violation",
-        signature: { signedBy: resume.signedBy, decision: "REJECTED", reason: "送检人不得自签（职责分离）", signedAtMs: configurable.nowMs?.() ?? null }
-      };
-    }
-    return {
-      status: resume.decision,
-      signature: { signedBy: resume.signedBy ?? null, decision: resume.decision, reason: resume.reason ?? null, signedAtMs: configurable.nowMs?.() ?? null }
+
+    const values = {
+      submission: input?.submission ?? null, candidate: null, adjudication: null, narrative: null,
+      artifactText: null, claimReport: null, status: "RECEIVED", signature: null, error: null
     };
+    const reachedGate = await runPipeline(values, configurable);
+    if (!reachedGate) {
+      const snapshot = { values: { ...values }, next: [] };
+      saveState(threadId, snapshot);
+      return snapshot.values;
+    }
+    // 挂起：AWAIT_SIGN 节点不提交——status 停在 REPORTED，暂停事实由 __interrupt__ 承载
+    const paused = {
+      values: { ...values, __interrupt__: [{ value: { requires: "human signature", summary: signSummary(values) } }] },
+      next: ["await_sign"]
+    };
+    saveState(threadId, paused);
+    return paused.values;
   }
 
-  function routeAfterReceive(state) { return state.status === "RECEIVED" ? "verify" : "invalid_end"; }
-  function routeAfterSign(state) { return state.status === "REJECTED" ? "rejected_end" : "released_end"; }
+  /** 兼容 LangGraph 的读取面：返回 { values, next }；无案件返回 null。 */
+  async function getState(config = {}) {
+    const threadId = config?.configurable?.thread_id;
+    if (!threadId) return null;
+    return loadState(threadId);
+  }
 
-  const workflow = new StateGraph(InspectionState)
-    .addNode("receive", receive)
-    .addNode("verify", verify)
-    .addNode("report", reportNode)
-    .addNode("await_sign", awaitSign)
-    .addNode("released_end", async state => ({ status: "RELEASED" }))
-    .addNode("rejected_end", async state => ({ status: "REJECTED" }))
-    .addEdge(START, "receive")
-    .addConditionalEdges("receive", routeAfterReceive, { verify: "verify", invalid_end: END })
-    .addEdge("verify", "report")
-    .addEdge("report", "await_sign")
-    .addConditionalEdges("await_sign", routeAfterSign, { released_end: "released_end", rejected_end: "rejected_end" })
-    .addEdge("released_end", END)
-    .addEdge("rejected_end", END);
-
-  return workflow.compile({ checkpointer: checkpointer ?? new MemorySaver() });
+  return { invoke, getState };
 }
 
-/** 便捷封装：开案（首次 invoke，跑到 AWAIT_SIGN 挂起）。 */
-export async function startInspection(graph, { caseId, submission, client = null, costRate, audit = null, nowMs = null } = {}) {
-  return graph.invoke(
-    { submission },
-    { configurable: { thread_id: caseId, client, costRate, audit, nowMs } } // dataset 由工厂闭包持有，不经 config 传递
-  );
+/** 便捷封装：开案（首次 invoke，跑到签字门挂起）。 */
+export async function startInspection(workflow, { caseId, submission, client = null, costRate, audit = null, nowMs = null } = {}) {
+  return workflow.invoke({ submission }, { configurable: { thread_id: caseId, client, costRate, audit, nowMs } });
 }
 
-/** 便捷封装：签字（resume interrupt）。 */
-export async function signInspection(graph, { caseId, signedBy, decision, reason = null, client = null, audit = null, nowMs = null } = {}) {
-  return graph.invoke(
-    new Command({ resume: { signedBy, decision, reason } }),
-    { configurable: { thread_id: caseId, client, audit, nowMs } }
-  );
+/** 便捷封装：签字（Command{resume} 恢复）。 */
+export async function signInspection(workflow, { caseId, signedBy, decision, reason = null, client = null, audit = null, nowMs = null } = {}) {
+  return workflow.invoke(new Command({ resume: { signedBy, decision, reason } }), { configurable: { thread_id: caseId, client, audit, nowMs } });
 }
-
-// Command 从 LangGraph 同名导出（re-export 供测试/调用方免依赖细节）。
-export { Command };

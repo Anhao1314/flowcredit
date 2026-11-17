@@ -121,9 +121,8 @@ const ZONE_B_NET_ENV = [
 // Zone C：agent/ 是唯一被授权的触网面；import 白名单外一律违规；仍禁随机与时钟（可重放）。
 const QUANT_AGENT_DIR = join(QUANT, "agent");
 const ZONE_C_IMPORT_ALLOWED = new Set(["node:fs", "node:readline", "node:path", "node:url", "node:crypto", "node:os", "node:http"]);
-// W1 转正（2026-11-13，用户批准）：@langchain/langgraph + @langchain/core 作为确定性编排框架
-// 进入 agent 层——仅限状态机/检查点/人工中断编排；LLM 自主规划与自由多 agent 编排仍禁。
-const ZONE_C_IMPORT_PREFIX_ALLOWED = ["@langchain/langgraph", "@langchain/core", "@langchain/langgraph-checkpoint"];
+// 历史：W1 曾引入 @langchain/langgraph（2026-11-13），2026-11-18 瘦身移除——
+// Zone C 回归零第三方依赖；确定性编排保持手写状态机（vanilla）。
 const ZONE_C_RUNTIME = [/\bMath\.random\b/, /\bnew\s+Date\b/, /\bDate\.now\b/];
 
 function scanZoneCImports(path, rel) {
@@ -139,7 +138,6 @@ function scanZoneCImports(path, rel) {
       const specifier = match[1];
       const allowed = specifier.startsWith("./") || specifier.startsWith("../")
         || ZONE_C_IMPORT_ALLOWED.has(specifier)
-        || ZONE_C_IMPORT_PREFIX_ALLOWED.some(prefix => specifier === prefix || specifier.startsWith(prefix + "/"))
         || (specifier === "node:http" && isServer); // 仅 HTTP 宿主文件可监听端口
       if (!allowed) violations.push({ file: rel, line: index + 1, rule: "zoneC-import-whitelist", text: specifier });
     }
