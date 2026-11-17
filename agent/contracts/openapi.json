@@ -569,7 +569,7 @@
                 "description": "Deterministic template text for a chat surface. It never explains a score."
               },
               "parserVersion": {
-                "const": "nl-draft-v0.2"
+                "const": "nl-draft-v0.3"
               },
               "draftId": {
                 "type": "string"

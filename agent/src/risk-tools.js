@@ -12,7 +12,6 @@ import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, sanitizeExtractedDraftV03, vali
 import { normalizeEvidenceV021 } from "./normalize-v021.js";
 import { computeRiskV021 } from "./risk-core-v021.js";
 import { extractNaturalLanguageDraft } from "./nl-draft-v01.js";
-import { groundExtractedDraft } from "./grounding.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { getPresetV021 } from "./presets.js";
@@ -161,12 +160,10 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
         const text = typeof args.text === "string" ? args.text : "";
         if (!text.trim() || text.length > INTAKE_SCHEMA_V03.maxTextLength) throw new TypeError(`text must contain 1 to ${INTAKE_SCHEMA_V03.maxTextLength} characters`);
         const extraction = extractNaturalLanguageDraft(text);
-        const grounded = groundExtractedDraft(text, extraction.draft);
-        const matched = Object.keys(grounded.draft);
         return {
-          draft: grounded.draft, matchedFields: matched,
-          warnings: [...extraction.warnings, ...grounded.report.warnings],
-          grounding: { groundedFields: grounded.report.groundedFields, ungroundedFields: grounded.report.ungroundedFields },
+          draft: extraction.draft, matchedFields: extraction.matchedFields,
+          warnings: extraction.warnings,
+          grounding: { note: "parser v0.3 is grounded by construction: only fields literally stated in the text are emitted" },
           authoritative: null
         };
       }
@@ -198,13 +195,14 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
         assertArgs(args, ["text"]);
         const text = typeof args.text === "string" ? args.text : "";
         if (!text.trim() || text.length > INTAKE_SCHEMA_V03.maxTextLength) throw new TypeError(`text must contain 1 to ${INTAKE_SCHEMA_V03.maxTextLength} characters`);
+        // 解析器 v0.3 是按构造 grounded 的（只映射文本明示字段，含推导月份行）；
+        // 不再做二次 grounding——那会把推导型字段（如 "3月"+年份锚点的月度行）误删。
         const extraction = extractNaturalLanguageDraft(text);
-        const grounded = groundExtractedDraft(text, extraction.draft);
-        const warnings = [...extraction.warnings, ...grounded.report.warnings];
-        const outcome = assessDraftPure(grounded.draft, { connectors });
+        const warnings = [...extraction.warnings];
+        const outcome = assessDraftPure(extraction.draft, { connectors });
         if (!outcome.ok) {
           return {
-            assessed: false, extracted: grounded.draft, matchedFields: Object.keys(grounded.draft), warnings,
+            assessed: false, extracted: extraction.draft, matchedFields: extraction.matchedFields, warnings,
             validation: {
               valid: false, errors: outcome.validation.errors, warnings: outcome.validation.warnings,
               missingByGroup: outcome.validation.missingByGroup, missingInputs: outcome.validation.missingInputs
@@ -213,7 +211,7 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
           };
         }
         return {
-          assessed: true, extracted: grounded.draft, matchedFields: Object.keys(grounded.draft), warnings,
+          assessed: true, extracted: extraction.draft, matchedFields: extraction.matchedFields, warnings,
           ...outcome.payload,
           authoritative: outcome.payload.authoritative
         };

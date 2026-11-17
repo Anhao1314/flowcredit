@@ -110,3 +110,17 @@ test("v0.2 does not mistake a date suffix for a revenue amount", () => {
   assert.equal(draft.repaymentRatePct, 94);
   assert.deepEqual(warnings, []);
 });
+
+test("v0.3: a realistic natural-language paragraph (monthly rows + zh R/C) reaches 19/19", () => {
+  const prose = "我们是一家 AI 推理服务商，评估周期 2026-08-01 到 2026-08-31，主卡 H100。近六个月：3月 token 72M、有效率 92%、收入 94000 美元、支出 55000 美元；4月 75M、93%、96000、56000；5月 77M、93%、97000、56500；6月 79M、94%、99000、57500；7月 81M、94%、101000、59000；8月 80M、94%、100000、58000。本月输入 token 64M、输出 16M、有效率 94%。GPU 4200 小时。月收入 100000 美元，算力支出 58000 美元。回款率 96%，30 天逾期 2%，付费客户 168 家，前五大占 36%。经营 720 天，数据覆盖率 100%。申报序列 R 是 64,65,63,67,68,66,70,71；可信序列 C 是 62,63,62,65,66,65,68,69。";
+  const { draft, warnings } = extractNaturalLanguageDraft(prose);
+  assert.equal(Object.keys(draft).length, 19);
+  assert.equal(draft.monthlySeries.length, 6);
+  assert.deepEqual(draft.monthlySeries[0], { period: "2026-03", rawTokensM: 72, validRatePct: 92, revenueUsd: 94000, computeSpendUsd: 55000 });
+  assert.deepEqual(draft.R, [64, 65, 63, 67, 68, 66, 70, 71]);
+  assert.deepEqual(draft.C, [62, 63, 62, 65, 66, 65, 68, 69]);
+  assert.equal(draft.overdue30Pct, 2, "'30 天逾期 2%' without 率 must parse");
+  assert.equal(draft.top5ConcentrationPct, 36, "'前五大占 36%' without 客户 must parse");
+  assert.equal(draft.operatingHistoryDays, 720, "'经营 720 天' without 历史 must parse");
+  assert.deepEqual(warnings, []);
+});

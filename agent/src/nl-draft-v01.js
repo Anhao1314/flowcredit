@@ -23,7 +23,7 @@
  */
 import { canonicalGpu } from "./intake-v03.js";
 
-export const NL_DRAFT_PARSER_VERSION = "nl-draft-v0.2";
+export const NL_DRAFT_PARSER_VERSION = "nl-draft-v0.3";
 
 // The complete set of fields this parser can ever emit, in a stable order.
 export const NL_DRAFT_FIELDS = Object.freeze([
@@ -73,11 +73,11 @@ const PERCENT_FIELDS = Object.freeze({
   ],
   overdue30Pct: [
     new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:30[-\\s]?day\s+overdue(?:\s+rate)?|逾期率)`, "i"),
-    labeled("30\\s*(?:天|日)\\s*(?:以上)?\\s*逾期率|30\\s*天以上逾期|逾期率|30[-\\s]?day\\s+overdue(?:\\s+rate)?|overdue(?:\\s+rate)?", PERCENT_TAIL)
+    labeled("30\\s*(?:天|日)\\s*(?:以上)?\\s*逾期(?:率)?|30\\s*天以上逾期|逾期率|30[-\\s]?day\\s+overdue(?:\\s+rate)?|overdue(?:\\s+rate)?", PERCENT_TAIL)
   ],
   top5ConcentrationPct: [
     new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:top\s*-?\s*5(?:\s*-?\s*(?:customer|client)s?)?\s*concentration|top\s*-?\s*5\s*customers?|前\s*5\s*大客户|前五大客户)`, "i"),
-    labeled("前\\s*5\\s*大客户|前\\s*五\\s*大客户|前五大客户|top\\s*-?\\s*5(?:\\s*-?\\s*(?:customer|client)s?)?\\s*concentration|top\\s*-?\\s*5\\s*customers?|top\\s*-?\\s*5|top5", PERCENT_TAIL)
+    labeled("前\\s*5\\s*大(?:客户)?|前\\s*五\\s*大(?:客户)?|前五大客户|前五大|top\\s*-?\\s*5(?:\\s*-?\\s*(?:customer|client)s?)?\\s*concentration|top\\s*-?\\s*5\\s*customers?|top\\s*-?\\s*5|top5", PERCENT_TAIL)
   ],
   validRatePct: [
     new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:有效率|valid\s+rate)`, "i"),
@@ -240,15 +240,95 @@ function extractPeriod(source, warnings) {
   return null;
 }
 
-function readSeries(source, label) {
+/**
+ * v0.3 自然语言月度行：分号/换行分段，每段 = "X月 [token量][单位]，有效率 P%，[收入] 美元，[支出] 美元"。
+ * 首行可带完整标签，后续行按固定顺序（token → 有效率% → 收入 → 支出）位置化解析。
+ * 年份取自文中显式日期（periodEnd 优先）；没有年份锚点则跳过——绝不使用时钟补年份。
+ * 识别行数 < 6 时不产出 monthlySeries（schema 最小 6 期），只给警告。
+ */
+const MONEY_NUM_TOKEN = String.raw`(?:US\$|\$)?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(万|千|亿|百万|k|K|m|M)?\s*(?:美元|美金|USD|usd|人民币|元)?`;
+
+function splitSpans(source) {
+  const out = []; let start = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === ";" || ch === "；" || ch === "。" || ch === "\n") {
+      if (i > start) out.push({ text: source.slice(start, i), start, end: i });
+      start = i + 1;
+    }
+  }
+  if (start < source.length) out.push({ text: source.slice(start), start, end: source.length });
+  return out;
+}
+
+function readMonthlySeriesProse(source, periodEnd, warnings) {
+  let year = null; let endMonth = null;
+  const range = /(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(source);
+  if (range) { year = Number(range[1]); endMonth = Number(range[2]); }
+  if (year == null) { const y = /(\d{4})\s*年/.exec(source); if (y) year = Number(y[1]); }
+  if (periodEnd && typeof periodEnd === "string") {
+    const pe = /^(\d{4})-(\d{2})/.exec(periodEnd);
+    if (pe) { year = Number(pe[1]); endMonth = Number(pe[2]); }
+  }
+  if (year == null) return null;
+  const rows = new Map();
+  const spans = [];
+  for (const seg of splitSpans(source)) {
+    const monthMatch = /(?:^|[^\d.])(\d{1,2})\s*月/.exec(seg.text);
+    if (!monthMatch) continue;
+    const month = Number(monthMatch[1]);
+    if (month < 1 || month > 12) continue;
+    let rest = seg.text.slice(monthMatch.index + monthMatch[0].length);
+    const tok = /^\s*(?:tokens?|令牌|token\s*(?:使用量|用量|量)|用量|使用量|量)?\s*(?:约|为|:|：)?\s*(\d+(?:\.\d+)?)\s*(M|m|百万|万|k|K|千|亿)?/.exec(rest);
+    if (!tok) continue;
+    rest = rest.slice(tok.index + tok[0].length);
+    const valid = /(?:有效率?|valid\s*rate)?\s*[:：]?\s*(\d{1,3}(?:\.\d+)?)\s*[%％]/.exec(rest);
+    if (!valid) continue;
+    const validRatePct = Number(valid[1]);
+    if (validRatePct < 0 || validRatePct > 100) continue;
+    const moneySource = rest.slice(valid.index + valid[0].length);
+    const nums = [...moneySource.matchAll(new RegExp(MONEY_NUM_TOKEN, "g"))];
+    if (nums.length < 2) continue;
+    const money = m => {
+      const value = Number(m[1]);
+      const scale = m[2] ? MONEY_UNIT_SCALE[m[2]] : 1;
+      return Math.round(value * (scale || 1));
+    };
+    const revenueUsd = money(nums[0]);
+    const computeSpendUsd = money(nums[1]);
+    const unit = (tok[2] || "").toLowerCase();
+    let rawTokensM = Number(tok[1]);
+    if (unit === "万" || unit === "千") rawTokensM = Math.round(rawTokensM * (unit === "万" ? 1e4 : 1e3) / 1e6 * 1e6) / 1e6;
+    else if (unit === "亿") rawTokensM = rawTokensM * 100;
+    let rowMonth = month;
+    let rowYear = year;
+    if (endMonth != null && month > endMonth) rowYear = year - 1;
+    const period = `${rowYear}-${String(rowMonth).padStart(2, "0")}`;
+    if (rows.has(period)) continue;
+    rows.set(period, { period, rawTokensM, validRatePct, revenueUsd, computeSpendUsd });
+    spans.push([seg.start, seg.end]);
+  }
+  if (!rows.size) return null;
+  const list = [...rows.values()].sort((a, b) => a.period < b.period ? -1 : 1);
+  if (list.length < MONTHLY_ROW_MIN) {
+    warnings.push(`月度序列仅识别到 ${list.length} 行（每行需含 月/token量/有效率/收入/支出）；不足 ${MONTHLY_ROW_MIN} 期已忽略，可改用 JSON 或 CSV。`);
+    return null;
+  }
+  return { rows: list, spans };
+}
+
+const MONTHLY_ROW_MIN = 6;
+
+function readSeries(source, labels) {
+  // v0.3：支持中文表述（申报序列/可信序列）与顿号分隔；R/C 字母仍可用。
   const patterns = [
-    new RegExp(String.raw`\b${label}\s*(?:序列|series)?\s*[:=]\s*\[([^\]]+)\]`, "i"),
-    new RegExp(String.raw`\b${label}\s*(?:序列|series)?\s*[:=]\s*([\d][\d.,\s]*)`, "i")
+    new RegExp(String.raw`(?:${labels})\s*(?:序列|series)?\s*[:=是]?\s*\[([^\]]+)\]`, "i"),
+    new RegExp(String.raw`(?:${labels})\s*(?:序列|series)?\s*(?:是|为|约)?\s*[:=]?\s*([\d][\d.,，、\s]*)`, "i")
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(source);
     if (!match) continue;
-    const parts = match[1].split(/[,\s]+/).filter(Boolean);
+    const parts = match[1].split(/[，、\s,]+/).filter(Boolean);
     const numbers = parts.map(toNumber);
     if (numbers.length >= 6 && numbers.every(value => value != null)) return numbers;
   }
@@ -413,6 +493,14 @@ function extractNaturalLanguageValues(source, warnings) {
     if (number < 0) continue;
     values[field] = number;
   }
+  if (!values.periodStart || !values.periodEnd) {
+    const period = extractPeriod(source, warnings);
+    if (period) {
+      values.periodStart = values.periodStart || period.start;
+      values.periodEnd = values.periodEnd || period.end;
+    }
+  }
+
   for (const field of ["periodStart", "periodEnd"]) {
     if (values[field]) continue;
     const pattern = new RegExp(String.raw`\b${field}\b\s*(?:[:=]|is|was|为|是)?\s*["']?(\d{4}-\d{2}-\d{2})`, "i");
@@ -422,12 +510,22 @@ function extractNaturalLanguageValues(source, warnings) {
     if (date) values[field] = date;
   }
 
-  const gpuHours = readGpuHours(source);
+  // v0.3：先解析自然语言月度行（span 屏蔽行内数字，避免污染总额/比率标量抽取）
+  let scalarSource = source;
+  const monthly = readMonthlySeriesProse(source, values.periodEnd, warnings);
+  if (monthly) {
+    values.monthlySeries = monthly.rows;
+    for (const span of monthly.spans) {
+      scalarSource = scalarSource.slice(0, span[0]) + " ".repeat(span[1] - span[0]) + scalarSource.slice(span[1]);
+    }
+  }
+
+  const gpuHours = readGpuHours(scalarSource);
   if (gpuHours != null && values.gpuHours === undefined) values.gpuHours = gpuHours;
 
   for (const [field, groups] of Object.entries(MONEY_FIELDS)) {
     if (values[field] !== undefined) continue;
-    const best = readMoneyBest(source, groups);
+    const best = readMoneyBest(scalarSource, groups);
     if (!best) continue;
     if (best.rank < 0) warnings.push(`The ${field} match came from a segment label; verify it is the total.`);
     if (best.conflicting) warnings.push(`Multiple ${field} values were stated; ${best.value} was used. Confirm the total.`);
@@ -435,14 +533,14 @@ function extractNaturalLanguageValues(source, warnings) {
   }
   for (const [field, patterns] of Object.entries(PERCENT_FIELDS)) {
     if (values[field] !== undefined) continue;
-    const rate = readNumber(source, patterns);
+    const rate = readNumber(scalarSource, patterns);
     if (rate == null) continue;
     if (rate < 0 || rate > 100) { warnings.push(`${field} must be within 0..100; it was ignored.`); continue; }
     values[field] = rate;
   }
 
   if (values.payingCustomers === undefined) {
-    const customers = readNumber(source, PAYING_CUSTOMER_PATTERNS);
+    const customers = readNumber(scalarSource, PAYING_CUSTOMER_PATTERNS);
     if (customers != null) {
       if (Number.isInteger(customers)) values.payingCustomers = customers;
       else warnings.push("A non-integer paying customer count was stated and ignored; supply a whole number of customers.");
@@ -452,7 +550,7 @@ function extractNaturalLanguageValues(source, warnings) {
   for (const [field, patterns] of Object.entries(TOKEN_PATTERNS)) {
     if (values[field] !== undefined) continue;
     for (const pattern of patterns) {
-      const match = pattern.exec(source);
+      const match = pattern.exec(scalarSource);
       if (!match) continue;
       const amount = toNumber(match[1]);
       if (amount == null) continue;
@@ -461,22 +559,14 @@ function extractNaturalLanguageValues(source, warnings) {
     }
   }
 
-  if (!values.periodStart || !values.periodEnd) {
-    const period = extractPeriod(source, warnings);
-    if (period) {
-      values.periodStart = values.periodStart || period.start;
-      values.periodEnd = values.periodEnd || period.end;
-    }
-  }
-
   if (values.operatingHistoryDays === undefined) {
-    const match = /(?:经营历史|运营历史|营业历史|operating\s+history)\s*(?:约|为|:|：)?\s*(\d+)\s*(?:天|days?)/i.exec(source)
-      || /(\d+)\s*(?:天|days?)\s*(?:的)?\s*(?:经营历史|运营历史|operating\s+history)/i.exec(source);
+    const match = /(?:经营历史|运营历史|营业历史|经营|运营|operating\s+history)\s*(?:约|为|:|：)?\s*(\d+)\s*(?:天|days?)/i.exec(scalarSource)
+      || /(\d+)\s*(?:天|days?)\s*(?:的)?\s*(?:经营历史|运营历史|经营|运营|operating\s+history)/i.exec(scalarSource);
     if (match) values.operatingHistoryDays = Number(match[1]);
   }
   if (values.dataCoveragePct === undefined) {
-    const match = /(?:数据覆盖率|数据覆盖|data\s+coverage)\s*(?:约|为|:|：)?\s*(\d+(?:\.\d+)?)\s*[%％]?/i.exec(source)
-      || /(\d+(?:\.\d+)?)\s*[%％]\s*(?:的)?\s*(?:数据覆盖率|数据覆盖|data\s+coverage)/i.exec(source);
+    const match = /(?:数据覆盖率|数据覆盖|data\s+coverage)\s*(?:约|为|:|：)?\s*(\d+(?:\.\d+)?)\s*[%％]?/i.exec(scalarSource)
+      || /(\d+(?:\.\d+)?)\s*[%％]\s*(?:的)?\s*(?:数据覆盖率|数据覆盖|data\s+coverage)/i.exec(scalarSource);
     if (match) {
       const coverage = Number(match[1]);
       if (coverage >= 0 && coverage <= 100) values.dataCoveragePct = coverage;
@@ -484,9 +574,10 @@ function extractNaturalLanguageValues(source, warnings) {
     }
   }
 
+  const SERIES_LABELS = { R: "R|申报(?:活动)?序列", C: "C|可信(?:活动)?序列" };
   for (const field of ["R", "C"]) {
     if (values[field] !== undefined) continue;
-    const series = readSeries(source, field);
+    const series = readSeries(scalarSource, SERIES_LABELS[field]);
     if (series) values[field] = series;
   }
   if (values.R && values.C && values.R.length !== values.C.length) {

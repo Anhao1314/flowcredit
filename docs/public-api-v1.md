@@ -47,7 +47,7 @@ Public deployments must set `AUTH_ENABLED=true` and a strong `FLOWCREDIT_API_KEY
 
 The current store is in memory. Multi-instance production deployment requires shared storage.
 
-## Natural Language Endpoint (v0.2)
+## Natural Language Endpoint (v0.3)
 
 ```text
 POST /api/v1/chat
@@ -69,7 +69,7 @@ The endpoint is a deterministic adapter, not a model call:
 
 Unstated fields are never interpolated, estimated or filled in, and no model provider is contacted. Authoritative fields (`TAI`, `CCI`, `riskGrade`, `decisionStatus`, `readinessStatus`, `verdict`, limits) can only be produced by the runtime.
 
-### Supported fields (parser v0.2)
+### Supported fields (parser v0.3)
 
 | Field | Unit / format | Notes |
 | --- | --- | --- |
