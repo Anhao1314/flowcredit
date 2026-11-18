@@ -249,6 +249,13 @@ const html = `<!doctype html>
       return { tool: call.name || "tool", title: "工具调用失败", ok: false, metrics: [{ label: "错误", value: (call.error && call.error.code) || "FAILED" }], note: (call.error && call.error.message) || "" };
     }
     var r = call.result || {};
+    if (r.ok === false) {
+      return {
+        tool: call.name || "tool", title: "未取到数据", ok: false,
+        metrics: [{ label: "Code", value: r.code || "FAILED" }],
+        note: r.message || ""
+      };
+    }
     var title = call.name || "tool", metrics = [], note = "";
     if ((call.name === "assess_draft" || call.name === "assess_prompt") && (r.assessed === false)) {
       title = "评估未通过";
