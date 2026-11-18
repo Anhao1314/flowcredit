@@ -17,6 +17,10 @@ after(async () => {
 const { createFlowCreditServer } = await import("../src/server.js");
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
+const EXPECTED_DRAFT = {
+  taskType: "inference", gpuModel: "h100-equivalent", gpuHours: 4200, revenueUsd: 100000,
+  computeSpendUsd: 58000, repaymentRatePct: 96, overdue30Pct: 2, payingCustomers: 168, top5ConcentrationPct: 36
+};
 const OFFICIAL_CN = "请帮我评估一家 AI 推理服务商。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。";
 
 async function withServer(run, options = {}) {
@@ -107,6 +111,31 @@ test("agent stream emits done frames over SSE and closes cleanly", async () => {
     assert.equal(done.result.harnessStatus, "not-requested");
     assert.match(done.result.answer, /初步风险评估/);
     assert.deepEqual(done.result.toolCalls.map(call => call.name), ["extract_from_text", "assess_draft"]);
+  }, { env: NO_MODEL_ENV });
+});
+
+test("standalone chat page is served by the business agent", async () => {
+  await withServer(async base => {
+    const response = await fetch(`${base}/chat`);
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /Business Risk Intelligence/);
+    assert.doesNotMatch(html, /data-view="overview"/, "standalone chat must not embed dashboards");
+  }, { env: NO_MODEL_ENV });
+});
+
+test("finch direct routes mirror the console proxy semantics", async () => {
+  await withServer(async base => {
+    const assess = await fetch(`${base}/api/finch/assess`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ prompt: OFFICIAL_CN }) });
+    assert.equal(assess.status, 200);
+    const body = await assess.json();
+    assert.equal(body.data.status, "insufficient-evidence");
+    assert.deepEqual(body.data.parsedFields, Object.keys(EXPECTED_DRAFT));
+
+    const agent = await fetch(`${base}/api/finch/agent`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ prompt: OFFICIAL_CN, modelConsent: false }) });
+    assert.equal(agent.status, 200);
+    const agentBody = await agent.json();
+    assert.equal(agentBody.data.answer, body.data.answer, "deterministic answer identical on both entries");
   }, { env: NO_MODEL_ENV });
 });
 

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
@@ -31,9 +31,13 @@ import { createRiskAuditLogger } from "./audit-risk.js";
 
 const AGENT_ASK_PATH = "/api/v1/agent/ask";
 const AGENT_STREAM_PATH = "/api/v1/agent/ask/stream";
+const CHAT_PAGE_PATH = "/chat";
+const FINCH_ASSESS_PATH = "/api/finch/assess";
+const FINCH_AGENT_PATH = "/api/finch/agent";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
+const CHAT_HTML_PATH = process.env.FC_CHAT_HTML || join(ROOT, "..", "quant", "console", "chat.html");
 const RUNTIME_ROOT = resolve(process.env.FC_RUNTIME_ROOT || join(ROOT, "..", "..", "fc-agent", "runtime"));
 const BODY_LIMIT = 64 * 1024;
 const sessions = new SessionStore();
@@ -384,6 +388,46 @@ async function route(req, res, requestId, context = {}) {
   if (req.method === "GET" && url.pathname === "/fc/ai/v0.3/schema") {
     return sendJson(res, 200, INTAKE_SCHEMA_V03, requestId);
   }
+  if (req.method === "GET" && url.pathname === CHAT_PAGE_PATH) {
+    // 独立对话页（第一公民人面入口）：文件缺失 → 503 指引挂载/设置 FC_CHAT_HTML。
+    try {
+      const html = readFileSync(CHAT_HTML_PATH);
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" });
+      res.end(html);
+      return null; // 与静态服务一致：已自行写响应，不把 res 交给日志哈希
+    } catch {
+      return sendJson(res, 503, { ok: false, errorCode: "CHAT_PAGE_NOT_INSTALLED", error: "chat page not installed — mount quant/console/chat.html or set FC_CHAT_HTML" }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 });
+    }
+  }
+  if (req.method === "POST" && url.pathname === FINCH_ASSESS_PATH) {
+    // 浏览器同源直连（/chat 页用）：与 console 代理语义一致 = chatPipeline 确定性回答。
+    const body = await readJson(req);
+    const chatCheck = context.chatPipeline.validateChatRequest({
+      prompt: body.prompt,
+      ...(body.sessionId !== undefined ? { sessionId: body.sessionId } : {})
+    });
+    if (!chatCheck.valid) {
+      return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit chat input schema.", errorDetails: chatCheck.errors }, requestId, agentCanonical());
+    }
+    const result = await withTimeout(
+      context.chatPipeline.buildChatPayload({ prompt: chatCheck.prompt, ...(chatCheck.sessionId ? { sessionId: chatCheck.sessionId } : {}) }, requestId),
+      context.security.invocationTimeoutMs, "INVOCATION_TIMEOUT"
+    );
+    return sendJson(res, result.status, result.body, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03, maxBytes: FINCH_RESPONSE_MAX_BYTES, meta: responseMeta(result.body) });
+  }
+  if (req.method === "POST" && url.pathname === FINCH_AGENT_PATH) {
+    // 浏览器同源直连：agent 循环（modelConsent 门禁与降级语义同 /api/v1/agent/ask）。
+    const body = await readJson(req);
+    const parsed = validateAgentBody(body, context.chatPipeline);
+    if (!parsed.valid) {
+      return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit agent input schema.", errorDetails: parsed.errors }, requestId, agentCanonical());
+    }
+    const result = await withTimeout(
+      context.riskAgent.askRisk({ prompt: parsed.prompt, modelConsent: parsed.modelConsent, sessionId: parsed.sessionId }),
+      context.security.invocationTimeoutMs, "INVOCATION_TIMEOUT"
+    );
+    return sendJson(res, result.ok === false ? 400 : 200, result, requestId, agentCanonical());
+  }
   if (req.method === "POST" && url.pathname === PUBLIC_CHAT_PATH) {
     return serveChat(req, res, requestId, context);
   }
@@ -501,7 +545,8 @@ export function createFlowCreditServer(options = {}) {
       const contractMode = isFinchContractRequest(req);
       const publicMode = isPublicAssessRequest(req);
       const chatMode = isPublicChatRequest(req);
-      const agentMode = url.pathname === AGENT_ASK_PATH || url.pathname === AGENT_STREAM_PATH;
+      const agentMode = url.pathname === AGENT_ASK_PATH || url.pathname === AGENT_STREAM_PATH
+        || url.pathname === FINCH_AGENT_PATH;
       const canonicalOptions = { canonical: contractMode || publicMode || chatMode || agentMode, apiVersion: publicMode || chatMode || agentMode ? PUBLIC_API_VERSION : undefined, schemaVersion: contractMode || publicMode ? RULE_VERSION_V021 : chatMode || agentMode ? PRODUCT_VERSION_V03 : undefined };
       if (isProtectedApi(req.method, url.pathname)) {
         const rate = limiter.consume(clientKey(req, security));
@@ -527,7 +572,8 @@ export function createFlowCreditServer(options = {}) {
       const contractMode = isFinchContractRequest(req);
       const publicMode = isPublicAssessRequest(req);
       const chatMode = isPublicChatRequest(req);
-      const agentMode = catchUrl.pathname === AGENT_ASK_PATH || catchUrl.pathname === AGENT_STREAM_PATH;
+      const agentMode = catchUrl.pathname === AGENT_ASK_PATH || catchUrl.pathname === AGENT_STREAM_PATH
+        || catchUrl.pathname === FINCH_AGENT_PATH;
       status = error.code === "BODY_TOO_LARGE" ? 413
         : error.code === "IDEMPOTENCY_CONFLICT" ? 409
           : error.code === "HARNESS_BUSY" ? 429
