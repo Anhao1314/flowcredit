@@ -17,7 +17,9 @@ import { forwardMarketLabels } from "./labels.js";
 
 export const RESEARCH_PANEL_VERSION = "ai-compute-panel/v0.1.0";
 
-export const DEFAULT_RESEARCH_UNIVERSE = Object.freeze(["CRWV", "NBIS", "IREN", "APLD", "WULF", "CIFR", "CORZ"]);
+export const DEFAULT_RESEARCH_UNIVERSE = Object.freeze([
+  "CRWV", "NBIS", "IREN", "APLD", "WULF", "CIFR", "CORZ", "HUT", "CLSK", "MARA", "RIOT", "BTBT"
+]);
 
 export const PANEL_FACTORS = Object.freeze([
   "netDebtToRevenueX", "cashToDebtPct", "interestCoverageX",
@@ -139,7 +141,7 @@ export async function buildResearchPanel({ secEdgar, priceFeed = null, tickers =
   if (!secEdgar) throw new TypeError("secEdgar connector is required");
   const requested = [...new Set((Array.isArray(tickers) ? tickers : []).map(value => String(value || "").trim().toUpperCase()).filter(Boolean))];
   if (!requested.length) throw new TypeError("at least one ticker is required");
-  if (requested.length > 8) throw new TypeError("at most 8 tickers per panel");
+  if (requested.length > 14) throw new TypeError("at most 14 tickers per panel");
   const observations = [];
   const failures = [];
   const marketFailures = [];
@@ -246,7 +248,32 @@ function summarizeIc(factorName, icSeries) {
   };
 }
 
-export function computeFactorReport(panel, { labels = null } = {}) {
+/** 稳健统计：median/MAD，超出 3×scaled-MAD 视为离群并截尾；返回截尾后的均值/方差。 */
+function robustStats(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const deviations = values.map(value => Math.abs(value - median)).sort((a, b) => a - b);
+  const madMid = Math.floor(deviations.length / 2);
+  const mad = deviations.length % 2 ? deviations[madMid] : (deviations[madMid - 1] + deviations[madMid]) / 2;
+  const scale = 1.4826 * mad;
+  const clip = scale > 0 ? 3 * scale : Infinity;
+  const clipped = values.map(value => Math.min(Math.max(value, median - clip), median + clip));
+  const mean = clipped.reduce((sum, value) => sum + value, 0) / clipped.length;
+  const variance = clipped.length > 1 ? clipped.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (clipped.length - 1) : null;
+  return {
+    median: round3(median),
+    mad: round3(mad),
+    clipLow: finite(scale) ? round3(median - clip) : null,
+    clipHigh: finite(scale) ? round3(median + clip) : null,
+    clippedMean: round3(mean),
+    clippedStd: round3(finite(variance) ? Math.sqrt(variance) : null),
+    outliers: values.filter(value => Math.abs(value - median) > clip).length
+  };
+}
+
+export function computeFactorReport(panel, { labels = null, labelsSource = null } = {}) {
   const observations = Array.isArray(panel?.observations) ? panel.observations : [];
   const factors = PANEL_FACTORS.map(factor => {
     const values = observations.map(item => item[factor]).filter(finite);
@@ -258,7 +285,8 @@ export function computeFactorReport(panel, { labels = null } = {}) {
       mean: round3(mean),
       std: round3(finite(variance) ? Math.sqrt(variance) : null),
       min: values.length ? Math.min(...values) : null,
-      max: values.length ? Math.max(...values) : null
+      max: values.length ? Math.max(...values) : null,
+      robust: robustStats(values)
     };
   });
 
@@ -274,14 +302,13 @@ export function computeFactorReport(panel, { labels = null } = {}) {
   const explicit = labels && typeof labels === "object" && Object.keys(labels).length ? labels : null;
   const effectiveLabels = explicit || (marketCount ? marketLabels : null);
   const labelStatus = explicit ? "available" : marketCount ? "proxy-market" : "unavailable";
-
   if (!effectiveLabels) {
     return {
       version: RESEARCH_PANEL_VERSION,
       observations: observations.length,
       factors,
       labelStatus: "unavailable",
-      note: "No labels: coverage/descriptive stats only; IC and monotonicity are intentionally not reported. Descriptive stats are un-winsorized: sub-scale operators can produce extreme ratios (small revenue denominators)."
+      note: "No labels: coverage/descriptive stats only; IC and monotonicity are intentionally not reported. Raw mean/std are un-winsorized (sub-scale operators produce extreme ratios) — use the robust median/MAD block for comparisons."
     };
   }
 
@@ -305,7 +332,7 @@ export function computeFactorReport(panel, { labels = null } = {}) {
   const benchmark = summarizeIc("dd", icSeries);
   const distressed = observations.filter(item => item.labelDistressed === true).length;
   const labelMeta = explicit
-    ? { source: "explicit", count: Object.keys(explicit).length }
+    ? { source: labelsSource || "explicit", count: Object.keys(explicit).length }
     : { source: "proxy-market", modelVersion: observations.find(item => item.labelModelVersion)?.labelModelVersion ?? null,
         definition: "forward 90d return measured from the filed date; proxy, NOT a credit event", distressed: distressed };
 
@@ -323,7 +350,7 @@ export function computeFactorReport(panel, { labels = null } = {}) {
 }
 
 /** 进程内面板存储（TTL + 容量上限；不落盘）。 */
-export function createResearchService({ secEdgar, priceFeed = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
+export function createResearchService({ secEdgar, priceFeed = null, explicitLabels = null, labelsSource = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
   const store = new Map();
   let sequence = 0;
 
@@ -366,7 +393,11 @@ export function createResearchService({ secEdgar, priceFeed = null, now = () => 
     evict();
     const entry = store.get(String(panelId || ""));
     if (!entry) return { ok: false, code: "PANEL_NOT_FOUND", message: "panel not found or expired; build it again" };
-    const report = computeFactorReport(entry.panel, { labels: labels || null });
+    const effective = explicitLabels && typeof explicitLabels === "object" && Object.keys(explicitLabels).length
+      ? explicitLabels
+      : (labels || null);
+    const source = explicitLabels && Object.keys(explicitLabels).length ? (labelsSource || "explicit-file") : null;
+    const report = computeFactorReport(entry.panel, { ...(effective ? { labels: effective } : {}), ...(source ? { labelsSource: source } : {}) });
     return { ok: true, panelId, ...report };
   }
 

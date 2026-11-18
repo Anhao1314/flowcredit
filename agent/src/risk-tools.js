@@ -326,7 +326,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
       name: "build_research_panel",
       description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. When the market price feed is configured it also attaches market cap, Merton distance-to-default and forward 90d proxy labels (filed-aligned). Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
       parameters: {
-        tickers: { type: "string", required: false, description: "Comma-separated tickers (max 8); defaults to the built-in compute-operator universe" },
+        tickers: { type: "string", required: false, description: "Comma-separated tickers (max 14); defaults to the built-in compute-operator universe" },
         periods: { type: "integer", required: false, description: "Quarters per company, 4-12 (default 8)" }
       },
       async execute(args) {
@@ -336,7 +336,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
         if (args.tickers !== undefined) {
           if (typeof args.tickers !== "string") throw new TypeError("tickers must be a comma-separated string");
           tickers = args.tickers.split(/[,\s]+/).map(value => value.trim().toUpperCase()).filter(Boolean);
-          if (!tickers.length || tickers.length > 8) throw new TypeError("tickers must contain 1-8 symbols");
+          if (!tickers.length || tickers.length > 14) throw new TypeError("tickers must contain 1-14 symbols");
         }
         let periods;
         if (args.periods !== undefined) {

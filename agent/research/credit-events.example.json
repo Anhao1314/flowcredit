@@ -1,0 +1,5 @@
+{
+  "version": "credit-events/v0.1.0",
+  "description": "Explicit credit-event labels for the research panel. key = TICKER|periodEnd (must match a panel observation). label = numeric forward outcome; convention: -1 = distress/credit event within 4 quarters of the filed date, 0 = none. Fill ONLY from verifiable sources (rating actions, bond restructure, exchange filings, court records) with the source noted per event via the optional 'source' field; never guess or interpolate. Wire via env FC_RESEARCH_LABELS_FILE; an invalid file fails server startup.",
+  "events": []
+}

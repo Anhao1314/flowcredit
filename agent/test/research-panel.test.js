@@ -126,10 +126,40 @@ test("research tools are agent-callable and enforce the ticker cap", async () =>
   assert.equal(report.labelStatus, "unavailable");
 
   await assert.rejects(
-    () => registry.get("build_research_panel").execute({ tickers: "AAA,BBB,CCC,DDD,EEE,FFF,GGG,HHH,III" }),
-    /1-8 symbols/
+    () => registry.get("build_research_panel").execute({ tickers: "AAA,BBB,CCC,DDD,EEE,FFF,GGG,HHH,III,JJJ,KKK,LLL,MMM,NNN,OOO" }),
+    /1-14 symbols/
   );
   assert.equal(registry.get("factor_report").execute({ panelId: "rp-missing" }).code, "PANEL_NOT_FOUND");
+});
+
+test("robust stats clip outliers via median/MAD instead of letting them dominate", () => {
+  const report = computeFactorReport({
+    observations: [
+      { ticker: "AAA", periodEnd: "2026-03-31", grossMarginPct: 1 },
+      { ticker: "BBB", periodEnd: "2026-03-31", grossMarginPct: 2 },
+      { ticker: "CCC", periodEnd: "2026-03-31", grossMarginPct: 3 },
+      { ticker: "DDD", periodEnd: "2026-03-31", grossMarginPct: 4 },
+      { ticker: "EEE", periodEnd: "2026-03-31", grossMarginPct: 100 }
+    ]
+  });
+  const gross = report.factors.find(item => item.factor === "grossMarginPct");
+  assert.equal(gross.robust.median, 3);
+  assert.equal(gross.robust.outliers, 1);
+  assert.ok(gross.robust.clippedMean < gross.mean, "clipped mean must be less distorted than the raw mean");
+  assert.equal(report.labelStatus, "unavailable");
+});
+
+test("explicit labels from the service override proxy labels and are marked as file source", async () => {
+  const service = createResearchService({
+    secEdgar,
+    explicitLabels: { "AAA|2026-03-31": -1, "BBB|2026-03-31": 0, "CCC|2026-03-31": 0 },
+    labelsSource: "explicit-file",
+    now: () => Date.parse("2026-11-18T00:00:00Z")
+  });
+  const built = await service.buildPanel({ tickers: ["AAA", "BBB", "CCC"], periods: 4 });
+  const report = service.factorReport({ panelId: built.panelId });
+  assert.equal(report.labelStatus, "available");
+  assert.equal(report.labels.source, "explicit-file");
 });
 
 // ── 价格层 / Merton DD / 代理标签 ──

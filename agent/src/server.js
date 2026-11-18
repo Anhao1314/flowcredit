@@ -254,8 +254,7 @@ async function serveAgentAsk(req, res, requestId, context) {
   return sendJson(res, result.ok === false ? 400 : 200, result, requestId, agentCanonical());
 }
 
-async function serveAgentAskStream(req, res, requestId, context) {
-  const body = await readJson(req);
+async function serveAgentAskStream(req, res, requestId, context) {  const body = await readJson(req);
   const parsed = validateAgentBody(body, context.chatPipeline);
   if (!parsed.valid) {
     return sendJson(res, 400, { errorCode: "INVALID_INPUT", error: "Request does not match the FlowCredit agent input schema.", errorDetails: parsed.errors }, requestId, agentCanonical());
@@ -445,6 +444,22 @@ async function route(req, res, requestId, context = {}) {
   return sendJson(res, 404, { error: "not found" }, requestId);
 }
 
+/** 显式研究标签文件：{version, events:[{ticker, periodEnd, label}]}；缺失 → null，非法 → 抛错。 */
+function loadResearchLabelsFile(env) {
+  const path = env?.FC_RESEARCH_LABELS_FILE;
+  if (!path) return null;
+  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  if (!parsed || !Array.isArray(parsed.events)) throw new Error("FC_RESEARCH_LABELS_FILE must contain {version, events:[]}");
+  const labels = {};
+  for (const event of parsed.events) {
+    if (!event?.ticker || !event?.periodEnd || !Number.isFinite(Number(event.label))) {
+      throw new Error("research label events need ticker, periodEnd and a numeric label");
+    }
+    labels[`${String(event.ticker).toUpperCase()}|${event.periodEnd}`] = Number(event.label);
+  }
+  return Object.keys(labels).length ? labels : null;
+}
+
 export function createFlowCreditServer(options = {}) {
   const security = securityConfig(options.env || process.env);
   const limiter = new FixedWindowRateLimiter({ windowMs: security.rateLimitWindowMs, maxRequests: security.rateLimitMaxRequests, now: options.now || Date.now });
@@ -466,9 +481,13 @@ export function createFlowCreditServer(options = {}) {
     transport: options.priceTransport,
     ...(options.now ? { now: options.now } : {})
   });
+  // 显式标签文件（可选）：{version, events:[{ticker, periodEnd, label}]}；键 = TICKER|periodEnd。
+  // 文件缺失 → null（走市场代理标签）；存在但非法 → 启动即失败（fail-fast）。
+  const researchLabels = options.researchLabels ?? loadResearchLabelsFile(options.env || process.env);
   const research = options.researchService || createResearchService({
     secEdgar,
     priceFeed,
+    ...(researchLabels ? { explicitLabels: researchLabels, labelsSource: "explicit-file" } : {}),
     ...(options.now ? { now: options.now } : {})
   });
   const riskAgent = options.riskAssistant || createRiskAssistant({
