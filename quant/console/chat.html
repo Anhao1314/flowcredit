@@ -277,6 +277,16 @@ body.has-messages .quick-chips{display:none}
       title = "字段抽取";
       metrics = [{ label: "Parsed", value: r.matchedFields.length }];
       note = r.matchedFields.join(", ");
+    } else if (call.name === "build_scoring_model" && r.model) {
+      title = "评分模型草案";
+      var wf = r.model.walkForward || {};
+      metrics = [
+        { label: "因子", value: (r.model.factors || []).length },
+        { label: "λ 收缩", value: r.model.shrinkage ? r.model.shrinkage.lambda : "n/a" },
+        { label: "样本外 IC", value: wf.compositeIc != null ? wf.compositeIc : "n/a" },
+        { label: "DD 样本外", value: wf.ddIc != null ? wf.ddIc : "n/a" }
+      ];
+      note = "研究草案 · 未接入引擎 · 采纳需人工评审与版本升级";
     } else if (call.name === "build_research_panel" && r.panelId) {
       title = "研究面板";
       metrics = [

@@ -358,6 +358,26 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
       }
     },
     {
+      name: "build_scoring_model",
+      description: "Fit a RESEARCH-DRAFT scoring model from a built panel: per-period robust z-scores, shrinkage weights (direction from in-sample IC, magnitude shrunk toward equal weight), factor correlations and walk-forward holdout IC versus the Merton DD benchmark. Returns the frozen model JSON draft. It is NOT wired to the assessment engine — adoption requires human review and a version bump. Never present it as validated.",
+      parameters: {
+        panelId: { type: "string", required: true, description: "panelId returned by build_research_panel" },
+        holdoutPeriods: { type: "integer", required: false, description: "Quarters held out for walk-forward validation, 1-4 (default 2)" }
+      },
+      execute(args) {
+        assertArgs(args, ["panelId", "holdoutPeriods"]);
+        if (typeof args.panelId !== "string" || !args.panelId.trim()) throw new TypeError("panelId is required");
+        if (args.holdoutPeriods !== undefined && (!Number.isInteger(args.holdoutPeriods) || args.holdoutPeriods < 1 || args.holdoutPeriods > 4)) {
+          throw new TypeError("holdoutPeriods must be an integer within 1-4");
+        }
+        if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
+        return research.buildScoringModel({
+          panelId: args.panelId.trim(),
+          ...(args.holdoutPeriods !== undefined ? { holdoutPeriods: args.holdoutPeriods } : {})
+        });
+      }
+    },
+    {
       name: "preset_draft",
       description: "Return one of the synthetic example drafts (healthy | watch | sybil) so the user can try a complete assessment. These are fixtures, not real companies.",
       parameters: { key: { type: "string", required: true, enum: ["healthy", "watch", "sybil"] } },

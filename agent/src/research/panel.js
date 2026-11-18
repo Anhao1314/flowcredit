@@ -349,6 +349,212 @@ export function computeFactorReport(panel, { labels = null, labelsSource = null 
   };
 }
 
+/** 因子相关矩阵：池化 Spearman（样本成对数 <3 → null）。 */
+export function factorCorrelations(observations, factors = PANEL_FACTORS) {
+  const matrix = {};
+  for (const a of factors) {
+    matrix[a] = {};
+    for (const b of factors) {
+      if (a === b) { matrix[a][b] = 1; continue; }
+      const pairs = observations
+        .map(item => ({ x: item[a], y: item[b] }))
+        .filter(row => finite(row.x) && finite(row.y));
+      matrix[a][b] = pairs.length >= 3 ? spearman(pairs.map(row => row.x), pairs.map(row => row.y)) : null;
+    }
+  }
+  return matrix;
+}
+
+/** 截面稳健 z：median/MAD；MAD=0 时全 0（该期该因子无区分度）。 */
+function periodRobustZ(rows, factor) {
+  const values = rows.map(row => row[factor]).filter(finite);
+  if (values.length < 3) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const deviations = values.map(value => Math.abs(value - median)).sort((a, b) => a - b);
+  const madMid = Math.floor(deviations.length / 2);
+  const mad = deviations.length % 2 ? deviations[madMid] : (deviations[madMid - 1] + deviations[madMid]) / 2;
+  const scale = 1.4826 * mad;
+  if (!(scale > 0)) return values.map(() => 0);
+  return values.map(value => (value - median) / scale);
+}
+
+function meanIcFor(factors, observations, labelOf, periods) {
+  const icSeries = [];
+  for (const period of periods) {
+    const rows = observations.filter(item => item.periodEnd === period)
+      .map(item => ({ item, label: labelOf(item) }))
+      .filter(row => finite(row.label));
+    if (rows.length < 3) continue;
+    const ic = {};
+    for (const factor of factors) {
+      const usable = rows.filter(row => finite(row.item[factor]));
+      ic[factor] = usable.length >= 3 ? spearman(usable.map(row => row.item[factor]), usable.map(row => row.label)) : null;
+    }
+    icSeries.push({ period, observations: rows.length, ic });
+  }
+  return { icSeries, summary: factors.map(factor => summarizeIc(factor, icSeries)) };
+}
+
+/**
+ * 收缩合成权重：方向由样本内 meanIC 符号决定，幅度向等权收缩。
+ * λ = fitPeriods / (fitPeriods + K)——期数越少越靠近等权（小样本诚实性）。
+ */
+export function compositeWeights({ fitSummary, fitPeriods, factors = PANEL_FACTORS }) {
+  const usable = fitSummary.filter(item => factors.includes(item.factor) && item.meanIc !== null && item.periods > 0);
+  const count = usable.length;
+  if (!count) return { ok: false, reason: "no factor had a computable in-sample IC" };
+  const lambda = round3(fitPeriods / (fitPeriods + count));
+  const rawSum = usable.reduce((sum, item) => sum + Math.abs(item.meanIc), 0);
+  const weights = {};
+  for (const item of usable) {
+    const icWeight = rawSum > 0 ? Math.abs(item.meanIc) / rawSum : 1 / count;
+    weights[item.factor] = round3(lambda * icWeight + (1 - lambda) * (1 / count));
+  }
+  const total = Object.values(weights).reduce((sum, value) => sum + value, 0);
+  for (const key of Object.keys(weights)) weights[key] = round3(weights[key] / total);
+  return { ok: true, lambda, icPeriods: fitPeriods, factors: usable.map(item => ({ factor: item.factor, sign: item.meanIc >= 0 ? 1 : -1, meanIc: item.meanIc, tStat: item.tStat, weight: weights[item.factor] })), weights };
+}
+
+/** 用冻结的权重/符号对观测集合成打分（每期截面稳健 z；缺因子时按可用因子重归一）。 */
+function applyComposite(observations, spec) {
+  const byPeriod = new Map();
+  for (const item of observations) {
+    if (!byPeriod.has(item.periodEnd)) byPeriod.set(item.periodEnd, []);
+    byPeriod.get(item.periodEnd).push(item);
+  }
+  const out = [];
+  for (const rows of byPeriod.values()) {
+    const zByTicker = new Map();
+    for (const factorSpec of spec.factors) {
+      const name = factorSpec.factor;
+      const usable = rows.filter(row => finite(row[name]));
+      if (usable.length < 3) continue;
+      const z = periodRobustZ(rows, name);
+      if (!z) continue;
+      usable.forEach((row, index) => {
+        if (!zByTicker.has(row.ticker)) zByTicker.set(row.ticker, {});
+        zByTicker.get(row.ticker)[name] = z[index];
+      });
+    }
+    for (const row of rows) {
+      const zs = zByTicker.get(row.ticker) || {};
+      const usable = spec.factors.filter(factorSpec => finite(zs[factorSpec.factor]));
+      if (!usable.length) continue;
+      const totalW = usable.reduce((sum, factorSpec) => sum + factorSpec.weight, 0);
+      if (!(totalW > 0)) continue;
+      let score = 0;
+      for (const factorSpec of usable) score += (factorSpec.weight / totalW) * factorSpec.sign * zs[factorSpec.factor];
+      if (finite(score)) out.push({ ticker: row.ticker, periodEnd: row.periodEnd, composite: round3(score) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Walk-forward：样本内（除最后 holdoutPeriods 期）定权重 → 最后 holdoutPeriods 期
+ * 计算合成打分与 DD 的样本外 Rank IC。只报告，不做通过/失败判定。
+ */
+export function walkForwardComposite(panel, { labels = null, labelsSource = null, holdoutPeriods = 2 } = {}) {
+  const observations = Array.isArray(panel?.observations) ? panel.observations : [];
+  const report = computeFactorReport(panel, { labels, labelsSource });
+  if (report.labelStatus === "unavailable") {
+    return { ok: false, code: "LABELS_UNAVAILABLE", message: "no labels: walk-forward needs explicit or proxy-market labels" };
+  }
+  const labelOf = item => {
+    if (report.labelStatus === "available") return labels?.[`${item.ticker}|${item.periodEnd}`];
+    return item.labelForwardReturnPct;
+  };
+  const periods = [...new Set(observations.map(item => item.periodEnd))].sort();
+  const hold = Math.min(Math.max(1, holdoutPeriods), Math.max(1, periods.length - 1));
+  const fitPeriods = periods.slice(0, periods.length - hold);
+  const holdoutPeriodsList = periods.slice(periods.length - hold);
+  const fit = meanIcFor(PANEL_FACTORS, observations, labelOf, fitPeriods);
+  const spec = compositeWeights({ fitSummary: fit.summary, fitPeriods: fit.icSeries.length });
+  if (!spec.ok) {
+    return { ok: false, code: "NO_IC", message: spec.reason, fitPeriods: fit.icSeries.length };
+  }
+  const evaluate = periodList => {
+    const perPeriod = [];
+    for (const period of periodList) {
+      const rows = observations.filter(item => item.periodEnd === period).map(item => ({ item, label: labelOf(item) })).filter(row => finite(row.label));
+      if (rows.length < 3) continue;
+      const scores = applyComposite(rows.map(row => row.item), spec);
+      const byKey = new Map(scores.map(score => [`${score.ticker}|${score.periodEnd}`, score.composite]));
+      const usable = rows.filter(row => finite(byKey.get(`${row.item.ticker}|${row.item.periodEnd}`)));
+      if (usable.length < 3) continue;
+      const ddRows = rows.filter(row => finite(row.item.dd));
+      perPeriod.push({
+        period,
+        observations: usable.length,
+        ic: spearman(usable.map(row => byKey.get(`${row.item.ticker}|${row.item.periodEnd}`)), usable.map(row => row.label)),
+        ddIc: ddRows.length >= 3 ? spearman(ddRows.map(row => row.item.dd), ddRows.map(row => row.label)) : null
+      });
+    }
+    return perPeriod;
+  };
+  const holdout = evaluate(holdoutPeriodsList);
+  const mean = values => values.filter(finite).length ? round3(values.filter(finite).reduce((sum, value) => sum + value, 0) / values.filter(finite).length) : null;
+  return {
+    ok: true,
+    labelStatus: report.labelStatus,
+    fit: { periods: fitPeriodsListCount(fitPeriods), icPeriods: fit.icSeries.length, factors: spec.factors, lambda: spec.lambda, meanIcSummary: fit.summary },
+    holdout: {
+      periods: holdoutPeriodsList,
+      perPeriod: holdout,
+      compositeIc: mean(holdout.map(entry => entry.ic)),
+      ddIc: mean(holdout.map(entry => entry.ddIc))
+    },
+    note: "Walk-forward is exploratory: small cross-sections (3-8 issuers) and proxy labels mean the holdout IC is indicative, not validated."
+  };
+}
+
+function fitPeriodsListCount(list) { return list.length; }
+
+/** 评分模型草案（研究工件）：收缩权重 + walk-forward + 模型卡；不自动接入引擎。 */
+export function buildScoringModelDraft(panel, { labels = null, labelsSource = null, holdoutPeriods = 2 } = {}) {
+  const report = computeFactorReport(panel, { labels, labelsSource });
+  if (report.labelStatus === "unavailable") {
+    return { ok: false, code: "LABELS_UNAVAILABLE", message: "no labels: a scoring draft needs explicit or proxy-market labels" };
+  }
+  const walk = walkForwardComposite(panel, { labels, labelsSource, holdoutPeriods });
+  if (!walk.ok) return { ok: false, code: walk.code, message: walk.message };
+  const observations = Array.isArray(panel?.observations) ? panel.observations : [];
+  const companies = [...new Set(observations.map(item => item.ticker))];
+  const model = {
+    version: "scoring-model/v0.1.0-draft",
+    status: "research-draft",
+    panelVersion: panel.version,
+    generatedAt: panel.generatedAt ?? null,
+    sampleWindow: {
+      firstPeriod: [...new Set(observations.map(item => item.periodEnd))].sort()[0],
+      lastPeriod: [...new Set(observations.map(item => item.periodEnd))].sort().at(-1),
+      companies: companies.length,
+      observations: observations.length
+    },
+    labelStatus: report.labelStatus,
+    labels: report.labels,
+    factors: walk.fit.factors,
+    composite: "score = Σ w_k · sign_k · z_robust_k, z from per-period cross-section median/MAD; missing factors renormalize weights",
+    correlations: factorCorrelations(observations),
+    walkForward: { fitPeriods: walk.fit.periods, icFitPeriods: walk.fit.icPeriods, holdoutPeriods: walk.holdout.periods, compositeIc: walk.holdout.compositeIc, ddIc: walk.holdout.ddIc, perPeriod: walk.holdout.perPeriod },
+    shrinkage: {
+      lambda: walk.fit.lambda,
+      icFitPeriods: walk.fit.icPeriods,
+      fitPeriods: walk.fit.periods,
+      rule: "lambda = IC-usable fit periods / (IC-usable fit periods + K); magnitude shrinks toward equal weight"
+    },
+    benchmark: report.benchmark,
+    disclaimers: [
+      "Research draft ONLY: NOT wired to the assessment engine; adoption requires human review and a version bump.",
+      "Labels are market-implied proxies unless explicitly provided; NOT credit events.",
+      "Small cross-section (3-8 issuers per period); IC is exploratory and not deflated for multiple testing."
+    ]
+  };
+  return { ok: true, model };
+}
+
 /** 进程内面板存储（TTL + 容量上限；不落盘）。 */
 export function createResearchService({ secEdgar, priceFeed = null, explicitLabels = null, labelsSource = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
   const store = new Map();
@@ -401,5 +607,23 @@ export function createResearchService({ secEdgar, priceFeed = null, explicitLabe
     return { ok: true, panelId, ...report };
   }
 
-  return Object.freeze({ buildPanel, factorReport, version: RESEARCH_PANEL_VERSION });
+  function buildScoringModel({ panelId, holdoutPeriods } = {}) {
+    evict();
+    const entry = store.get(String(panelId || ""));
+    if (!entry) return { ok: false, code: "PANEL_NOT_FOUND", message: "panel not found or expired; build it again" };
+    const effective = explicitLabels && typeof explicitLabels === "object" && Object.keys(explicitLabels).length
+      ? { labels: explicitLabels, labelsSource: labelsSource || "explicit-file" }
+      : {};
+    const result = buildScoringModelDraft(entry.panel, {
+      ...effective,
+      ...(holdoutPeriods !== undefined ? { holdoutPeriods } : {})
+    });
+    if (!result.ok) return result;
+    sequence += 1;
+    const modelId = `sm-${createHash("sha256").update(JSON.stringify(result.model)).digest("hex").slice(0, 12)}`;
+    store.set(modelId, { model: result.model, expiresAt: now() + ttlMs });
+    return { ok: true, modelId, ...result };
+  }
+
+  return Object.freeze({ buildPanel, factorReport, buildScoringModel, version: RESEARCH_PANEL_VERSION });
 }

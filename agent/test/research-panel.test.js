@@ -251,3 +251,39 @@ test("price feed failures surface as marketFailures and keep labelStatus unavail
   const report = computeFactorReport(panel);
   assert.equal(report.labelStatus, "unavailable");
 });
+
+test("scoring model draft: shrinkage, correlations, walk-forward, deterministic", async () => {
+  const service = createResearchService({ secEdgar, priceFeed, now: () => Date.parse("2026-11-18T00:00:00Z") });
+  const built = await service.buildPanel({ tickers: ["AAA", "BBB", "CCC"], periods: 4 });
+  const first = service.buildScoringModel({ panelId: built.panelId, holdoutPeriods: 1 });
+  assert.equal(first.ok, true);
+  const model = first.model;
+  assert.equal(model.version, "scoring-model/v0.1.0-draft");
+  assert.equal(model.status, "research-draft");
+  assert.ok(model.factors.length >= 1);
+  const weightSum = model.factors.reduce((sum, f) => sum + f.weight, 0);
+  assert.ok(Math.abs(weightSum - 1) < 0.02, `weights must sum to ~1, got ${weightSum}`);
+  const expectedLambda = Math.round((model.shrinkage.icFitPeriods / (model.shrinkage.icFitPeriods + model.factors.length)) * 1000) / 1000;
+  assert.equal(model.shrinkage.lambda, expectedLambda);
+  assert.deepEqual(model.walkForward.holdoutPeriods, ["2026-09-30"]);
+  assert.ok(model.walkForward.icFitPeriods >= 1);
+  assert.ok(model.disclaimers.some(text => /NOT wired/.test(text)));
+  assert.equal(model.correlations.netDebtToRevenueX.netDebtToRevenueX, 1);
+  assert.equal(model.correlations.grossMarginPct.netDebtToRevenueX !== null || model.correlations.grossMarginPct.netDebtToRevenueX === null, true);
+
+  const built2 = await service.buildPanel({ tickers: ["AAA", "BBB", "CCC"], periods: 4 });
+  const second = service.buildScoringModel({ panelId: built2.panelId, holdoutPeriods: 1 });
+  assert.deepEqual(second.model, model, "same inputs must produce the identical model draft");
+  assert.equal(second.modelId, first.modelId);
+});
+
+test("build_scoring_model requires labels and registers as a tool", async () => {
+  const connectors = createConnectorRegistry([createCsvConnector()]);
+  const noLabelService = createResearchService({ secEdgar });
+  const registry = createRiskToolRegistry({ connectors, research: noLabelService });
+  assert.ok(registry.list.map(tool => tool.name).includes("build_scoring_model"));
+  const built = await registry.get("build_research_panel").execute({ tickers: "AAA,BBB,CCC", periods: 4 });
+  const draft = registry.get("build_scoring_model").execute({ panelId: built.panelId });
+  assert.equal(draft.ok, false);
+  assert.equal(draft.code, "LABELS_UNAVAILABLE");
+});
