@@ -516,10 +516,12 @@ const html = `<!doctype html>
     }).then(function() {
       if (!finalResult) throw new Error("流式响应未返回 done 事件");
       if (row.parentNode) row.parentNode.removeChild(row);
+      setBotMood("idle"); // 先释放 think（think 有优先级保护，直接切 happy 会被挡）
       setBotMood(finalResult && finalResult.harnessStatus === "ok" ? "happy" : "idle", 1600);
       renderAgentResult(finalResult, started);
     }).catch(function(error) {
       if (row.parentNode) row.parentNode.removeChild(row);
+      setBotMood("idle");
       setBotMood("alert", 1600);
       if (error && error.name === "AbortError") {
         var partial = text.textContent;
