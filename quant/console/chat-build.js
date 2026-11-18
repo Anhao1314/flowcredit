@@ -4,8 +4,10 @@
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 单文件静态页：无框架、无 CDN、无构建依赖；JS 全内联 ES5 风格。
  *   2. 页面只有对话区：无仪表盘、无导航、无 Paper、无历史侧栏。
- *   3. 后端端点 = console 同源代理（/api/finch/assess 与 /api/finch/agent），
- *      不直连业务 agent、不接触公网凭证。
+ *   3. 后端端点 = 业务 agent 同源（/chat 与 API 同在 8790）：确定性走
+ *      /api/finch/assess（一次性 JSON），agent 模式走 /api/v1/agent/ask/stream
+ *      （SSE：delta/tool/reset/done）；不接触公网凭证。
+ *      （2026-11-18 前端归一后修订：原先的 console 代理已随重复页删除。）
  *   4. 与 index.html 共用同一套 Kimi 设计令牌，但独立生成（byte-stable：无时钟）。
  * 输出：quant/console/chat.html
  */
@@ -71,6 +73,10 @@ header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:
 .quick-chip:hover{background:var(--card2)}
 .hint{font-size:11.5px;color:var(--muted);margin:10px auto 14px;max-width:820px;width:100%;text-align:center;padding:0 24px}
 .finch-reset{color:var(--accent);cursor:pointer;background:none;border:none;font-size:11.5px;padding:0;margin-left:8px}
+.live-meta{font-size:11px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-bottom:5px}
+.live-body{white-space:pre-wrap}
+.caret{display:inline-block;width:6px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:fc-blink 1s steps(2,start) infinite}
+@keyframes fc-blink{to{visibility:hidden}}
 body.has-messages .quick-chips{display:none}
 `;
 
@@ -130,6 +136,7 @@ const html = `<!doctype html>
   var messages = [];
   var sessionId = null;
   var busy = false;
+  var controller = null;
 
   function newSessionId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return "chat-" + crypto.randomUUID();
@@ -151,7 +158,11 @@ const html = `<!doctype html>
     } catch (e) {}
   }
   function scroll() { thread.scrollTop = thread.scrollHeight; }
-  function updateSend() { sendBtn.disabled = busy || !input.value.trim(); }
+  function updateSend() {
+    if (busy) { sendBtn.disabled = false; sendBtn.textContent = "■"; sendBtn.title = "停止"; return; }
+    sendBtn.textContent = "↑"; sendBtn.title = "发送";
+    sendBtn.disabled = !input.value.trim();
+  }
   function badge(text, cls) {
     var b = document.createElement("span");
     b.className = "badge" + (cls ? " " + cls : "");
@@ -329,20 +340,146 @@ const html = `<!doctype html>
     persist();
     renderMessage(m);
   }
+  function stopStream() {
+    if (!controller) return;
+    try { controller.abort(); } catch (e) {}
+  }
+  function finishTurn() {
+    busy = false;
+    controller = null;
+    updateSend();
+  }
+  function renderAgentResult(result, started) {
+    var answer = result && typeof result.answer === "string" ? result.answer : "";
+    if (!answer && result && result.code) answer = "ERROR " + result.code + (result.note ? "：" + result.note : "");
+    if (!answer) answer = "（无 answer 字段）";
+    var diag = agentDiag(result || {}, Date.now() - started);
+    var artifacts = ((result && result.toolCalls) || []).map(function(call) { return artifactFromCall(call); }).filter(Boolean);
+    var cites = (result && result.citations) || [];
+    if (result && result.sessionId) sessionId = result.sessionId;
+    append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: result || null });
+  }
+  function streamAgentTurn(prompt, started) {
+    var payload = { prompt: prompt, modelConsent: true };
+    if (sessionId) payload.sessionId = sessionId;
+    var live = document.createElement("div");
+    live.className = "msg assistant";
+    var meta = document.createElement("div");
+    meta.className = "live-meta";
+    meta.textContent = "正在连接模型…";
+    var body = document.createElement("div");
+    body.className = "live-body";
+    var text = document.createElement("span");
+    text.className = "live-text";
+    var caret = document.createElement("span");
+    caret.className = "caret";
+    body.appendChild(text);
+    body.appendChild(caret);
+    live.appendChild(meta);
+    live.appendChild(body);
+    thread.appendChild(live);
+    thread.style.display = "flex";
+    empty.style.display = "none";
+    document.body.classList.add("has-messages");
+    scroll();
+    var finalResult = null;
+    controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    function handleEvent(event) {
+      if (!event || !event.type) return;
+      if (event.type === "delta") {
+        if (typeof event.text === "string" && event.text) {
+          text.textContent += event.text;
+          meta.textContent = "正在生成…";
+          scroll();
+        }
+      } else if (event.type === "reset") {
+        text.textContent = "";
+        meta.textContent = "工具结果已返回，正在组织回答…";
+      } else if (event.type === "tool") {
+        var names = (event.calls || []).map(function(call) { return (call.name || "tool") + (call.ok === false ? " ✗" : " ✓"); }).join(" · ");
+        meta.textContent = "步骤 " + (event.step || "?") + " · " + (names || "工具");
+        scroll();
+      } else if (event.type === "done") {
+        finalResult = event.result || null;
+      }
+    }
+    fetch("/api/v1/agent/ask/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+      body: JSON.stringify(payload),
+      signal: controller ? controller.signal : undefined
+    }).then(function(response) {
+      if (!response.ok) {
+        return response.text().then(function(raw) {
+          var body = null;
+          try { body = JSON.parse(raw); } catch (e) {}
+          var code = (body && (body.code || body.errorCode)) || ("HTTP " + response.status);
+          var message = body && (body.error || body.message);
+          if (message && typeof message !== "string") message = message.message || JSON.stringify(message);
+          throw new Error(code + ": " + (message || raw.slice(0, 200)));
+        });
+      }
+      if (!response.body || typeof response.body.getReader !== "function") {
+        return response.json().then(function(envelope) {
+          var data = envelope && envelope.data ? envelope.data : envelope;
+          if (!data || data.answer === undefined) throw new Error("流式响应不可读（浏览器不支持 ReadableStream）");
+          finalResult = data;
+        });
+      }
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = "";
+      function drain() {
+        var frames = buffer.split("\\n\\n");
+        buffer = frames.pop();
+        frames.forEach(function(frame) {
+          var data = "";
+          frame.split("\\n").forEach(function(line) {
+            if (line.indexOf("data:") === 0) data += line.slice(5).trim();
+          });
+          if (!data) return;
+          try { handleEvent(JSON.parse(data)); } catch (e) {}
+        });
+      }
+      function pump() {
+        return reader.read().then(function(chunk) {
+          if (chunk.done) {
+            if (buffer.trim()) { buffer += "\\n\\n"; drain(); }
+            return;
+          }
+          buffer += decoder.decode(chunk.value, { stream: true });
+          drain();
+          return pump();
+        });
+      }
+      return pump();
+    }).then(function() {
+      if (!finalResult) throw new Error("流式响应未返回 done 事件");
+      if (live.parentNode) live.parentNode.removeChild(live);
+      renderAgentResult(finalResult, started);
+    }).catch(function(error) {
+      if (live.parentNode) live.parentNode.removeChild(live);
+      if (error && error.name === "AbortError") {
+        var partial = text.textContent;
+        append({ role: "assistant", text: (partial ? partial + "\\n\\n" : "") + "（已停止）", diag: [["stopped", "badge-warn"]] });
+        return;
+      }
+      append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)) });
+    }).finally(finishTurn);
+  }
   function send() {
     var prompt = input.value.trim();
     if (!prompt || busy) return;
     append({ role: "user", text: prompt });
     input.value = "";
-    updateSend();
     busy = true;
-    sendBtn.disabled = true;
+    updateSend();
     var started = Date.now();
     var agentMode = consent.checked;
+    if (agentMode) { streamAgentTurn(prompt, started); return; }
     var payload = { prompt: prompt };
     if (sessionId) payload.sessionId = sessionId;
-    if (agentMode) payload.modelConsent = true;
-    fetch(agentMode ? "/api/finch/agent" : "/api/finch/assess", {
+    fetch("/api/finch/assess", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -352,19 +489,11 @@ const html = `<!doctype html>
       var body = null;
       try { body = JSON.parse(result.text); } catch (e) {}
       var data = body && body.data ? body.data : null;
-      var agent = agentMode && data && data.answer !== undefined ? data : null;
-      var answer, diag, artifacts = null, cites = null;
-      if (!agent && body && (body.code || body.error) && result.status !== 200) {
+      var answer, diag;
+      if (body && (body.code || body.error) && result.status !== 200) {
         var code = body.code || (body.error && body.error.code) || "UNKNOWN";
         var message = body.error && typeof body.error === "string" ? body.error : (body.error && body.error.message) || (body.error || "");
         answer = "ERROR " + code + ": " + message;
-      }
-      if (agent) {
-        answer = agent.answer || (body.error ? "ERROR " + (body.error.code || "UNKNOWN") + ": " + (body.error.message || "") : "（无 answer 字段，HTTP " + result.status + "）");
-        diag = agentDiag(agent, Date.now() - started);
-        artifacts = (agent.toolCalls || []).map(function(call) { return artifactFromCall(call); }).filter(Boolean);
-        cites = agent.citations || [];
-        if (agent.sessionId) sessionId = agent.sessionId;
       } else {
         data = data || (body && body.data === undefined ? body : null);
         answer = data && (data.answer || data.message)
@@ -373,13 +502,10 @@ const html = `<!doctype html>
         diag = data ? diagnostic(data, Date.now() - started) : [["HTTP " + result.status, "badge-bad"]];
         if (data && data.sessionId) sessionId = data.sessionId;
       }
-      append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: body });
+      append({ role: "assistant", text: answer, diag: diag });
     }).catch(function(error) {
       append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)) });
-    }).finally(function() {
-      busy = false;
-      updateSend();
-    });
+    }).finally(finishTurn);
   }
 
   if (messages.length) {
@@ -416,7 +542,9 @@ const html = `<!doctype html>
     consentLabel.textContent = label;
     modeLabel.textContent = label;
   });
-  sendBtn.addEventListener("click", send);
+  sendBtn.addEventListener("click", function() {
+    if (busy) stopStream(); else send();
+  });
   reset.addEventListener("click", function() {
     messages = [];
     sessionId = newSessionId();

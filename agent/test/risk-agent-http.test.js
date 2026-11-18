@@ -121,6 +121,11 @@ test("standalone chat page is served by the business agent", async () => {
     const html = await response.text();
     assert.match(html, /Business Risk Intelligence/);
     assert.doesNotMatch(html, /data-view="overview"/, "standalone chat must not embed dashboards");
+    assert.match(html, /\/api\/v1\/agent\/ask\/stream/, "agent mode consumes the same-origin SSE endpoint");
+    assert.match(html, /text\/event-stream/);
+    assert.match(html, /event\.type === "delta"/, "stream deltas append to the live bubble");
+    assert.doesNotMatch(html, /\/api\/finch\/agent/, "agent mode no longer uses the unary finch route");
+    assert.match(html, /\/api\/finch\/assess/, "deterministic mode stays on the unary assess route");
   }, { env: NO_MODEL_ENV });
 });
 
