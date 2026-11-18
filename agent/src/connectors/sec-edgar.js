@@ -75,7 +75,7 @@ function sha256(text) {
 /**
  * 输入：{ transport?, userAgent?, timeoutMs?, maxBytes?, now? }
  *   transport(url, options) → Response-like { ok, status, text() }；默认 globalThis.fetch。
- * 输出：{ lookupPublicCompany({ query }), version }
+ * 输出：{ lookupPublicCompany({ query, periods? }), version }
  */
 export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_000, maxBytes = SEC_MAX_BYTES, now = () => Date.now() } = {}) {
   const doFetch = transport || (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
@@ -129,7 +129,7 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
     return { cik: Number(only.cik_str), ticker: String(only.ticker), name: String(only.title || only.ticker) };
   }
 
-  function latestFacts(conceptEntry, factsUnit) {
+  function latestFacts(conceptEntry, factsUnit, periods) {
     const rows = factsUnit
       .filter(row => {
         if (!FAILING_FORMS.has(String(row.form)) || typeof row.val !== "number" || !row.end) return false;
@@ -148,12 +148,13 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
       if (seen.has(row.end)) continue;
       seen.add(row.end);
       out.push(row);
-      if (out.length >= 4) break;
+      if (out.length >= periods) break;
     }
     return out;
   }
 
-  async function lookupPublicCompany({ query } = {}) {
+  async function lookupPublicCompany({ query, periods = 4 } = {}) {
+    const wantPeriods = Number.isInteger(periods) ? Math.max(1, Math.min(12, periods)) : 4;
     const company = await resolveCompany(query);
     const tickersRaw = await fetchText(SEC_TICKERS_URL); // 命中缓存；仅用于来源哈希
     const factsUrl = SEC_FACTS_URL(company.cik);
@@ -171,7 +172,7 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
         if (Array.isArray(unit) && unit.length) { chosen = { name, unit }; break; }
       }
       if (!chosen) { missing.push(mapping.label); continue; }
-      const rows = latestFacts(mapping, chosen.unit);
+      const rows = latestFacts(mapping, chosen.unit, wantPeriods);
       if (!rows.length) { missing.push(mapping.label); continue; }
       for (const row of rows) {
         facts.push({

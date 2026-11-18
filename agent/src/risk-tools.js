@@ -119,7 +119,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, research = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -320,6 +320,41 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, nowMs = ()
             ...(Array.isArray(error.candidates) ? { candidates: error.candidates } : {})
           };
         }
+      }
+    },
+    {
+      name: "build_research_panel",
+      description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
+      parameters: {
+        tickers: { type: "string", required: false, description: "Comma-separated tickers (max 8); defaults to the built-in compute-operator universe" },
+        periods: { type: "integer", required: false, description: "Quarters per company, 4-12 (default 8)" }
+      },
+      async execute(args) {
+        assertArgs(args, ["tickers", "periods"]);
+        if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
+        let tickers;
+        if (args.tickers !== undefined) {
+          if (typeof args.tickers !== "string") throw new TypeError("tickers must be a comma-separated string");
+          tickers = args.tickers.split(/[,\s]+/).map(value => value.trim().toUpperCase()).filter(Boolean);
+          if (!tickers.length || tickers.length > 8) throw new TypeError("tickers must contain 1-8 symbols");
+        }
+        let periods;
+        if (args.periods !== undefined) {
+          if (!Number.isInteger(args.periods) || args.periods < 4 || args.periods > 12) throw new TypeError("periods must be an integer within 4-12");
+          periods = args.periods;
+        }
+        return await research.buildPanel({ ...(tickers ? { tickers } : {}), ...(periods ? { periods } : {}) });
+      }
+    },
+    {
+      name: "factor_report",
+      description: "Summarize a research panel: factor coverage and descriptive statistics, and — only when credit-event labels exist — per-period Rank IC, ICIR, t-stat and monotonicity. Labels are not yet wired, so the default response reports labelStatus=unavailable and must not be presented as validated alpha.",
+      parameters: { panelId: { type: "string", required: true, description: "panelId returned by build_research_panel" } },
+      execute(args) {
+        assertArgs(args, ["panelId"]);
+        if (typeof args.panelId !== "string" || !args.panelId.trim()) throw new TypeError("panelId is required");
+        if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
+        return research.factorReport({ panelId: args.panelId.trim() });
       }
     },
     {

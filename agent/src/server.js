@@ -26,6 +26,7 @@ import { createAssessmentService, withTimeout } from "./assessment-service.js";
 import { createChatPipeline } from "./chat-pipeline.js";
 import { createRiskToolRegistry } from "./risk-tools.js";
 import { createSecEdgarConnector } from "./connectors/sec-edgar.js";
+import { createResearchService } from "./research/panel.js";
 import { createRiskAssistant } from "./risk-assistant.js";
 import { createRiskClient } from "./risk-client.js";
 import { createRiskAuditLogger } from "./audit-risk.js";
@@ -452,9 +453,13 @@ export function createFlowCreditServer(options = {}) {
     userAgent: options.secUserAgent,
     ...(options.now ? { now: options.now } : {})
   });
+  const research = options.researchService || createResearchService({
+    secEdgar,
+    ...(options.now ? { now: options.now } : {})
+  });
   const riskAgent = options.riskAssistant || createRiskAssistant({
     client: options.riskAgentClient || createRiskClient({ env: options.env || process.env }),
-    registry: createRiskToolRegistry({ connectors, secEdgar }),
+    registry: createRiskToolRegistry({ connectors, secEdgar, research }),
     audit: options.riskAudit || createRiskAuditLogger(),
     deterministicChat: ({ prompt, sessionId, requestId }) =>
       chatPipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)

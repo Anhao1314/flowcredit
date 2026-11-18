@@ -298,6 +298,23 @@ const html = `<!doctype html>
       title = "字段抽取";
       metrics = [{ label: "Parsed", value: r.matchedFields.length }];
       note = r.matchedFields.join(", ");
+    } else if (call.name === "build_research_panel" && r.panelId) {
+      title = "研究面板";
+      metrics = [
+        { label: "公司", value: (r.resolved || []).length },
+        { label: "观测", value: (r.stats || {}).observations || 0 },
+        { label: "季度", value: (r.stats || {}).quarters || 0 },
+        { label: "失败", value: (r.failures || []).length }
+      ];
+      note = r.panelId + " · point-in-time（periodEnd/申报日）· 研究用，不改权威评分";
+    } else if (call.name === "factor_report" && r.factors) {
+      title = "因子报告";
+      metrics = [
+        { label: "因子", value: (r.factors || []).length },
+        { label: "观测", value: r.observations || 0 },
+        { label: "标签", value: r.labelStatus }
+      ];
+      note = r.labelStatus === "available" ? "IC 为探索性，未做多重检验校正" : "标签未接入：只报覆盖率与描述统计，不报 IC";
     } else if (call.name === "assess_public_company" && r.company) {
       title = "公开数据 · 资本结构";
       metrics = [
