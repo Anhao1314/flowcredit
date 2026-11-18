@@ -53,7 +53,7 @@ export function createModelGateway(options = {}) {
   const transport = options.transport || globalThis.fetch;
   if (typeof transport !== "function") throw new TypeError("transport must be a fetch-like function");
 
-  async function request({ messages, tools = [], stream = false, onDelta = null, signal = null } = {}) {
+  async function request({ messages, tools = [], stream = false, onDelta = null, onThinking = null, signal = null } = {}) {
     if (!apiKey) throw new ModelGatewayError("HARNESS_UNCONFIGURED", "DEEPSEEK_API_KEY is not configured");
     if (!Array.isArray(messages) || !messages.length) throw new TypeError("messages must be a non-empty array");
     if (signal?.aborted) throw new ModelGatewayError("MODEL_ABORTED", "model call aborted by caller");
@@ -90,7 +90,7 @@ export function createModelGateway(options = {}) {
         error.status = response.status;
         throw error;
       }
-      if (stream) return await readEventStream(response, onDelta);
+      if (stream) return await readEventStream(response, onDelta, onThinking);
 
       let payload;
       try {
@@ -125,12 +125,13 @@ export function createModelGateway(options = {}) {
   });
 }
 
-async function readEventStream(response, onDelta) {
+async function readEventStream(response, onDelta, onThinking) {
   if (!response.body) throw malformed("model stream response missing body");
   const decoder = new TextDecoder();
   const toolCallsAcc = [];
   let buffer = "";
   let content = "";
+  let reasoning = "";
   let finishReason = null;
   let usage = null;
 
@@ -142,6 +143,10 @@ async function readEventStream(response, onDelta) {
     if (parsed?.usage) usage = parsed.usage;
     const choice = parsed?.choices?.[0];
     const delta = choice?.delta;
+    if (delta && typeof delta.reasoning_content === "string" && delta.reasoning_content) {
+      reasoning += delta.reasoning_content;
+      if (onThinking) onThinking(delta.reasoning_content, reasoning);
+    }
     if (delta && typeof delta.content === "string" && delta.content) {
       content += delta.content;
       if (onDelta) onDelta(delta.content, content);
@@ -180,5 +185,5 @@ async function readEventStream(response, onDelta) {
     }));
   }
   if (!finishReason && !message.content && !message.tool_calls) throw malformed("model stream ended without content");
-  return { message, usage, finishReason };
+  return { message, usage, finishReason, reasoning };
 }

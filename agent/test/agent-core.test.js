@@ -49,6 +49,44 @@ test("core model gateway parses SSE deltas, tool arguments and terminal usage", 
   assert.equal(deltas.join(""), "你好");
 });
 
+test("core model gateway streams reasoning_content separately from content", async () => {
+  const encoder = new TextEncoder();
+  const chunks = [
+    `data: {"choices":[{"delta":{"reasoning_content":"先看杠杆"}}]}
+
+`,
+    `data: {"choices":[{"delta":{"reasoning_content":"再核对覆盖"}}]}
+
+`,
+    `data: {"choices":[{"delta":{"content":"结论"}}]}
+
+`,
+    `data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"total_tokens":9}}
+
+data: [DONE]
+
+`
+  ];
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    }
+  });
+  const gateway = createModelGateway({ apiKey: "test-key", transport: async () => new Response(stream) });
+  const thinking = [];
+  const deltas = [];
+  const result = await gateway.chatStream({
+    messages: [{ role: "user", content: "hello" }],
+    onDelta: text => deltas.push(text),
+    onThinking: text => thinking.push(text)
+  });
+  assert.equal(result.reasoning, "先看杠杆再核对覆盖");
+  assert.deepEqual(thinking, ["先看杠杆", "再核对覆盖"]);
+  assert.deepEqual(deltas, ["结论"]);
+  assert.equal(result.message.content, "结论");
+});
+
 test("core model gateway honors external cancellation before transport", async () => {
   let touched = false;
   const gateway = createModelGateway({ apiKey: "test-key", transport: async () => { touched = true; throw new Error("must not run"); } });

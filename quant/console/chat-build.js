@@ -75,6 +75,9 @@ header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:
 .finch-reset{color:var(--accent);cursor:pointer;background:none;border:none;font-size:11.5px;padding:0;margin-left:8px}
 .live-meta{font-size:11px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-bottom:5px}
 .live-body{white-space:pre-wrap}
+.think{margin:0 0 7px;color:var(--muted)}
+.think summary{cursor:pointer;user-select:none;font-size:10.5px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.think pre{white-space:pre-wrap;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:10.5px;line-height:1.55;max-height:200px;overflow:auto;margin:6px 0 0;color:var(--muted)}
 .caret{display:inline-block;width:6px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:fc-blink 1s steps(2,start) infinite}
 @keyframes fc-blink{to{visibility:hidden}}
 /* Q 版助手（与 console 同一套生成器与状态机；每实例独立渐变 id，避免冲突） */
@@ -199,7 +202,7 @@ const html = `<!doctype html>
   function persist() {
     try {
       localStorage.setItem(STORE, JSON.stringify(messages.slice(-40).map(function(m) {
-        return { role: m.role, text: m.text, diag: m.diag || null, artifacts: m.artifacts || null, cites: m.cites || null };
+        return { role: m.role, text: m.text, diag: m.diag || null, artifacts: m.artifacts || null, cites: m.cites || null, thinking: m.thinking ? String(m.thinking).slice(0, 4000) : null };
       })));
       if (sessionId) localStorage.setItem(SESSION, sessionId); else localStorage.removeItem(SESSION);
     } catch (e) {}
@@ -410,7 +413,20 @@ const html = `<!doctype html>
   function renderMessage(m) {
     var div = document.createElement("div");
     div.className = "msg " + (m.role === "user" ? "user" : "assistant");
-    div.textContent = m.text;
+    if (m.thinking) {
+      var think = document.createElement("details");
+      think.className = "think";
+      var thinkSummary = document.createElement("summary");
+      thinkSummary.textContent = "思考链 · 模型注记（非权威）";
+      var thinkPre = document.createElement("pre");
+      thinkPre.textContent = m.thinking;
+      think.appendChild(thinkSummary);
+      think.appendChild(thinkPre);
+      div.appendChild(think);
+    }
+    var textSpan = document.createElement("span");
+    textSpan.textContent = m.text;
+    div.appendChild(textSpan);
     if (m.artifacts && m.artifacts.length) div.appendChild(renderArtifacts(m.artifacts));
     if (m.cites && m.cites.length) {
       var cites = document.createElement("div");
@@ -474,7 +490,7 @@ const html = `<!doctype html>
     var artifacts = ((result && result.toolCalls) || []).map(function(call) { return artifactFromCall(call); }).filter(Boolean);
     var cites = (result && result.citations) || [];
     if (result && result.sessionId) sessionId = result.sessionId;
-    append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: result || null });
+    append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: result || null, thinking: (result && result.reasoning) || null });
   }
   function streamAgentTurn(prompt, started) {
     var payload = { prompt: prompt, modelConsent: true };
@@ -484,6 +500,14 @@ const html = `<!doctype html>
     var meta = document.createElement("div");
     meta.className = "live-meta";
     meta.textContent = "正在连接模型…";
+    var think = document.createElement("details");
+    think.className = "think";
+    think.open = false;
+    var thinkSummary = document.createElement("summary");
+    thinkSummary.textContent = "思考链";
+    var thinkText = document.createElement("pre");
+    think.appendChild(thinkSummary);
+    think.appendChild(thinkText);
     var body = document.createElement("div");
     body.className = "live-body";
     var text = document.createElement("span");
@@ -493,6 +517,7 @@ const html = `<!doctype html>
     body.appendChild(text);
     body.appendChild(caret);
     live.appendChild(meta);
+    live.appendChild(think);
     live.appendChild(body);
     var row = document.createElement("div");
     row.className = "msg-row";
@@ -505,11 +530,20 @@ const html = `<!doctype html>
     scroll();
     setBotMood("think");
     var finalResult = null;
+    var thinkCollapsed = false;
     controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     function handleEvent(event) {
       if (!event || !event.type) return;
-      if (event.type === "delta") {
+      if (event.type === "thinking") {
         if (typeof event.text === "string" && event.text) {
+          thinkText.textContent += (thinkText.textContent ? "\\n" : "") + event.text;
+          think.open = true;
+          meta.textContent = "思考中…";
+          scroll();
+        }
+      } else if (event.type === "delta") {
+        if (typeof event.text === "string" && event.text) {
+          if (!thinkCollapsed) { think.open = false; thinkCollapsed = true; }
           text.textContent += event.text;
           meta.textContent = "正在生成…";
           scroll();

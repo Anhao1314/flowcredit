@@ -314,7 +314,15 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const run = beginRun("ask-stream", startedAt);
     const requestId = `risk-${startedAt}-${runSequence}`;
     const emit = event => { try { onEvent(event); } catch { /* 观察者异常不污染主流程 */ } };
+    // 思考链：确定性路由说明 + 模型 reasoning_content（如有）。全部是注记层，非权威。
+    let reasoning = "";
+    const think = text => {
+      if (!text) return;
+      reasoning += (reasoning ? "\n" : "") + text;
+      emit({ type: "thinking", text });
+    };
     const finish = result => {
+      if (reasoning) result.reasoning = reasoning;
       const finishedAt = auditLogger.nowMs();
       auditLogger.write({
         run: completeRun(run, result, finishedAt),
@@ -329,10 +337,12 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     };
 
     if (typeof prompt !== "string" || !prompt.trim() || prompt.length > PROMPT_MAX_CHARS) {
+      think("[route] prompt 无效 → 直接拒绝（INVALID_PROMPT），不调用模型与工具");
       return finish({ ok: false, code: "INVALID_PROMPT", harnessStatus: "not-requested", answer: "", toolCalls: [], steps: 0, citations: [], usage: null, sessionId, agentVersion: AGENT_VERSION, model: client.model });
     }
 
     if (modelConsent !== true) {
+      think("[route] modelConsent=false → 确定性管线：parser v0.3 解析 → 引擎计算；任何文本都不会发送给模型");
       const result = await deterministicResult({
         prompt, sessionId, requestId, harnessStatus: "not-requested",
         note: "未获得 modelConsent=true：不发送任何文本到模型；以上为确定性对话管线回答，工具轨迹仅供产物卡展示。"
@@ -341,6 +351,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     }
 
     if (!client.configured()) {
+      think("[route] 已同意但未配置 DEEPSEEK_API_KEY → 降级为确定性管线；模型编排不可用，结果仍由工具产出");
       const result = await deterministicResult({
         prompt, sessionId, requestId, harnessStatus: "unconfigured", code: "HARNESS_UNCONFIGURED",
         note: "未配置 DEEPSEEK_API_KEY：以上为确定性对话管线回答；模型编排需配置密钥。"
@@ -348,6 +359,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
       return finish(result);
     }
 
+    think("[route] modelConsent=true → agent 循环：4 步工具轮预算，工具输出权威，模型只做编排与叙述；思考链=模型 reasoning_content（如有）+ 确定性路由说明");
     if (typeof client.chatStream !== "function") {
       // 无流式能力的 client：退化为一次性 askRisk（自身写审计），此处不再重复写。
       const result = await askRisk({ prompt, modelConsent: true, sessionId });
@@ -374,7 +386,8 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
         try {
           const response = await client.chatStream({
             messages, tools: registry.schemas, signal,
-            onDelta: text => { emittedDelta = true; emit({ type: "delta", text }); }
+            onDelta: text => { emittedDelta = true; emit({ type: "delta", text }); },
+            onThinking: text => think(text)
           });
           message = response.message;
           finishReason = response.finishReason ?? null;
@@ -391,6 +404,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
         if (lastError?.code === "MODEL_ABORTED") {
           return finish({ ok: false, harnessStatus: "aborted", code: "MODEL_ABORTED", answer: "", toolCalls, steps, citations: [], usage: totalUsage, sessionId, agentVersion: AGENT_VERSION, model: client.model, note: "已停止生成；本轮不进入会话记忆。" });
         }
+        think(`[route] 模型不可用（${lastError?.code || "MODEL_ERROR"}）→ 降级为确定性管线：工具结果直接编排为回答`);
         const status = lastError?.code === "HARNESS_UNCONFIGURED" ? "unconfigured" : "unavailable";
         const result = await deterministicResult({
           prompt, sessionId, requestId, harnessStatus: status, code: lastError?.code || "MODEL_ERROR",
@@ -437,6 +451,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
 
       const { answer, truncated } = finalAnswer(message, finishReason);
       if (!answer.trim()) {
+        think("[route] 模型返回为空 → 降级为确定性管线回答");
         const result = await deterministicResult({
           prompt, sessionId, requestId, harnessStatus: "unavailable", code: "MODEL_EMPTY_ANSWER",
           note: "回答为确定性对话管线答案；模型返回为空时的降级路径。"
@@ -450,11 +465,13 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
         citations: citationsFrom(toolCalls),
         usage: totalUsage, sessionId,
         agentVersion: AGENT_VERSION, model: client.model,
+        ...(reasoning ? { reasoning } : {}),
         authority: "deterministic-tools",
         note: "回答为模型对权威工具输出的编排与解释（注记层，非权威）；与工具输出冲突的数字一律以工具为准。"
       });
     }
 
+    think("[route] 超出 4 步工具轮预算 → 降级为确定性管线回答（不弃用已产生的工具结果）");
     const result = await deterministicResult({
       prompt, sessionId, requestId, harnessStatus: "max-steps-reached", code: "MAX_STEPS_EXCEEDED",
       note: "回答为确定性对话管线答案；模型超出工具轮次预算时的降级路径。"

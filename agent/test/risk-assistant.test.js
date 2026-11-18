@@ -41,12 +41,13 @@ function createScriptedClient(scenarios, { configured = true } = {}) {
       if (step.throw) throw step.throw;
       return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }, finishReason: step.finishReason ?? null };
     },
-    chatStream: async ({ messages, tools, onDelta }) => {
+    chatStream: async ({ messages, tools, onDelta, onThinking }) => {
       calls.push({ messages: messages.map(m => ({ role: m.role, content: m.content ?? null })), toolCount: tools.length });
       const step = nextTurn();
+      if (step.thinking && onThinking) onThinking(step.thinking);
       if (step.delta) onDelta(step.delta);
       if (step.throw) throw step.throw;
-      return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }, finishReason: step.finishReason ?? null };
+      return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }, finishReason: step.finishReason ?? null, reasoning: step.thinking ?? "" };
     },
     model: "scripted-model",
     baseUrl: "scripted://local",
@@ -256,7 +257,8 @@ test("stream path emits delta/tool/done with identical authority semantics", asy
   const { assistant } = buildAssistant(scenarios);
   const events = [];
   const result = await assistant.askRiskStream({ prompt: "评估 healthy", modelConsent: true, sessionId: "sess-stream-1", onEvent: event => events.push(event) });
-  assert.deepEqual(events.map(event => event.type), ["delta", "reset", "tool", "done"]);
+  assert.deepEqual(events.map(event => event.type), ["thinking", "delta", "reset", "tool", "done"]);
+  assert.equal(events[0].text.startsWith("[route] modelConsent=true"), true, "the deterministic route is disclosed first");
   assert.equal(events.at(-1).result.ok, true);
   assert.equal(result.toolCalls[0].result.authoritative.CCI, 929);
 });
@@ -297,6 +299,19 @@ test("finish_reason=length marks the answer as truncated with a visible note", a
   assert.equal(result.truncated, true);
   assert.match(result.answer, /已截断/);
   assert.match(result.answer, /半句结论/);
+});
+
+test("reasoning_content streams as thinking events and attaches to the result", async () => {
+  const { assistant } = buildAssistant([
+    { thinking: "先看杠杆与覆盖，再看集中度", message: { role: "assistant", content: "结论：观察。" }, finishReason: "stop" }
+  ]);
+  const events = [];
+  const result = await assistant.askRiskStream({ prompt: OFFICIAL_CN, modelConsent: true, onEvent: e => events.push(e) });
+  assert.match(result.reasoning, /\[route\] modelConsent=true/);
+  assert.match(result.reasoning, /先看杠杆与覆盖，再看集中度/);
+  assert.ok(events.some(e => e.type === "thinking" && e.text === "先看杠杆与覆盖，再看集中度"));
+  assert.equal(events.filter(e => e.type === "done").length, 1);
+  assert.equal(events[0].type, "thinking", "thinking precedes the answer stream");
 });
 
 test("async lookup_public_company tool runs inside the loop and its facts reach the answer", async () => {
