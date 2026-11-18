@@ -1,4 +1,4 @@
-import { REQUIRED_DECISION_FIELDS_V021 } from "./rules-v021.js";
+import { CAPITAL_FIELD_KEYS, REQUIRED_DECISION_FIELDS_V021 } from "./rules-v021.js";
 
 export const PRODUCT_VERSION_V03 = "flowcredit.intake/v0.3.1";
 
@@ -15,10 +15,11 @@ const FLAT_ALLOWED = new Set([
   "revenueUsd", "computeSpendUsd", "monthlySeries", "repaymentRatePct", "overdue30Pct", "payingCustomers",
   "top5ConcentrationPct", "customerHHI", "relatedPartyRevenuePct", "monthlyRevenueUsd",
   "monthlyComputeSpendUsd", "operatingHistoryDays", "dataCoveragePct", "R", "C", "loopWashRatePct",
+  "totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd",
   "evidence", "integrityEvents", "currentExposure"
 ]);
 
-const GROUPS = new Set(["scope", "tokenActivity", "computeBusiness", "creditProfile", "historyCrossCheck"]);
+const GROUPS = new Set(["scope", "tokenActivity", "computeBusiness", "creditProfile", "capitalStructure", "historyCrossCheck"]);
 // Strict YYYY-MM (month 01-12) contract for monthlySeries rows. The Finch Direct API JSON
 // Schema cannot express regex (pattern keywords fail closed there), so this application-layer
 // validator retains the strict format check that the contract schema deliberately cannot.
@@ -56,6 +57,9 @@ export const INTAKE_SCHEMA_V03 = Object.freeze({
     top5ConcentrationPct: { type: "number", unit: "percent", min: 0, max: 100, required: true, help: "Revenue share attributable to the five largest customers." },
     customerHHI: { type: "number", min: 0, max: 10000, required: false, help: "Optional customer concentration Herfindahl-Hirschman Index." },
     relatedPartyRevenuePct: { type: "number", unit: "percent", min: 0, max: 100, required: false, help: "Optional share of revenue from related parties." },
+    totalDebtUsd: { type: "number", unit: "USD", min: 0, required: false, help: "Optional total debt (carrying amount) at period end; activates the capital-structure overlay when cash is also supplied." },
+    cashAndCashEquivalentsUsd: { type: "number", unit: "USD", min: 0, required: false, help: "Optional cash and equivalents at period end." },
+    interestExpenseUsd: { type: "number", unit: "USD", min: 0, required: false, help: "Optional interest expense for the same period; enables interest coverage in the capital-structure overlay." },
     monthlySeries: { type: "array", minItems: 6, required: true, help: "Continuous same-basis monthly Token, revenue and compute-cost rows." },
     operatingHistoryDays: { type: "integer", unit: "days", min: 0, required: true, help: "Operating history covered by available records." },
     dataCoveragePct: { type: "number", unit: "percent", min: 0, max: 100, required: true, help: "Share of the assessment window covered by supplied data." },
@@ -69,6 +73,7 @@ export const INTAKE_SCHEMA_V03 = Object.freeze({
     { id: "tokenActivity", label: "Token activity", fields: ["inputTokensM", "outputTokensM", "rawTokensM", "validRatePct", "tokenBucketsM"] },
     { id: "computeBusiness", label: "Compute and business", fields: ["gpuModel", "gpuHours", "revenueUsd", "computeSpendUsd"] },
     { id: "creditProfile", label: "Credit profile", fields: ["repaymentRatePct", "overdue30Pct", "payingCustomers", "top5ConcentrationPct", "customerHHI", "relatedPartyRevenuePct"] },
+    { id: "capitalStructure", label: "Capital structure (optional)", fields: ["totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd"] },
     { id: "historyCrossCheck", label: "History and cross-check", fields: ["monthlySeries", "operatingHistoryDays", "dataCoveragePct", "R", "C"] },
     { id: "evidence", label: "Evidence", fields: ["evidence", "integrityEvents"] }
   ]
@@ -98,7 +103,7 @@ export function flattenDraftV03(source) {
   const nested = [...GROUPS].some(key => draft[key] && typeof draft[key] === "object");
   const merged = nested ? {
     ...object(draft.scope), ...object(draft.tokenActivity), ...object(draft.computeBusiness),
-    ...object(draft.creditProfile), ...object(draft.historyCrossCheck),
+    ...object(draft.creditProfile), ...object(draft.capitalStructure), ...object(draft.historyCrossCheck),
     evidence: Array.isArray(draft.evidence) ? draft.evidence : undefined,
     integrityEvents: Array.isArray(draft.integrityEvents) ? draft.integrityEvents : undefined
   } : draft;
@@ -143,7 +148,7 @@ export function sanitizeExtractedDraftV03(value) {
   } else if (Array.isArray(input.evidence)) {
     input.evidence = input.evidence.filter(item => item && typeof item === "object" && !Array.isArray(item)).flatMap(item => {
       const fields = Array.isArray(item.fields) ? item.fields : item.field ? [item.field] : [];
-      return [...new Set(fields)].filter(field => REQUIRED_DECISION_FIELDS_V021.includes(field)).map(field => {
+      return [...new Set(fields)].filter(field => REQUIRED_DECISION_FIELDS_V021.includes(field) || CAPITAL_FIELD_KEYS.includes(field)).map(field => {
         const record = { ...item, field };
         delete record.fields;
         return record;
@@ -183,7 +188,7 @@ export function validateDraftV03(source) {
     if (!finite(draft[key]) || draft[key] < min || draft[key] > max) errors.push({ field: key, message: `Enter a number between ${min} and ${max}.` });
   };
   for (const key of ["validRatePct", "repaymentRatePct", "overdue30Pct", "top5ConcentrationPct", "relatedPartyRevenuePct", "dataCoveragePct", "loopWashRatePct"]) range(key, 0, 100);
-  for (const key of ["rawTokensM", "inputTokensM", "outputTokensM", "gpuHours", "revenueUsd", "computeSpendUsd", "payingCustomers", "customerHHI", "operatingHistoryDays", "currentExposure"]) range(key, 0, Number.MAX_SAFE_INTEGER);
+  for (const key of ["rawTokensM", "inputTokensM", "outputTokensM", "gpuHours", "revenueUsd", "computeSpendUsd", "payingCustomers", "customerHHI", "operatingHistoryDays", "currentExposure", "totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd"]) range(key, 0, Number.MAX_SAFE_INTEGER);
   for (const key of ["periodStart", "periodEnd", "assessmentAsOf"]) {
     if (draft[key] && Number.isNaN(Date.parse(draft[key]))) errors.push({ field: key, message: "Enter a valid ISO-8601 date." });
   }

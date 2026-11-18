@@ -30,6 +30,7 @@ export const NL_DRAFT_FIELDS = Object.freeze([
   "taskType", "gpuModel", "gpuHours", "revenueUsd", "computeSpendUsd",
   "repaymentRatePct", "overdue30Pct", "payingCustomers", "top5ConcentrationPct",
   "inputTokensM", "outputTokensM", "validRatePct",
+  "totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd",
   "periodStart", "periodEnd", "operatingHistoryDays", "dataCoveragePct",
   "monthlySeries", "R", "C"
 ]);
@@ -63,6 +64,16 @@ const MONEY_FIELDS = Object.freeze({
     { rank: 2, patterns: [labeled("总算力\\s*(?:支出|成本|花费|费用)|total\\s+compute\\s+(?:spend|cost)", MONEY_TAIL)] },
     { rank: 1, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:算力支出|算力成本|算力花费|算力费用|计算支出|compute\s+spend|compute\s+cost)`, "i")] },
     { rank: 1, patterns: [labeled("算力支出|算力成本|算力花费|算力费用|计算支出|compute\\s+spend|compute\\s+cost", MONEY_TAIL)] }
+  ],
+  // 资本结构（可选叠加层）：只在用户/申报明确给出时抽取，缺失不影响原评估。
+  totalDebtUsd: [
+    { rank: 2, patterns: [labeled("总债务|债务总额|有息负债|长期债务|total\\s+debt|gross\\s+debt", MONEY_TAIL)] }
+  ],
+  cashAndCashEquivalentsUsd: [
+    { rank: 2, patterns: [labeled("现金及现金等价物|现金及等价物|现金余额|账面现金|cash\\s+and\\s+(?:cash\\s+)?equivalents|cash\\s+balance", MONEY_TAIL)] }
+  ],
+  interestExpenseUsd: [
+    { rank: 2, patterns: [labeled("利息支出|利息费用|interest\\s+expense", MONEY_TAIL)] }
   ]
 });
 

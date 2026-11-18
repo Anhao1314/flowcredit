@@ -18,6 +18,12 @@ export const CREDIT_DIMENSION_WEIGHTS_V021 = Object.freeze({
   continuity: 0.10
 });
 
+// 资本结构叠加层 v0.1（可选）：只有同时提供债务与现金才参与。它不改变基础五维
+// 权重与分数，而是给出 CCI 上限（600 + 4 × solvency，solvency 100 → 不封顶）；
+// 未提供时结果与 v0.2.1 完全一致（指纹不变）。
+export const CAPITAL_STRUCTURE_VERSION = "flowcredit.capital_structure/v0.1.0";
+export const CAPITAL_FIELD_KEYS = Object.freeze(["totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd"]);
+
 export const REQUIRED_DECISION_FIELDS_V021 = Object.freeze([
   "periodStart", "periodEnd",
   "inputTokensM", "outputTokensM", "modelTier", "taskType", "normalizationProfileId",
@@ -62,7 +68,11 @@ export const KNOTS_V021 = Object.freeze({
   historyDays: [[30, 20], [90, 35], [180, 50], [365, 70], [730, 85], [1095, 95]],
   deviationAbs: [[0, 100], [5, 90], [10, 75], [20, 55], [35, 30], [50, 10], [100, 0]],
   volatility: [[0, 100], [5, 95], [10, 85], [20, 65], [35, 40], [50, 20], [75, 0]],
-  recencyDays: [[0, 100], [30, 100], [90, 80], [180, 60], [365, 30], [366, 0]]
+  recencyDays: [[0, 100], [30, 100], [90, 80], [180, 60], [365, 30], [366, 0]],
+  // 资本结构叠加层：净债务 / 年化收入（倍）；利息覆盖（倍）；现金 / 总债务（百分比）
+  netDebtToRevenue: [[-1, 100], [0, 100], [0.5, 95], [1, 85], [2, 65], [3, 45], [5, 20], [8, 0]],
+  interestCoverage: [[0, 0], [1, 15], [1.5, 35], [2, 55], [3, 75], [5, 92], [8, 100]],
+  cashToDebt: [[0, 0], [10, 25], [25, 50], [50, 75], [75, 90], [100, 100]]
 });
 
 export const NORMALIZATION_PROFILES_V021 = Object.freeze({

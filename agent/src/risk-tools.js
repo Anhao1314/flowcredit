@@ -25,7 +25,8 @@ import { createCoreToolRegistry } from "../core/tool-registry.js";
 const WHAT_IF_NUMERIC_FIELDS = Object.freeze([
   "inputTokensM", "outputTokensM", "validRatePct", "gpuHours", "revenueUsd", "computeSpendUsd",
   "repaymentRatePct", "overdue30Pct", "payingCustomers", "top5ConcentrationPct",
-  "operatingHistoryDays", "dataCoveragePct"
+  "operatingHistoryDays", "dataCoveragePct",
+  "totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd"
 ]);
 const PERCENT_FIELDS = new Set(["validRatePct", "repaymentRatePct", "overdue30Pct", "top5ConcentrationPct", "dataCoveragePct"]);
 
@@ -62,6 +63,9 @@ function assessDraftPure(draft, { connectors }) {
   payload.authoritative = {
     TAI: result.TAI ?? null, CCI: result.CCI ?? null, riskGrade: result.riskGrade ?? null,
     decisionStatus: result.decisionStatus ?? null, readinessStatus: validation.readinessStatus,
+    capitalStructure: result.capitalStructure
+      ? { score: result.capitalStructure.score, cciCap: result.capitalStructure.cciCap, cciBeforeCap: result.capitalStructure.cciBeforeCap, capApplied: result.capitalStructure.capApplied }
+      : null,
     inputFingerprint, assessmentFingerprint
   };
   return { ok: true, payload, validation, inputFingerprint, assessmentFingerprint };
@@ -122,7 +126,10 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, nowMs = ()
         const pick = payload => ({
           TAI: payload.TAI ?? null, CCI: payload.CCI ?? null, riskGrade: payload.riskGrade ?? null,
           decisionStatus: payload.decisionStatus ?? null, readinessStatus: payload.readinessStatus ?? null,
-          evidenceStrength: payload.evidenceStrength ?? null
+          evidenceStrength: payload.evidenceStrength ?? null,
+          capitalStructure: payload.capitalStructure
+            ? { score: payload.capitalStructure.score, cciCap: payload.capitalStructure.cciCap, cciBeforeCap: payload.capitalStructure.cciBeforeCap, capApplied: payload.capitalStructure.capApplied }
+            : null
         });
         const before = pick(baseline.payload);
         const result = pick(after.payload);

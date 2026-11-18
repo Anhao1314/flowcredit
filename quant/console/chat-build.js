@@ -267,6 +267,9 @@ const html = `<!doctype html>
         { label: "Grade", value: a.riskGrade },
         { label: "Decision", value: a.decisionStatus }
       ];
+      if (a.capitalStructure) {
+        metrics.push({ label: "Solvency", value: a.capitalStructure.score + (a.capitalStructure.capApplied ? " (cap " + a.capitalStructure.cciCap + ")" : "") });
+      }
       note = a.assessmentFingerprint || "";
     } else if (call.name === "what_if" && r.assessed) {
       title = "敏感性分析";

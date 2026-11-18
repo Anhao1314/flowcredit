@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
-  CREDIT_DIMENSION_KEYS_V021, CREDIT_DIMENSION_WEIGHTS_V021, HARD_EVENT_CODES_V021, KNOTS_V021,
+  CAPITAL_STRUCTURE_VERSION, CREDIT_DIMENSION_KEYS_V021, CREDIT_DIMENSION_WEIGHTS_V021,
+  HARD_EVENT_CODES_V021, KNOTS_V021,
   NORMALIZATION_PROFILES_V021, PEER_PROFILES_V021, REQUIRED_DECISION_FIELDS_V021, RULE_VERSION_V021,
   SOURCE_DOMAINS_V021, TOKEN_COMPONENT_KEYS_V021, TOKEN_COMPONENT_WEIGHTS_V021,
   VERIFICATION_SCORES_V021, interpolateV021
@@ -203,6 +204,47 @@ function deriveBusinessMetrics(data) {
   return { deviationPct: finite(deviationPct) ? Math.round(deviationPct) : null, volatilityPct: round1(returnsVolatility(data.C)) };
 }
 
+/**
+ * 资本结构叠加层（可选）：债务 + 现金同时存在且收入可年化时才计算。
+ * 组件：净债务/年化收入（50%，缺利息时 62.5%）、利息覆盖（30%，缺利息时省略）、
+ *      现金/总债务（20%，缺利息时 37.5%）。缺失时返回 null，主模型保持不变。
+ */
+function capitalStructureDimensions(data) {
+  if (!finite(data.totalDebtUsd) || !finite(data.cashAndCashEquivalentsUsd)) return null;
+  if (!finite(data.revenueUsd) || data.revenueUsd <= 0) return null;
+  const totalDebtUsd = data.totalDebtUsd;
+  const cashUsd = data.cashAndCashEquivalentsUsd;
+  const annualizedRevenueUsd = data.revenueUsd * 12;
+  const netDebtUsd = totalDebtUsd - cashUsd;
+  const netDebtToRevenueX = round3(netDebtUsd / annualizedRevenueUsd);
+  const cashToDebtPct = totalDebtUsd > 0 ? clamp((cashUsd / totalDebtUsd) * 100) : 100;
+  const contributionUsd = data.revenueUsd - data.computeSpendUsd;
+  const interestExpenseUsd = finite(data.interestExpenseUsd) && data.interestExpenseUsd > 0 ? data.interestExpenseUsd : null;
+  const interestCoverageX = interestExpenseUsd ? round3(contributionUsd / interestExpenseUsd) : null;
+
+  const components = {
+    netDebtToRevenue: round1(interpolateV021(netDebtToRevenueX, KNOTS_V021.netDebtToRevenue)),
+    liquidity: round1(interpolateV021(cashToDebtPct, KNOTS_V021.cashToDebt)),
+    interestCoverage: finite(interestCoverageX) ? round1(interpolateV021(interestCoverageX, KNOTS_V021.interestCoverage)) : null
+  };
+  const weights = interestCoverageX === null
+    ? { netDebtToRevenue: 0.625, liquidity: 0.375 }
+    : { netDebtToRevenue: 0.5, interestCoverage: 0.3, liquidity: 0.2 };
+  const score = round1(Object.entries(weights).reduce((sum, [key, weight]) => sum + components[key] * weight, 0));
+
+  return {
+    score,
+    cap: Math.round(600 + score * 4), // solvency 100 → 1000（不封顶），50 → 800，25 → 700
+    details: {
+      version: CAPITAL_STRUCTURE_VERSION,
+      totalDebtUsd, cashAndCashEquivalentsUsd: cashUsd, netDebtUsd,
+      annualizedRevenueUsd, netDebtToRevenueX, cashToDebtPct: round1(cashToDebtPct),
+      interestExpenseUsd, interestCoverageX,
+      components
+    }
+  };
+}
+
 function businessDimensions(data, metrics, findings) {
   const scores = { repayment: null, customer: null, economics: null, continuity: null };
   const details = {};
@@ -237,7 +279,12 @@ function businessDimensions(data, metrics, findings) {
     details.continuity = { historyScore: round1(history), coverageScore: round1(data.dataCoveragePct), deviationScore: round1(deviation), volatilityScore: round1(volatility) };
   }
   for (const key of ["repayment", "customer", "economics", "continuity"]) if (!finite(scores[key])) findings.push(finding("DIMENSION_NOT_COMPUTABLE", "material", `${key} credit dimension is not computable`, [key]));
-  return { scores, details };
+  const capital = capitalStructureDimensions(data);
+  if (capital) {
+    scores.solvency = capital.score;
+    details.solvency = capital.details;
+  }
+  return { scores, details, capital };
 }
 
 function evidenceQuality(data, findings) {
@@ -347,7 +394,8 @@ export function computeRiskV021(input) {
   const business = businessDimensions(data, businessMetrics, findings);
   const dimensionScores = { tokenActivity: token.TAI, ...business.scores };
   const complete = CREDIT_DIMENSION_KEYS_V021.every(key => finite(dimensionScores[key]));
-  const cci = complete ? Math.round(CREDIT_DIMENSION_KEYS_V021.reduce((sum, key) => sum + dimensionScores[key] * CREDIT_DIMENSION_WEIGHTS_V021[key], 0) * 10) : null;
+  const baseCci = complete ? Math.round(CREDIT_DIMENSION_KEYS_V021.reduce((sum, key) => sum + dimensionScores[key] * CREDIT_DIMENSION_WEIGHTS_V021[key], 0) * 10) : null;
+  const cci = business.capital && finite(baseCci) ? Math.min(baseCci, business.capital.cap) : baseCci;
   const eqs = evidenceQuality(data, findings);
   const integrityResult = integrity(data, token.metrics);
   const meteringStatus = tokenMeteringStatus(data, token, profiles, findings);
@@ -401,7 +449,18 @@ export function computeRiskV021(input) {
     limitations,
     disclaimer: "Conservative demonstration risk screening only; not a credit approval, financial recommendation, statutory audit or assurance opinion."
   };
+  if (business.capital) {
+    result.capitalStructure = {
+      ...business.capital.details,
+      score: business.capital.score,
+      cciCap: business.capital.cap,
+      cciBeforeCap: baseCci,
+      capApplied: finite(baseCci) && baseCci > business.capital.cap
+    };
+    result.limitations.push("Capital-structure overlay v0.1 is additive: it caps CCI from supplied debt/cash/interest and does not model covenants, maturity walls or off-balance-sheet obligations.");
+  }
   result.summary = `${decisionStatus.toUpperCase()}. ${finite(token.TAI) ? `AI Token Activity Index ${token.TAI} (${result.tokenActivityBand})` : "TAI not computable"}; ${finite(cci) ? `Compute Credibility Index ${cci}, risk grade ${riskGrade}` : "CCI not computable"}; Token metering ${meteringStatus}; ${integrityResult.vetoApplied ? "confirmed integrity Veto" : "no confirmed integrity Veto"}.`;
+  if (business.capital) result.summary += ` Capital-structure cap ${business.capital.cap} from solvency ${business.capital.score}${finite(baseCci) && baseCci > business.capital.cap ? " (applied)" : ""} (${CAPITAL_STRUCTURE_VERSION}).`;
   result.inputHash = createHash("sha256").update(JSON.stringify(data)).digest("hex").slice(0, 16);
   return result;
 }
