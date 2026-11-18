@@ -109,15 +109,22 @@ export async function buildResearchPanel({ secEdgar, tickers = DEFAULT_RESEARCH_
   const observations = [];
   const failures = [];
   const resolved = [];
-  for (const ticker of requested) {
-    try {
-      const lookup = await secEdgar.lookupPublicCompany({ query: ticker, periods });
-      resolved.push({ ticker, name: lookup.company.name, cik: lookup.company.cik });
-      observations.push(...observationsForCompany(lookup));
-    } catch (error) {
+  // 并发抓取（SEC 允许 10 req/s；并列请求显著缩短长工具调用，避免 SSE/调用超时）。
+  const results = await Promise.allSettled(requested.map(async ticker => ({
+    ticker,
+    lookup: await secEdgar.lookupPublicCompany({ query: ticker, periods })
+  })));
+  results.forEach((result, index) => {
+    const ticker = requested[index];
+    if (result.status === "rejected") {
+      const error = result.reason || {};
       failures.push({ ticker, code: error.code || "LOOKUP_FAILED", message: String(error.message || error) });
+      return;
     }
-  }
+    const lookup = result.value.lookup;
+    resolved.push({ ticker, name: lookup.company.name, cik: lookup.company.cik });
+    observations.push(...observationsForCompany(lookup));
+  });
   const featureCoverage = {};
   for (const factor of PANEL_FACTORS) {
     featureCoverage[factor] = observations.filter(item => finite(item[factor])).length;
@@ -196,7 +203,7 @@ export function computeFactorReport(panel, { labels = null } = {}) {
       observations: observations.length,
       factors,
       labelStatus: "unavailable",
-      note: "No credit-event labels are wired yet. Coverage/descriptive stats only; IC and monotonicity are intentionally not reported."
+      note: "No credit-event labels are wired yet. Coverage/descriptive stats only; IC and monotonicity are intentionally not reported. Descriptive stats are un-winsorized: sub-scale operators can produce extreme ratios (small revenue denominators)."
     };
   }
 

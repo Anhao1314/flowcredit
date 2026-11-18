@@ -271,6 +271,13 @@ async function serveAgentAskStream(req, res, requestId, context) {
     try { res.write(`data: ${JSON.stringify(payload)}\n\n`); }
     catch { ended = true; }
   };
+  // 心跳：SEC 面板等长工具调用期间可能十几秒没有事件，避免中间层把空闲 SSE 断开。
+  const heartbeat = setInterval(() => {
+    if (ended) return;
+    try { res.write(": ping\n\n"); }
+    catch { ended = true; }
+  }, 10_000);
+  heartbeat.unref?.();
   try {
     await withTimeout(
       context.riskAgent.askRiskStream({
@@ -291,6 +298,7 @@ async function serveAgentAskStream(req, res, requestId, context) {
       }
     });
   }
+  clearInterval(heartbeat);
   ended = true;
   res.end();
   return null;
