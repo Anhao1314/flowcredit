@@ -238,6 +238,7 @@ const html = `<!doctype html>
       ["harness " + (data.harnessStatus || "n/a"), data.harnessStatus === "ok" ? "badge-good" : "badge-warn"]
     ];
     if (data.usage && data.usage.total_tokens) out.push(["tokens " + data.usage.total_tokens, ""]);
+    if (data.truncated) out.push(["truncated", "badge-warn"]);
     if (data.status) out.push(["status " + data.status, data.status === "insufficient-evidence" ? "badge-warn" : ""]);
     out.push([ms + " ms", ""]);
     return out;

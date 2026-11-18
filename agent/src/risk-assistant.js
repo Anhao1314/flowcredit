@@ -34,6 +34,14 @@ export const MAX_SESSION_TURNS_RISK = 4;
 
 const RETRYABLE_CODES = new Set(["MODEL_HTTP_ERROR", "MODEL_TIMEOUT", "MODEL_MALFORMED"]);
 const PROMPT_MAX_CHARS = INTAKE_SCHEMA_V03.maxTextLength;
+const TRUNCATION_NOTE = "（提示：回答达到单轮长度上限，已截断；可继续追问以获取剩余内容。）";
+
+/** 长度截断识别：finish_reason=length 时补一条可见提示，避免半句答案被当成完整结论。 */
+function finalAnswer(message, finishReason) {
+  const text = typeof message?.content === "string" ? message.content : "";
+  const truncated = finishReason === "length";
+  return { answer: truncated && text.trim() ? `${text}\n\n${TRUNCATION_NOTE}` : text, truncated };
+}
 
 // 边界声明：工具输出权威，模型只编排与解释；PD/限额/审批不存在于任何工具输出。
 // prompt v2（2026-11-17）：显式路由树 + 草稿重建规则 + 语言硬规则 —— 由
@@ -211,11 +219,13 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     for (let step = 1; step <= MAX_STEPS_RISK; step += 1) {
       let message = null;
       let lastError = null;
+      let finishReason = null;
       // 瞬时错误固定重试 ≤ RETRY_BUDGET_RISK 次；配置类/场景耗尽类错误不重试。
       for (let attempt = 0; attempt <= RETRY_BUDGET_RISK; attempt += 1) {
         try {
           const response = await client.chat({ messages, tools: registry.schemas });
           message = response.message;
+          finishReason = response.finishReason ?? null;
           totalUsage = addUsage(totalUsage, response.usage);
           break;
         } catch (error) {
@@ -266,7 +276,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
         continue;
       }
 
-      const answer = typeof message.content === "string" ? message.content : "";
+      const { answer, truncated } = finalAnswer(message, finishReason);
       if (!answer.trim()) {
         const result = await deterministicResult({
           prompt, sessionId, requestId, harnessStatus: "unavailable", code: "MODEL_EMPTY_ANSWER",
@@ -277,7 +287,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
       if (sessionId) sessionAppend(sessionId, prompt, answer);
       return finish({
         ok: true, harnessStatus: "ok",
-        answer, toolCalls, steps,
+        answer, truncated, toolCalls, steps,
         citations: citationsFrom(toolCalls),
         usage: totalUsage, sessionId,
         agentVersion: AGENT_VERSION, model: client.model,
@@ -353,6 +363,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
       let message = null;
       let lastError = null;
       let emittedDelta = false;
+      let finishReason = null;
       for (let attempt = 0; attempt <= RETRY_BUDGET_RISK; attempt += 1) {
         emittedDelta = false;
         try {
@@ -361,6 +372,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
             onDelta: text => { emittedDelta = true; emit({ type: "delta", text }); }
           });
           message = response.message;
+          finishReason = response.finishReason ?? null;
           totalUsage = addUsage(totalUsage, response.usage);
           break;
         } catch (error) {
@@ -418,7 +430,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
         continue;
       }
 
-      const answer = typeof message.content === "string" ? message.content : "";
+      const { answer, truncated } = finalAnswer(message, finishReason);
       if (!answer.trim()) {
         const result = await deterministicResult({
           prompt, sessionId, requestId, harnessStatus: "unavailable", code: "MODEL_EMPTY_ANSWER",
@@ -429,7 +441,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
       if (sessionId) sessionAppend(sessionId, prompt, answer);
       return finish({
         ok: true, harnessStatus: "ok",
-        answer, toolCalls, steps,
+        answer, truncated, toolCalls, steps,
         citations: citationsFrom(toolCalls),
         usage: totalUsage, sessionId,
         agentVersion: AGENT_VERSION, model: client.model,

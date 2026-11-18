@@ -100,7 +100,7 @@ export function createModelGateway(options = {}) {
       }
       const message = payload?.choices?.[0]?.message;
       if (!message) throw malformed("model response missing choices[0].message");
-      return { message, usage: payload.usage ?? null };
+      return { message, usage: payload.usage ?? null, finishReason: payload?.choices?.[0]?.finish_reason ?? null };
     } catch (error) {
       if (error instanceof ModelGatewayError) throw error;
       if (error?.name === "AbortError") {

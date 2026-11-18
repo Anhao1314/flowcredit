@@ -19,6 +19,7 @@ export function createRiskClient(options = {}) {
     baseUrl: options.baseUrl || options.env?.DEEPSEEK_BASE_URL || process.env.DEEPSEEK_BASE_URL,
     model: options.model || options.env?.FC_AGENT_MODEL || process.env.FC_AGENT_MODEL || options.env?.DEEPSEEK_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-chat",
     timeoutMs: options.timeoutMs || (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 30_000),
+    maxTokens: options.maxTokens || 1400,
     transport: options.transport
   });
 }

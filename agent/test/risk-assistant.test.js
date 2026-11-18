@@ -39,14 +39,14 @@ function createScriptedClient(scenarios, { configured = true } = {}) {
       calls.push({ messages: messages.map(m => ({ role: m.role, content: m.content ?? null, tool_calls: m.tool_calls ?? null })), toolCount: tools.length });
       const step = nextTurn();
       if (step.throw) throw step.throw;
-      return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } };
+      return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }, finishReason: step.finishReason ?? null };
     },
     chatStream: async ({ messages, tools, onDelta }) => {
       calls.push({ messages: messages.map(m => ({ role: m.role, content: m.content ?? null })), toolCount: tools.length });
       const step = nextTurn();
       if (step.delta) onDelta(step.delta);
       if (step.throw) throw step.throw;
-      return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } };
+      return { message: step.message, usage: step.usage ?? { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }, finishReason: step.finishReason ?? null };
     },
     model: "scripted-model",
     baseUrl: "scripted://local",
@@ -281,4 +281,14 @@ test("invalid prompt is rejected before any gate", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.code, "INVALID_PROMPT");
   assert.equal(client.calls.length, 0);
+});
+
+test("finish_reason=length marks the answer as truncated with a visible note", async () => {
+  const { assistant } = buildAssistant([
+    { message: { role: "assistant", content: "半句结论（模型输出达到上限" }, finishReason: "length" }
+  ]);
+  const result = await assistant.askRisk({ prompt: OFFICIAL_CN, modelConsent: true });
+  assert.equal(result.truncated, true);
+  assert.match(result.answer, /已截断/);
+  assert.match(result.answer, /半句结论/);
 });
