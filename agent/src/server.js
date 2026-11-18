@@ -21,7 +21,8 @@ import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { createConnectorRegistry } from "./connectors/contract.js";
 import { createCsvConnector, buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { RunRecord } from "../core/run-record.js";
-import { createAssessmentService } from "./assessment-service.js";
+import { readJsonBody } from "../core/http-util.js";
+import { createAssessmentService, withTimeout } from "./assessment-service.js";
 import { createChatPipeline } from "./chat-pipeline.js";
 import { createRiskToolRegistry } from "./risk-tools.js";
 import { createRiskAssistant } from "./risk-assistant.js";
@@ -139,37 +140,7 @@ function acceptsJson(req) {
 }
 
 async function readJson(req) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > BODY_LIMIT) {
-      const error = new Error("request body exceeds 64 KB");
-      error.code = "BODY_TOO_LARGE";
-      throw error;
-    }
-    chunks.push(chunk);
-  }
-  if (!chunks.length) return {};
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
-  catch {
-    const error = new Error("request body must be valid JSON");
-    error.code = "INVALID_JSON";
-    throw error;
-  }
-}
-
-function withTimeout(promise, timeoutMs, code = "INVOCATION_TIMEOUT") {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(code === "MODEL_TIMEOUT" ? "Model review timed out." : "Assessment invocation timed out.");
-      error.code = code;
-      reject(error);
-    }, timeoutMs);
-    timer.unref?.();
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  return readJsonBody(req, BODY_LIMIT);
 }
 
 async function handleV03Assessment(req, requestId, context) {

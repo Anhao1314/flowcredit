@@ -12,7 +12,6 @@
  */
 
 import { createServer } from "node:http";
-import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +24,7 @@ import { runPaperSession, PaperEngine, PAPER_ENGINE_VERSION } from "../paper/eng
 import { createInspectionWorkflow, startInspection, signInspection } from "./workflow/inspection.js";
 import { CaseFileStore, loadCaseIndex, saveCaseIndex, nextCaseSeq } from "./workflow/case-store.js";
 import { RunRecord } from "../../agent/core/run-record.js";
+import { digest, digestEquals, readBody, withTimeout, FixedWindowRateLimiter } from "../../agent/core/http-util.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const QUANT = join(HERE, "..");
@@ -64,68 +64,17 @@ export function securityFromEnv(env = process.env) {
   };
 }
 
-function digest(value) { return createHash("sha256").update(String(value)).digest(); }
-
 function authorized(header, security) {
   if (!security.authEnabled) return true;
   const match = /^Bearer\s+([^\s]+)$/i.exec(String(header || ""));
   if (!match || !security.apiKey) return false;
-  const supplied = digest(match[1]);
-  const expected = digest(security.apiKey);
-  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
-}
-
-class FixedWindowLimiter {
-  constructor({ max, windowMs }) { this.max = max; this.windowMs = windowMs; this.entries = new Map(); }
-  consume(key, nowMs) {
-    let entry = this.entries.get(key);
-    if (!entry || nowMs >= entry.resetAt) entry = { count: 0, resetAt: nowMs + this.windowMs };
-    entry.count += 1;
-    this.entries.set(key, entry);
-    return { allowed: entry.count <= this.max, retryAfterSeconds: Math.max(1, Math.ceil((entry.resetAt - nowMs) / 1000)) };
-  }
+  return digestEquals(match[1], digest(security.apiKey));
 }
 
 function loadFrozen() {
   const dataset = JSON.parse(readFileSync(join(QUANT, "data", "dataset-v002.json"), "utf8"));
   const trials = JSON.parse(readFileSync(join(QUANT, "eval", "trials-v002.json"), "utf8"));
   return { dataset, trials };
-}
-
-function readBody(req, limit) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    let settled = false;
-    req.on("data", chunk => {
-      if (settled) return;
-      size += chunk.length;
-      if (size > limit) {
-        settled = true;
-        req.pause();
-        const error = new Error("request body exceeds limit");
-        error.code = "BODY_TOO_LARGE";
-        reject(error);
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on("end", () => { if (!settled) { settled = true; resolve(Buffer.concat(chunks).toString("utf8")); } });
-    req.on("error", error => { if (!settled) { settled = true; reject(error); } });
-  });
-}
-
-function withTimeout(promise, timeoutMs, code) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error("request timed out");
-      error.code = code;
-      reject(error);
-    }, timeoutMs);
-    timer.unref?.();
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -135,8 +84,8 @@ function withTimeout(promise, timeoutMs, code) {
 export function createQuantConsoleServer(options = {}) {
   const env = options.env || process.env;
   const security = securityFromEnv(env);
-  const limiter = new FixedWindowLimiter({ max: security.rateLimitMax, windowMs: security.rateLimitWindowMs });
   const nowMs = options.nowMs || (() => Date.now());
+  const limiter = new FixedWindowRateLimiter({ maxRequests: security.rateLimitMax, windowMs: security.rateLimitWindowMs, now: nowMs });
 
   const { dataset, trials } = loadFrozen();
   const registry = createToolRegistry({ dataset, trials });
@@ -299,7 +248,7 @@ export function createQuantConsoleServer(options = {}) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required (CONSOLE_AUTH_ENABLED=true)" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
         const ip = req.socket?.remoteAddress || "unknown";
-        const rate = limiter.consume(ip, nowMs());
+        const rate = limiter.consume(ip);
         if (!rate.allowed) {
           return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         }
@@ -337,7 +286,7 @@ export function createQuantConsoleServer(options = {}) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required (CONSOLE_AUTH_ENABLED=true)" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
         const ip = req.socket?.remoteAddress || "unknown";
-        const rate = limiter.consume(ip, nowMs());
+        const rate = limiter.consume(ip);
         if (!rate.allowed) {
           return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         }
@@ -392,7 +341,7 @@ export function createQuantConsoleServer(options = {}) {
         if (!authorized(req.headers.authorization, security)) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
-        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown");
         if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         const raw = await readBody(req, security.bodyLimit);
         let body = {};
@@ -409,7 +358,7 @@ export function createQuantConsoleServer(options = {}) {
         if (!authorized(req.headers.authorization, security)) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
-        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown");
         if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         const [, sessionId, action] = paperSessionMatch;
         const session = paperSessions.get(sessionId);
@@ -436,7 +385,7 @@ export function createQuantConsoleServer(options = {}) {
         if (!authorized(req.headers.authorization, security)) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
-        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown");
         if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         const raw = await readBody(req, security.bodyLimit);
         let body;
@@ -496,7 +445,7 @@ export function createQuantConsoleServer(options = {}) {
         if (!authorized(req.headers.authorization, security)) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
-        const rate = limiter.consume(req.socket?.remoteAddress || "unknown", nowMs());
+        const rate = limiter.consume(req.socket?.remoteAddress || "unknown");
         if (!rate.allowed) return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         const [, caseId] = caseSignMatch;
         const entry = cases.get(caseId);
@@ -549,7 +498,7 @@ export function createQuantConsoleServer(options = {}) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required (CONSOLE_AUTH_ENABLED=true)" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
         const ip = req.socket?.remoteAddress || "unknown";
-        const rate = limiter.consume(ip, nowMs());
+        const rate = limiter.consume(ip);
         if (!rate.allowed) {
           return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         }
@@ -571,7 +520,7 @@ export function createQuantConsoleServer(options = {}) {
           return send(401, { ok: false, code: "UNAUTHORIZED", error: "Bearer token required (CONSOLE_AUTH_ENABLED=true)" }, { "WWW-Authenticate": 'Bearer realm="quant-console"' });
         }
         const ip = req.socket?.remoteAddress || "unknown";
-        const rate = limiter.consume(ip, nowMs());
+        const rate = limiter.consume(ip);
         if (!rate.allowed) {
           return send(429, { ok: false, code: "RATE_LIMIT_EXCEEDED", error: "Too many requests." }, { "Retry-After": String(rate.retryAfterSeconds) });
         }

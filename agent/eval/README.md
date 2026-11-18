@@ -119,7 +119,11 @@ roadmap inputs; only **unexpected** failures turn CI red.
 
 ## Artifact
 
-`eval/results/agent-eval-<date>.json` is committed as machine-readable evidence. It records:
+One canonical artifact — `eval/results/agent-eval-2026-11-17.json` — is committed as
+machine-readable evidence. New runs write dated files locally but are git-ignored
+(`agent/eval/results/*.json`); promote a file (and update the negation in `.gitignore` and the
+"committed artifact matches a fresh offline run" test) only when publishing a release artifact.
+It records:
 
 - baseline commit SHA, branch and dirty state
 - dataset path, version, case count and SHA-256

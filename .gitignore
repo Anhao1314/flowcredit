@@ -19,3 +19,7 @@ quant/data/raw/
 credentials*
 secrets*
 node_modules/
+
+# eval artifacts: one canonical release artifact is committed; dated runs are local-only
+agent/eval/results/*.json
+!agent/eval/results/agent-eval-2026-11-17.json

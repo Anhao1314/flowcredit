@@ -176,7 +176,7 @@ test("artifact is reproducible for a fixed generation time", () => {
 });
 
 test("committed artifact matches a fresh offline run", () => {
-  const artifactPath = join(ROOT, "..", "eval", "results", "agent-eval-2026-10-29.json");
+  const artifactPath = join(ROOT, "..", "eval", "results", "agent-eval-2026-11-17.json");
   const committed = JSON.parse(readFileSync(artifactPath, "utf8"));
   const fresh = runEval({ datasetPath: DATASET, now: new Date(committed.generatedAt) });
   assert.equal(committed.dataset.version, DATASET_VERSION);

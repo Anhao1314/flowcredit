@@ -13,17 +13,11 @@ import { PRODUCT_VERSION_V03, buildEvidenceCoverageV03, buildRequiredActionsV03,
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { addFinchIdentity, deterministicFingerprintPayload, finchAssessmentFingerprint, finchInputFingerprint } from "./finch-contract.js";
 
+import { withTimeout as raceTimeout } from "../core/http-util.js";
+
+/** 超时竞速（消息措辞属于本服务的对外语义；实现共享 core/http-util）。 */
 export function withTimeout(promise, timeoutMs, code = "INVOCATION_TIMEOUT") {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(code === "MODEL_TIMEOUT" ? "Model review timed out." : "Assessment invocation timed out.");
-      error.code = code;
-      reject(error);
-    }, timeoutMs);
-    timer.unref?.();
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  return raceTimeout(promise, timeoutMs, code, code === "MODEL_TIMEOUT" ? "Model review timed out." : "Assessment invocation timed out.");
 }
 
 function factsForV021(data, result) {

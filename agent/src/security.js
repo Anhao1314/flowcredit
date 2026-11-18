@@ -1,4 +1,6 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { digest, digestEquals, FixedWindowRateLimiter } from "../core/http-util.js";
+
+export { FixedWindowRateLimiter };
 
 const MUTATING_API = /^\/api\/v1\/(?:assess|chat|agent\/ask(?:\/stream)?)$|^\/api\/finch\/(?:assess|agent)$|^\/fc\/ai\/v0\.3\/(?:assess|import\/csv)$/;
 
@@ -19,7 +21,6 @@ function boundedInteger(value, fallback, min, max, name) {
 }
 
 function enabled(value) { return /^(1|true|yes|on)$/i.test(String(value || "")); }
-function digest(value) { return createHash("sha256").update(String(value)).digest(); }
 
 export function networkConfig(env = process.env) {
   const rawPort = Number(env.PORT || env.FC_PORT || 8787);
@@ -54,35 +55,7 @@ export function bearerAuthorized(header, config) {
   if (!config.authEnabled) return true;
   const match = /^Bearer\s+([^\s]+)$/i.exec(String(header || ""));
   if (!match || !config.apiKeyDigest) return false;
-  const supplied = digest(match[1]);
-  return supplied.length === config.apiKeyDigest.length && timingSafeEqual(supplied, config.apiKeyDigest);
-}
-
-export class FixedWindowRateLimiter {
-  constructor({ windowMs, maxRequests, now = Date.now }) {
-    this.windowMs = windowMs;
-    this.maxRequests = maxRequests;
-    this.now = now;
-    this.entries = new Map();
-  }
-
-  consume(key) {
-    const current = this.now();
-    let entry = this.entries.get(key);
-    if (!entry || current >= entry.resetAt) entry = { count: 0, resetAt: current + this.windowMs };
-    entry.count += 1;
-    this.entries.set(key, entry);
-    if (this.entries.size > 1000) {
-      for (const [name, value] of this.entries) if (current >= value.resetAt) this.entries.delete(name);
-    }
-    return {
-      allowed: entry.count <= this.maxRequests,
-      limit: this.maxRequests,
-      remaining: Math.max(0, this.maxRequests - entry.count),
-      resetAt: entry.resetAt,
-      retryAfterSeconds: Math.max(1, Math.ceil((entry.resetAt - current) / 1000))
-    };
-  }
+  return digestEquals(match[1], config.apiKeyDigest);
 }
 
 export function clientKey(req, config = {}) {
