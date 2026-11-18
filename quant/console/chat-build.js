@@ -314,7 +314,9 @@ const html = `<!doctype html>
         { label: "观测", value: r.observations || 0 },
         { label: "标签", value: r.labelStatus }
       ];
-      note = r.labelStatus === "available" ? "IC 为探索性，未做多重检验校正" : "标签未接入：只报覆盖率与描述统计，不报 IC";
+      note = r.labelStatus === "available" ? "显式标签 · IC 为探索性，未做多重检验校正"
+        : r.labelStatus === "proxy-market" ? "代理标签（前瞻 90d 收益，filed 对齐）· DD 为结构基准 · IC 探索性"
+        : "标签未接入：只报覆盖率与描述统计，不报 IC";
     } else if (call.name === "assess_public_company" && r.company) {
       title = "公开数据 · 资本结构";
       metrics = [

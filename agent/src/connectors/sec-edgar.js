@@ -72,6 +72,18 @@ function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
+/** dei 股本（时点事实），用于市值与 Merton DD；缺失返回 null。 */
+function extractSharesOutstanding(payload) {
+  const unit = payload?.facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares;
+  if (!Array.isArray(unit) || !unit.length) return null;
+  const rows = unit
+    .filter(row => typeof row.val === "number" && row.end)
+    .slice()
+    .sort((a, b) => String(b.end).localeCompare(String(a.end)) || String(b.filed || "").localeCompare(String(a.filed || "")));
+  const row = rows[0];
+  return row ? { value: row.val, end: row.end, filed: row.filed || null, form: String(row.form) } : null;
+}
+
 /**
  * 输入：{ transport?, userAgent?, timeoutMs?, maxBytes?, now? }
  *   transport(url, options) → Response-like { ok, status, text() }；默认 globalThis.fetch。
@@ -188,6 +200,7 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
     return {
       ok: true,
       company,
+      sharesOutstanding: extractSharesOutstanding(payload),
       facts,
       missing,
       sources: [

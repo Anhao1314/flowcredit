@@ -12,6 +12,8 @@
  */
 
 import { createHash } from "node:crypto";
+import { annualizedVolPct, closeAsOf, distanceToDefault } from "./merton.js";
+import { forwardMarketLabels } from "./labels.js";
 
 export const RESEARCH_PANEL_VERSION = "ai-compute-panel/v0.1.0";
 
@@ -100,20 +102,61 @@ export function observationsForCompany(lookup) {
   return observations;
 }
 
-/** 抓取多公司并组装面板；单公司失败不影响其他公司，失败明细进 failures。 */
-export async function buildResearchPanel({ secEdgar, tickers = DEFAULT_RESEARCH_UNIVERSE, periods = 8, now = () => Date.now() } = {}) {
+/** 市值/DD/前瞻标签：filed 对齐，缺失即 null，绝不插值。 */
+function attachMarketFields(observations, { shares, closes }) {
+  if (!closes || !Array.isArray(closes) || !closes.length) return observations;
+  for (const item of observations) {
+    const asOf = item.filed;
+    if (!asOf) continue;
+    const base = closeAsOf(closes, asOf);
+    if (!base) continue;
+    const upTo = closes.filter(row => row.date <= asOf);
+    const vol = annualizedVolPct(upTo);
+    if (finite(vol) && vol > 0) item.equityVolPct = vol;
+    if (finite(shares) && shares > 0 && base.close > 0) item.marketCapUsd = Math.round(shares * base.close);
+    if (item.marketCapUsd && finite(item.debtUsd) && finite(vol) && vol > 0) {
+      const dd = distanceToDefault({ equityUsd: item.marketCapUsd, debtUsd: item.debtUsd, equityVolPct: vol });
+      if (dd) {
+        item.dd = dd.dd;
+        item.merton = { version: dd.modelVersion, assetVolPct: dd.assetVolPct, mertonLeverage: dd.mertonLeverage, reason: dd.reason ?? null };
+      }
+    }
+    const label = forwardMarketLabels({ closes, asOfDate: asOf, horizonDays: 90 });
+    if (label?.labelAvailable) {
+      item.labelForwardReturnPct = label.forwardReturnPct;
+      item.labelForwardMaxDeclinePct = label.forwardMaxDeclinePct;
+      item.labelRealizedVolPct = label.realizedVolPct;
+      item.labelDistressed = label.distressed === true;
+      item.labelModelVersion = label.modelVersion;
+    }
+  }
+  return observations;
+}
+
+/** 抓取多公司并组装面板；单公司失败不影响其他公司，失败明细进 failures。
+ *  priceFeed 可选：提供时为每条观测补市值/DD（Merton）与前瞻 90d 市场代理标签。 */
+export async function buildResearchPanel({ secEdgar, priceFeed = null, tickers = DEFAULT_RESEARCH_UNIVERSE, periods = 8, now = () => Date.now() } = {}) {
   if (!secEdgar) throw new TypeError("secEdgar connector is required");
   const requested = [...new Set((Array.isArray(tickers) ? tickers : []).map(value => String(value || "").trim().toUpperCase()).filter(Boolean))];
   if (!requested.length) throw new TypeError("at least one ticker is required");
   if (requested.length > 8) throw new TypeError("at most 8 tickers per panel");
   const observations = [];
   const failures = [];
+  const marketFailures = [];
   const resolved = [];
   // 并发抓取（SEC 允许 10 req/s；并列请求显著缩短长工具调用，避免 SSE/调用超时）。
-  const results = await Promise.allSettled(requested.map(async ticker => ({
-    ticker,
-    lookup: await secEdgar.lookupPublicCompany({ query: ticker, periods })
-  })));
+  const results = await Promise.allSettled(requested.map(async ticker => {
+    const lookup = await secEdgar.lookupPublicCompany({ query: ticker, periods });
+    let closes = null;
+    if (priceFeed) {
+      try {
+        closes = (await priceFeed.fetchDaily({ symbol: ticker })).rows;
+      } catch (error) {
+        marketFailures.push({ ticker, code: error.code || "PRICE_FAILED", message: String(error.message || error) });
+      }
+    }
+    return { ticker, lookup, closes };
+  }));
   results.forEach((result, index) => {
     const ticker = requested[index];
     if (result.status === "rejected") {
@@ -122,13 +165,15 @@ export async function buildResearchPanel({ secEdgar, tickers = DEFAULT_RESEARCH_
       return;
     }
     const lookup = result.value.lookup;
+    const closes = result.value.closes || null;
     resolved.push({ ticker, name: lookup.company.name, cik: lookup.company.cik });
-    observations.push(...observationsForCompany(lookup));
+    observations.push(...attachMarketFields(observationsForCompany(lookup), { shares: lookup.sharesOutstanding?.value ?? null, closes }));
   });
   const featureCoverage = {};
   for (const factor of PANEL_FACTORS) {
     featureCoverage[factor] = observations.filter(item => finite(item[factor])).length;
   }
+  const labeled = observations.filter(item => finite(item.labelForwardReturnPct));
   return {
     version: RESEARCH_PANEL_VERSION,
     generatedAt: new Date(now()).toISOString(),
@@ -136,11 +181,16 @@ export async function buildResearchPanel({ secEdgar, tickers = DEFAULT_RESEARCH_
     resolved,
     failures,
     observations: observations.sort((a, b) => a.ticker.localeCompare(b.ticker) || a.periodEnd.localeCompare(b.periodEnd)),
+    labelStatus: priceFeed && labeled.length ? "proxy-market" : "unavailable",
+    labelModelVersion: labeled.length ? labeled[0].labelModelVersion : null,
+    marketFailures,
     stats: {
       companies: resolved.length,
       observations: observations.length,
       quarters: [...new Set(observations.map(item => item.periodEnd))].length,
-      featureCoverage
+      featureCoverage,
+      ddCoverage: observations.filter(item => finite(item.dd)).length,
+      labeledObservations: labeled.length
     }
   };
 }
@@ -181,6 +231,21 @@ function spearman(xs, ys) {
  * 每期截面 Rank IC 及汇总（IC 均值、ICIR、t 值、期数）与三分层单调性。
  * 没有 labels 时 labelStatus=unavailable，绝不编造 IC。
  */
+function summarizeIc(factorName, icSeries) {
+  const values = icSeries.map(entry => entry.ic[factorName]).filter(finite);
+  if (!values.length) return { factor: factorName, periods: 0, meanIc: null, icir: null, tStat: null };
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.length > 1 ? values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1) : null;
+  const std = finite(variance) ? Math.sqrt(variance) : null;
+  return {
+    factor: factorName,
+    periods: values.length,
+    meanIc: round3(mean),
+    icir: finite(std) && std > 0 ? round3(mean / std) : null,
+    tStat: finite(std) && std > 0 ? round3(mean / std * Math.sqrt(values.length)) : null
+  };
+}
+
 export function computeFactorReport(panel, { labels = null } = {}) {
   const observations = Array.isArray(panel?.observations) ? panel.observations : [];
   const factors = PANEL_FACTORS.map(factor => {
@@ -197,13 +262,26 @@ export function computeFactorReport(panel, { labels = null } = {}) {
     };
   });
 
-  if (!labels || typeof labels !== "object" || !Object.keys(labels).length) {
+  // 标签来源优先级：显式 labels > 面板内市场代理标签（labelForwardReturnPct）> 无。
+  const marketLabels = {};
+  let marketCount = 0;
+  for (const item of observations) {
+    if (finite(item.labelForwardReturnPct)) {
+      marketLabels[`${item.ticker}|${item.periodEnd}`] = item.labelForwardReturnPct;
+      marketCount += 1;
+    }
+  }
+  const explicit = labels && typeof labels === "object" && Object.keys(labels).length ? labels : null;
+  const effectiveLabels = explicit || (marketCount ? marketLabels : null);
+  const labelStatus = explicit ? "available" : marketCount ? "proxy-market" : "unavailable";
+
+  if (!effectiveLabels) {
     return {
       version: RESEARCH_PANEL_VERSION,
       observations: observations.length,
       factors,
       labelStatus: "unavailable",
-      note: "No credit-event labels are wired yet. Coverage/descriptive stats only; IC and monotonicity are intentionally not reported. Descriptive stats are un-winsorized: sub-scale operators can produce extreme ratios (small revenue denominators)."
+      note: "No labels: coverage/descriptive stats only; IC and monotonicity are intentionally not reported. Descriptive stats are un-winsorized: sub-scale operators can produce extreme ratios (small revenue denominators)."
     };
   }
 
@@ -211,11 +289,11 @@ export function computeFactorReport(panel, { labels = null } = {}) {
   const icSeries = [];
   for (const period of periods) {
     const rows = observations.filter(item => item.periodEnd === period)
-      .map(item => ({ item, label: labels[`${item.ticker}|${item.periodEnd}`] }))
+      .map(item => ({ item, label: effectiveLabels[`${item.ticker}|${item.periodEnd}`] }))
       .filter(row => finite(row.label));
     if (rows.length < 3) continue;
     const periodIc = {};
-    for (const factor of PANEL_FACTORS) {
+    for (const factor of [...PANEL_FACTORS, "dd"]) {
       const usable = rows.filter(row => finite(row.item[factor]));
       if (usable.length < 3) { periodIc[factor] = null; continue; }
       periodIc[factor] = spearman(usable.map(row => row.item[factor]), usable.map(row => row.label));
@@ -223,35 +301,29 @@ export function computeFactorReport(panel, { labels = null } = {}) {
     icSeries.push({ period, observations: rows.length, ic: periodIc });
   }
 
-  const summary = PANEL_FACTORS.map(factor => {
-    const values = icSeries.map(entry => entry.ic[factor]).filter(finite);
-    if (!values.length) return { factor, periods: 0, meanIc: null, icir: null, tStat: null };
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const variance = values.length > 1 ? values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1) : null;
-    const std = finite(variance) ? Math.sqrt(variance) : null;
-    return {
-      factor,
-      periods: values.length,
-      meanIc: round3(mean),
-      icir: finite(std) && std > 0 ? round3(mean / std) : null,
-      tStat: finite(std) && std > 0 ? round3(mean / std * Math.sqrt(values.length)) : null
-    };
-  });
+  const summary = [...PANEL_FACTORS].map(factor => summarizeIc(factor, icSeries));
+  const benchmark = summarizeIc("dd", icSeries);
+  const distressed = observations.filter(item => item.labelDistressed === true).length;
+  const labelMeta = explicit
+    ? { source: "explicit", count: Object.keys(explicit).length }
+    : { source: "proxy-market", modelVersion: observations.find(item => item.labelModelVersion)?.labelModelVersion ?? null,
+        definition: "forward 90d return measured from the filed date; proxy, NOT a credit event", distressed: distressed };
 
   return {
     version: RESEARCH_PANEL_VERSION,
     observations: observations.length,
     factors,
-    labelStatus: "available",
-    labels: { count: Object.keys(labels).length, periods: icSeries.length },
+    labelStatus,
+    labels: { ...labelMeta, periods: icSeries.length },
+    benchmark,
     icSeries,
     icSummary: summary,
-    note: "Rank IC is computed per period cross-section and is not deflated for multiple testing; treat it as exploratory until walk-forward validation."
+    note: "Labels are market-implied proxies and are NOT a credit event unless explicitly provided; Rank IC is per-period cross-section, exploratory and not deflated for multiple testing. DD (Merton) is reported as the structural benchmark: judge factors by incremental IC versus DD, not by raw magnitude."
   };
 }
 
 /** 进程内面板存储（TTL + 容量上限；不落盘）。 */
-export function createResearchService({ secEdgar, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
+export function createResearchService({ secEdgar, priceFeed = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
   const store = new Map();
   let sequence = 0;
 
@@ -265,6 +337,7 @@ export function createResearchService({ secEdgar, now = () => Date.now(), ttlMs 
     evict();
     const panel = await buildResearchPanel({
       secEdgar,
+      ...(priceFeed ? { priceFeed } : {}),
       ...(tickers !== undefined ? { tickers } : {}),
       ...(periods !== undefined ? { periods } : {}),
       now
@@ -281,6 +354,8 @@ export function createResearchService({ secEdgar, now = () => Date.now(), ttlMs 
       generatedAt: panel.generatedAt,
       resolved: panel.resolved,
       failures: panel.failures,
+      marketFailures: panel.marketFailures,
+      labelStatus: panel.labelStatus,
       stats: panel.stats,
       sample: panel.observations.slice(0, 3),
       note: "Point-in-time panel: periodEnd is the report period, filed is the availability date. Use filed for any calibration; research-only, no authority fields."

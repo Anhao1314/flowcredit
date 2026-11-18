@@ -324,7 +324,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
     },
     {
       name: "build_research_panel",
-      description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
+      description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. When the market price feed is configured it also attaches market cap, Merton distance-to-default and forward 90d proxy labels (filed-aligned). Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
       parameters: {
         tickers: { type: "string", required: false, description: "Comma-separated tickers (max 8); defaults to the built-in compute-operator universe" },
         periods: { type: "integer", required: false, description: "Quarters per company, 4-12 (default 8)" }
@@ -348,7 +348,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
     },
     {
       name: "factor_report",
-      description: "Summarize a research panel: factor coverage and descriptive statistics, and — only when credit-event labels exist — per-period Rank IC, ICIR, t-stat and monotonicity. Labels are not yet wired, so the default response reports labelStatus=unavailable and must not be presented as validated alpha.",
+      description: "Summarize a research panel: factor coverage and descriptive statistics. Labels: explicit labels → labelStatus=available; forward 90d market-proxy labels (filed-aligned) → labelStatus=proxy-market; otherwise unavailable and no IC is reported. When labels exist it reports per-period Rank IC, ICIR and t-stat for each factor plus the Merton DD structural benchmark — judge factors by incremental IC versus DD, never as validated alpha.",
       parameters: { panelId: { type: "string", required: true, description: "panelId returned by build_research_panel" } },
       execute(args) {
         assertArgs(args, ["panelId"]);

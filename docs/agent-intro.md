@@ -34,8 +34,8 @@
 | `import_csv` | 月度 CSV → 完整 draft + sha256 证据认证 |
 | `lookup_public_company` | 自己去 SEC EDGAR 取上市公司公开财务（收入/毛利/经营利润/净利/现金/债务，带表单、申报日、来源哈希；不取 token/回款/客户集中度） |
 | `assess_public_company` | 公开数据 → 资本结构叠加：用申报的收入/成本/债务/现金/利息算 solvency 与 CCI 上限，并列出做完整评级仍缺的经营字段 |
-| `build_research_panel` | 自行抓取上市算力运营商 SEC 申报，构建 point-in-time 季度面板（periodEnd + 申报日），供因子研究/校准；不改权威评分 |
-| `factor_report` | 面板的因子覆盖率与描述统计；有信用事件标签时才报 Rank IC/ICIR/t 值，标签缺失如实返回 `unavailable` |
+| `build_research_panel` | 自行抓取上市算力运营商 SEC 申报与日线价格，构建 point-in-time 季度面板（periodEnd + 申报日、市值/Merton DD、前瞻 90d 代理标签），供因子研究/校准；不改权威评分 |
+| `factor_report` | 面板的因子覆盖率与描述统计；标签状态如实标注（显式/`proxy-market` 代理/`unavailable`），有标签时报每期 Rank IC/ICIR/t 值，并以 Merton DD 为结构基准（看增量 IC，不当已验证 alpha） |
 | `preset_draft` | 合成示例草稿（healthy / watch / sybil） |
 
 **配套能力**：
