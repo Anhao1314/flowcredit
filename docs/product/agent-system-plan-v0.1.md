@@ -100,8 +100,8 @@ console 运行时（8789）= 量化研究工作台（保留；移除重复的 Fi
 | 项 | 内容 | 状态 |
 |---|---|---|
 | A. 去 LangGraph | 案件签字门 → 手写状态机（65MB/2 依赖/CI 一步） | 工作树已完成，待收尾提交 |
-| B. 面收敛 | 删 /fc/ai/v0.3/extract + ask（被 agent 循环取代；保留 assess + import/csv） | 待做 |
-| C. 前端归一 | /chat 归业务 agent；console 移除 Finch 页 | 待做 |
+| B. 面收敛 | 删 /fc/ai/v0.3/extract + ask（被 agent 循环取代；保留 assess + import/csv） | 已完成（commit ③） |
+| C. 前端归一 | /chat 归业务 agent；console 移除 Finch 页 | 已完成（commit ②） |
 | D. 重复件合并 | audit/client 参数化合一 | 待做 |
 
 **红线**：确定性内核、审计链、降级路径、诚实披露——这些"重"是产品本体，不是脂肪。

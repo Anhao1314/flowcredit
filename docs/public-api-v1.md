@@ -280,8 +280,9 @@ verified. The default registry contains only the CSV import connector (tier `doc
 registered; `basis` becomes `connector_attested` only then. The numeric evidence-quality score is
 unchanged (risk_result v0.2.1) and still uses declared levels — the status layer discloses the
 gap rather than silently re-scoring. `evidenceStatus` is excluded from `assessmentFingerprint`.
-The internal extraction path (`POST /fc/ai/v0.3/extract`) additionally returns `grounding`:
-model-extracted fields without support in the supplied text are dropped before validation.
+The internal extraction path (`POST /fc/ai/v0.3/extract`) has been removed: natural-language
+drafts are parsed deterministically (parser v0.3 emits only values stated in the text), so
+model-extraction grounding no longer exists as a separate step.
 The internal CSV import path (`POST /fc/ai/v0.3/import/csv`) returns an intake draft plus its
 `digest` and `evidenceStatus` (CSV evidence is `documented` tier, attested by `csv-import-v1`).
 

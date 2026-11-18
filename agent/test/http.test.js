@@ -93,15 +93,15 @@ test("HTTP validation uses documented status codes", async () => {
     assert.equal(legacyGone.status, 404);
     const tooLarge = await fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: {}, padding: "x".repeat(70 * 1024) }) });
     assert.equal(tooLarge.status, 413);
-    const extractWithoutConsent = await fetch(`${base}/fc/ai/v0.3/extract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "Assess this operator" }) });
-    assert.equal(extractWithoutConsent.status, 400);
+    const extractGone = await fetch(`${base}/fc/ai/v0.3/extract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: "Assess this operator" }) });
+    assert.equal(extractGone.status, 404, "superseded model-extraction route is gone (parser v0.3 + agent tools)");
     const badDraft = await fetch(`${base}/fc/ai/v0.3/assess`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft: { validRatePct: 120 } }) });
     assert.equal(badDraft.status, 400);
     const badDraftBody = await badDraft.json();
     assert.ok(badDraftBody.fieldErrors.some(item => item.field === "validRatePct"));
     assert.ok(badDraftBody.missingByGroup.Scope.includes("label"));
-    const askWithoutConsent = await fetch(`${base}/fc/ai/v0.3/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "missing", question: "Explain" }) });
-    assert.equal(askWithoutConsent.status, 400);
+    const askGone = await fetch(`${base}/fc/ai/v0.3/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "missing", question: "Explain" }) });
+    assert.equal(askGone.status, 404, "superseded follow-up route is gone (agent loop answers follow-ups)");
   });
 });
 

@@ -29,11 +29,12 @@ Workspace 只突出 `Start a new assessment`。预置案例位于 `Try an exampl
 
 - `GET /fc/ai/v0.3/config`
 - `GET /fc/ai/v0.3/schema`
-- `POST /fc/ai/v0.3/extract`
 - `POST /fc/ai/v0.3/assess`
-- `POST /fc/ai/v0.3/ask`
+- `POST /fc/ai/v0.3/import/csv`
 
-`extract` 需要 `draftId`、`text` 和 `modelConsent=true`。`assess` 接受白名单化 draft，默认不调用模型。`ask` 必须同时提供当前自定义 `sessionId`、问题和模型授权。
+`assess` 接受白名单化 draft，默认不调用模型。自然语言抽取不再走独立模型端点
+（`extract`/`ask` 已随瘦身删除）：对话侧由确定性 parser v0.3 解析（只发原文中出现的值，
+grounding by construction），追问由 agent 循环（`POST /api/v1/agent/ask`）承接。
 
 ## 隐私与会话
 

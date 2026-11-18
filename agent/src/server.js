@@ -9,7 +9,7 @@ import { RULE_VERSION_V021 } from "./rules-v021.js";
 import { HarnessBrain } from "./harness.js";
 import { SafeLogger } from "./logger.js";
 import { SessionStore } from "./session-store.js";
-import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, sanitizeExtractedDraftV03, validateDraftV03 } from "./intake-v03.js";
+import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03 } from "./intake-v03.js";
 import { FixedWindowRateLimiter, bearerAuthorized, clientKey, isProtectedApi, networkConfig, securityConfig } from "./security.js";
 import { IdempotencyStore } from "./idempotency-store.js";
 import {
@@ -18,7 +18,6 @@ import {
   isPublicAssessRequest, isPublicChatRequest, PUBLIC_API_VERSION, PUBLIC_ASSESS_PATH, PUBLIC_CHAT_PATH, PUBLIC_SCHEMA_PATH, validateFinchAssessInput
 } from "./finch-contract.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
-import { groundExtractedDraft } from "./grounding.js";
 import { createConnectorRegistry } from "./connectors/contract.js";
 import { createCsvConnector, buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { RunRecord } from "../core/run-record.js";
@@ -440,42 +439,6 @@ async function route(req, res, requestId, context = {}) {
   if (req.method === "POST" && url.pathname === AGENT_STREAM_PATH) {
     return serveAgentAskStream(req, res, requestId, context);
   }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/extract") {
-    const body = await readJson(req);
-    if (body.modelConsent !== true) return sendJson(res, 400, { error: "modelConsent must be true before sending case text to DeepSeek" }, requestId);
-    if (typeof body.text !== "string" || !body.text.trim() || body.text.length > 10000) return sendJson(res, 400, { error: "text must contain 1 to 10000 characters" }, requestId);
-    const extracted = await brain.extractV03(body.text.trim(), requestId);
-    let primaryWindowDerived = false;
-    const extractedDraft = extracted?.draft && typeof extracted.draft === "object" ? extracted.draft : extracted;
-    if (Array.isArray(extractedDraft?.monthlySeries) && extractedDraft.monthlySeries.length) {
-      const lastPeriod = String(extractedDraft.monthlySeries.at(-1)?.period || "");
-      const currentDays = (Date.parse(extractedDraft.periodEnd || "") - Date.parse(extractedDraft.periodStart || "")) / 86400000;
-      const match = lastPeriod.match(/^(\d{4})-(\d{2})$/);
-      if (match && (!Number.isFinite(currentDays) || currentDays < 27 || currentDays > 31)) {
-        const year = Number(match[1]), month = Number(match[2]);
-        extractedDraft.periodStart = `${match[1]}-${match[2]}-01`;
-        extractedDraft.periodEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-        primaryWindowDerived = true;
-      }
-    }
-    const cleaned = sanitizeExtractedDraftV03(extracted);
-    // 原文 grounding：模型抽取的字段必须能在用户原文中找到依据，否则丢弃。
-    const grounded = groundExtractedDraft(body.text.trim(), cleaned.draft);
-    const validation = validateDraftV03(grounded.draft);
-    const evidenceStatus = summarizeEvidenceStatus(validation.draft.evidence, { connectors });
-    const confidence = extracted?.fieldConfidence && typeof extracted.fieldConfidence === "object"
-      ? Object.fromEntries(Object.entries(extracted.fieldConfidence).filter(([key]) => Object.hasOwn(validation.draft, key)))
-      : {};
-    return sendJson(res, 200, {
-      productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021,
-      draftId: typeof body.draftId === "string" && body.draftId.length <= 80 ? body.draftId : requestId,
-      draft: validation.draft, fieldConfidence: confidence,
-      grounding: grounded.report, evidenceStatus,
-      missingInputs: validation.missingInputs, missingByGroup: validation.missingByGroup,
-      warnings: [...validation.warnings, ...(primaryWindowDerived ? ["Primary scoring window was derived from the latest explicitly supplied monthly period."] : []), ...(Array.isArray(extracted?.warnings) ? extracted.warnings.slice(0, 10).map(String) : []), ...grounded.report.warnings],
-      ignoredInputs: [...new Set([...cleaned.ignoredInputs, ...validation.ignoredInputs])], model: MODEL
-    }, requestId);
-  }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/import/csv") {
     const body = await readJson(req);
     if (typeof body.csv !== "string" || !body.csv.trim()) return sendJson(res, 400, { ok: false, code: "CSV_REQUIRED", error: "csv (text) is required" }, requestId);
@@ -495,17 +458,6 @@ async function route(req, res, requestId, context = {}) {
   }
   if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/assess") {
     return serveAssessment(req, res, requestId, context);
-  }
-  if (req.method === "POST" && url.pathname === "/fc/ai/v0.3/ask") {
-    const body = await readJson(req);
-    if (body.modelConsent !== true) return sendJson(res, 400, { error: "modelConsent must be true before sending assessment facts to DeepSeek" }, requestId);
-    if (typeof body.question !== "string" || !body.question.trim() || body.question.length > 500) return sendJson(res, 400, { error: "question must contain 1 to 500 characters" }, requestId);
-    if (typeof body.sessionId !== "string" || !body.sessionId) return sendJson(res, 400, { error: "sessionId is required" }, requestId);
-    const session = sessions.get(`v03:${body.sessionId}`);
-    if (!session) return sendJson(res, 400, { error: "no v0.3 assessment found for this session" }, requestId);
-    const response = await brain.ask({ ruleVersion: RULE_VERSION_V021, ...session.assessment, facts: session.facts }, body.question.trim(), requestId);
-    const citations = Array.isArray(response.citations) ? response.citations.filter(value => /^F(?:[1-9]|1[0-2])$/.test(value)) : [];
-    return sendJson(res, 200, { answer: String(response.answer || ""), citations, harnessStatus: "ok", model: MODEL, productVersion: PRODUCT_VERSION_V03, ruleVersion: RULE_VERSION_V021 }, requestId);
   }
   if ((req.method === "GET" || req.method === "HEAD") && await serveStatic(req, res)) return null;
   return sendJson(res, 404, { error: "not found" }, requestId);

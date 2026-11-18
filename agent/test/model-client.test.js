@@ -101,22 +101,23 @@ test("harness: assessV021 runs analysis+review over REST, deterministic summary 
   assert.doesNotMatch(firstPrompt, /modelWeight/, "internal weights must not be sent to the model");
 });
 
-test("harness: extractV03 parses draft and retries once on invalid JSON", async () => {
+test("harness: assessV021 retries once on invalid JSON before review", async () => {
   const { transport, calls } = scripted([
     completion("not json"),
-    completion('{"draft":{"label":"Operator"},"fieldConfidence":{},"warnings":[]}')
+    completion('{"evidenceNotes":[],"tokenOpinions":{},"creditOpinions":{},"limitations":[],"explanation":"stable"}'),
+    completion('{"conflicts":[],"approved":true,"correctedExplanation":"stable"}')
   ]);
   const brain = new HarnessBrain({ transport, apiKey: "k" });
-  const extracted = await brain.extractV03("Some operator text", "req-2");
-  assert.equal(extracted.draft.label, "Operator");
-  assert.equal(calls.length, 2, "invalid JSON must trigger exactly one retry");
+  const result = await brain.assessV021({ periodStart: "2026-08-01" }, { TAI: 93.8, CCI: 929, riskGrade: "A" }, "req-2");
+  assert.equal(result.analysis.explanation, "stable");
+  assert.equal(calls.length, 3, "invalid JSON must trigger exactly one retry (analysis retry + review)");
 });
 
 test("harness: unconfigured and busy paths surface typed errors", async () => {
   const brain = new HarnessBrain({ transport: async () => ({ ok: true, json: async () => completion("{}").body }), apiKey: null });
-  await assert.rejects(() => brain.extractV03("x", "req-3"), error => error.code === "HARNESS_UNCONFIGURED");
+  await assert.rejects(() => brain.assessV021({}, {}, "req-3"), error => error.code === "HARNESS_UNCONFIGURED");
 
   const busy = new HarnessBrain({ transport: async () => ({ ok: true, json: async () => completion("{}").body }), apiKey: "k" });
   busy.active = 2;
-  await assert.rejects(() => busy.extractV03("x", "req-4"), error => error.code === "HARNESS_BUSY");
+  await assert.rejects(() => busy.assessV021({}, {}, "req-4"), error => error.code === "HARNESS_BUSY");
 });

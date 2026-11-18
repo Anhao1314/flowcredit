@@ -36,10 +36,11 @@ supplied evidence / free text
 - Reserved result fields are stripped before validation; schema validation fails closed.
 - `assessmentFingerprint` excludes request metadata (`meta`), `evidenceStatus` and model
   annotations.
-- Guided/JSON intake is deterministic by default; raw free text reaches the model only with
-  `modelConsent: true` (via `/fc/ai/v0.3/extract` or `POST /api/v1/chat`'s parser path).
-- Model extraction is **grounded** against the supplied text: fields without support are dropped
-  before validation and reported in `grounding.warnings`.
+- Guided/JSON intake is deterministic by default. Draft extraction never uses the model: the
+  deterministic parser (`nl-draft-v0.3`) only emits values literally stated in the text, so
+  grounding is by construction (the legacy `/fc/ai/v0.3/extract` route is removed).
+  With `modelConsent: true`, `POST /api/v1/agent/ask` may send tool outputs to the model for
+  orchestration/narration only; without consent it falls back to deterministic answers.
 - Assessments report `evidenceStatus`: `basis: "declared_only"` by default; declared
   `system_api` / `cross_verified` / `cryptographic` records are downgraded to `attested` unless a
   registered connector attestation verifies. The default registry contains only the CSV import
