@@ -99,10 +99,14 @@ console 运行时（8789）= 量化研究工作台（保留；移除重复的 Fi
 
 | 项 | 内容 | 状态 |
 |---|---|---|
-| A. 去 LangGraph | 案件签字门 → 手写状态机（65MB/2 依赖/CI 一步） | 工作树已完成，待收尾提交 |
+| A. 去 LangGraph | 案件签字门 → 手写状态机（65MB/2 依赖/CI 一步） | 已完成（commit ① d060efa） |
 | B. 面收敛 | 删 /fc/ai/v0.3/extract + ask（被 agent 循环取代；保留 assess + import/csv） | 已完成（commit ③） |
 | C. 前端归一 | /chat 归业务 agent；console 移除 Finch 页 | 已完成（commit ②） |
-| D. 重复件合并 | audit/client 参数化合一 | 待做 |
+| D. 重复件合并 | audit/client/http 公共件归 core；eval 工件只留权威件 | 已完成（commit ④ f1a91af） |
+
+瘦身验收（2026-11-18，commit ④ + push）：agent 176/176、quant 164/164、隔离 lint 0/64 files、
+typecheck/syntax ✓、eval 10/10、finch-contract/public-api 校验 ✓、CI checks 绿；
+浏览器验收：8790 `/chat` 纯自然语言出卡、agent 模式同源直连 + 诚实降级；8789 无 Finch 页、案件送检→验货→待签可用。
 
 **红线**：确定性内核、审计链、降级路径、诚实披露——这些"重"是产品本体，不是脂肪。
 
