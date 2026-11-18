@@ -33,6 +33,7 @@
 | `extract_from_text` | 白名单抽取（中英文、JSON、倒装、单位换算）+ 原文 grounding 围栏 |
 | `import_csv` | 月度 CSV → 完整 draft + sha256 证据认证 |
 | `lookup_public_company` | 自己去 SEC EDGAR 取上市公司公开财务（收入/毛利/经营利润/净利/现金/债务，带表单、申报日、来源哈希；不取 token/回款/客户集中度） |
+| `assess_public_company` | 公开数据 → 资本结构叠加：用申报的收入/成本/债务/现金/利息算 solvency 与 CCI 上限，并列出做完整评级仍缺的经营字段 |
 | `preset_draft` | 合成示例草稿（healthy / watch / sybil） |
 
 **配套能力**：

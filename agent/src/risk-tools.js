@@ -14,7 +14,7 @@
  */
 import { PRODUCT_VERSION_V03, INTAKE_SCHEMA_V03, sanitizeExtractedDraftV03, validateDraftV03, buildEvidenceCoverageV03, buildRequiredActionsV03 } from "./intake-v03.js";
 import { normalizeEvidenceV021 } from "./normalize-v021.js";
-import { computeRiskV021 } from "./risk-core-v021.js";
+import { computeRiskV021, computeCapitalStructure } from "./risk-core-v021.js";
 import { extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { buildMonthlyDraftFromCsv } from "./connectors/csv.js";
@@ -76,6 +76,49 @@ function assessDraftPure(draft, { connectors }) {
  *   connectors  connector registry（证据分级/attestation）
  *   nowMs       CSV attestation 时间注入（确定性测试可固定）
  */
+/** SEC facts → 月度口径 draft 片段（仅供资本结构层；不补 token/GPU/回款/客户数据）。 */
+function latestFact(facts, field, periodEnd = null) {
+  const all = (facts || []).filter(fact => fact.field === field);
+  const pool = periodEnd ? all.filter(fact => fact.periodEnd === periodEnd) : [];
+  const use = pool.length ? pool : all;
+  return use.slice().sort((a, b) => String(b.periodEnd).localeCompare(String(a.periodEnd)) || String(b.filed || "").localeCompare(String(a.filed || "")))[0] || null;
+}
+
+function publicDraftFromLookup(lookup) {
+  const revenue = latestFact(lookup.facts, "revenueUsd");
+  if (!revenue) return null;
+  const months = String(revenue.form) === "10-K" ? 12 : 3;
+  const month = String(revenue.periodEnd).slice(0, 7);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const periodEnd = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
+  const draft = {
+    label: lookup.company.name,
+    periodStart: `${month}-01`,
+    periodEnd,
+    revenueUsd: Math.round(revenue.value / months)
+  };
+  const gross = latestFact(lookup.facts, "grossProfitUsd", revenue.periodEnd);
+  const cost = latestFact(lookup.facts, "costOfRevenueUsd", revenue.periodEnd);
+  if (gross) draft.computeSpendUsd = Math.round((revenue.value - gross.value) / months);
+  else if (cost) draft.computeSpendUsd = Math.round(cost.value / months);
+  const debt = latestFact(lookup.facts, "debtUsd", revenue.periodEnd);
+  const cash = latestFact(lookup.facts, "cashUsd", revenue.periodEnd);
+  const interest = latestFact(lookup.facts, "interestExpenseUsd", revenue.periodEnd);
+  if (debt) draft.totalDebtUsd = debt.value;
+  if (cash) draft.cashAndCashEquivalentsUsd = cash.value;
+  if (interest) draft.interestExpenseUsd = Math.round(interest.value / months);
+  return {
+    draft,
+    derived: {
+      months,
+      basis: `${revenue.form} ${revenue.periodEnd}`,
+      monthlyRevenue: draft.revenueUsd,
+      computeSpendSource: gross ? "revenue − gross profit" : cost ? "cost of revenue" : "not available",
+      sources: lookup.sources
+    }
+  };
+}
+
 export function createRiskToolRegistry({ connectors, secEdgar = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
@@ -238,6 +281,39 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, nowMs = ()
         if (!secEdgar) return { ok: false, code: "SEC_CONNECTOR_UNAVAILABLE", message: "public-company lookup is not configured on this server" };
         try {
           return await secEdgar.lookupPublicCompany({ query: args.query.trim() });
+        } catch (error) {
+          return {
+            ok: false, code: error.code || "SEC_LOOKUP_FAILED", message: String(error.message || error),
+            ...(Array.isArray(error.candidates) ? { candidates: error.candidates } : {})
+          };
+        }
+      }
+    },
+    {
+      name: "assess_public_company",
+      description: "Fetch a US-listed company's SEC EDGAR facts and compute the capital-structure overlay (solvency score and CCI cap) from filed revenue, cost of revenue, debt, cash and interest. Returns the monthly-equivalent draft fragment plus the operator fields still required for a full TAI/CCI assessment. Never fabricates token/GPU/repayment/customer data.",
+      parameters: { query: { type: "string", required: true, description: "Company name or ticker, e.g. CoreWeave or CRWV" } },
+      async execute(args) {
+        assertArgs(args, ["query"]);
+        if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 120) throw new TypeError("query must be a company name or ticker (1-120 chars)");
+        if (!secEdgar) return { ok: false, code: "SEC_CONNECTOR_UNAVAILABLE", message: "public-company lookup is not configured on this server" };
+        try {
+          const lookup = await secEdgar.lookupPublicCompany({ query: args.query.trim() });
+          const built = publicDraftFromLookup(lookup);
+          if (!built) return { ok: false, code: "SEC_REVENUE_NOT_FOUND", message: "SEC facts did not contain a revenue concept" };
+          const capital = computeCapitalStructure(built.draft);
+          const validation = validateDraftV03({ ...built.draft });
+          return {
+            ok: true,
+            company: lookup.company,
+            draft: built.draft,
+            derived: built.derived,
+            capitalStructure: capital ? { score: capital.score, cciCap: capital.cap, ...capital.details } : null,
+            missingInputs: validation.missingInputs,
+            sources: lookup.sources,
+            facts: lookup.facts,
+            note: "Capital-structure overlay computed from SEC-filed figures (quarterly ÷ months for the monthly-equivalent draft). CCI requires operator-provided token/GPU/repayment/customer data; nothing is fabricated."
+          };
         } catch (error) {
           return {
             ok: false, code: error.code || "SEC_LOOKUP_FAILED", message: String(error.message || error),

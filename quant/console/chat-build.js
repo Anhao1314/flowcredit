@@ -291,6 +291,17 @@ const html = `<!doctype html>
       title = "字段抽取";
       metrics = [{ label: "Parsed", value: r.matchedFields.length }];
       note = r.matchedFields.join(", ");
+    } else if (call.name === "assess_public_company" && r.company) {
+      title = "公开数据 · 资本结构";
+      metrics = [
+        { label: "公司", value: r.company.name + " (" + r.company.ticker + ")" },
+        { label: "Solvency", value: r.capitalStructure ? r.capitalStructure.score : "n/a" },
+        { label: "CCI 上限", value: r.capitalStructure ? r.capitalStructure.cciCap : "n/a" },
+        { label: "缺口", value: (r.missingInputs || []).length }
+      ];
+      note = r.capitalStructure
+        ? "净债务/年化收入 " + r.capitalStructure.netDebtToRevenueX + "x · 现金/债务 " + r.capitalStructure.cashToDebtPct + "% · CCI 需经营数据"
+        : (r.derived ? r.derived.basis : "");
     } else if (call.name === "lookup_public_company" && r.company) {
       title = "公开数据";
       var firstPeriod = (r.facts && r.facts[0]) ? r.facts[0].periodEnd : null;

@@ -36,7 +36,9 @@ const CONCEPT_MAP = Object.freeze([
   { field: "operatingIncomeUsd", label: "Operating income", kind: "flow", names: ["OperatingIncomeLoss"] },
   { field: "netIncomeUsd", label: "Net income", kind: "flow", names: ["NetIncomeLoss"] },
   { field: "cashUsd", label: "Cash & equivalents", kind: "stock", names: ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"] },
-  { field: "debtUsd", label: "Debt (carrying amount)", kind: "stock", names: ["DebtInstrumentCarryingAmount", "LongTermDebt", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations"] }
+  { field: "debtUsd", label: "Debt (carrying amount)", kind: "stock", names: ["DebtInstrumentCarryingAmount", "LongTermDebt", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations"] },
+  { field: "costOfRevenueUsd", label: "Cost of revenue", kind: "flow", names: ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"] },
+  { field: "interestExpenseUsd", label: "Interest expense", kind: "flow", names: ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt"] }
 ]);
 
 const FAILING_FORMS = new Set(["10-Q", "10-K"]);

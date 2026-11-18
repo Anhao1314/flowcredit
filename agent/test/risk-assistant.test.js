@@ -264,6 +264,7 @@ test("stream path emits delta/tool/done with identical authority semantics", asy
 test("system prompt keeps the engineered routing, boundary and language rules", () => {
   for (const directive of [
     "call lookup_public_company FIRST with the name or ticker",
+    "call assess_public_company (SEC facts → capital-structure overlay)",
     "call assess_prompt ONCE with the raw user text",
     "Never pre-extract or pre-validate first",
     "never retype arrays or figures from memory",

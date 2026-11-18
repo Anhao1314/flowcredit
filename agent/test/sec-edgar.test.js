@@ -37,7 +37,9 @@ const FACTS = {
       OperatingIncomeLoss: { units: { USD: [quarter("2026-09-30", 207000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
       NetIncomeLoss: { units: { USD: [quarter("2026-09-30", -709000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
       CashAndCashEquivalentsAtCarryingValue: { units: { USD: [quarter("2026-09-30", 4122000000, "2026-11-05")] } },
-      DebtInstrumentCarryingAmount: { units: { USD: [quarter("2026-09-30", 47505000000, "2026-11-05")] } }
+      DebtInstrumentCarryingAmount: { units: { USD: [quarter("2026-09-30", 47505000000, "2026-11-05")] } },
+      CostOfRevenue: { units: { USD: [quarter("2026-09-30", 1183000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
+      InterestExpense: { units: { USD: [quarter("2026-09-30", 120000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } }
     }
   }
 };
@@ -147,4 +149,25 @@ test("lookup_public_company is registered with a closed schema and returns tool-
   const unavailable = await unconfigured.get("lookup_public_company").execute({ query: "CRWV" });
   assert.equal(unavailable.ok, false);
   assert.equal(unavailable.code, "SEC_CONNECTOR_UNAVAILABLE");
+});
+
+test("assess_public_company builds a monthly-equivalent draft and computes the capital cap", async () => {
+  const connectors = createConnectorRegistry([createCsvConnector()]);
+  const { transport } = scriptedTransport();
+  const secEdgar = createSecEdgarConnector({ transport });
+  const registry = createRiskToolRegistry({ connectors, secEdgar });
+  const result = await registry.get("assess_public_company").execute({ query: "CRWV" });
+  assert.equal(result.ok, true);
+  assert.equal(result.draft.revenueUsd, Math.round(3661000000 / 3));
+  assert.equal(result.draft.computeSpendUsd, Math.round((3661000000 - 2478000000) / 3));
+  assert.equal(result.draft.interestExpenseUsd, 40000000);
+  assert.equal(result.draft.totalDebtUsd, 47505000000);
+  assert.equal(result.draft.cashAndCashEquivalentsUsd, 4122000000);
+  assert.equal(result.draft.periodStart, "2026-09-01");
+  assert.equal(result.draft.periodEnd, "2026-09-30");
+  assert.ok(result.capitalStructure.score >= 0 && result.capitalStructure.score <= 100);
+  assert.ok(result.capitalStructure.cciCap >= 600 && result.capitalStructure.cciCap <= 1000);
+  assert.ok(result.missingInputs.includes("inputTokensM"), "full CCI still requires operator token data");
+  assert.ok(result.missingInputs.includes("gpuHours"));
+  assert.equal(result.facts.some(fact => fact.field === "interestExpenseUsd"), true);
 });

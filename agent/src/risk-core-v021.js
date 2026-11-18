@@ -208,8 +208,9 @@ function deriveBusinessMetrics(data) {
  * 资本结构叠加层（可选）：债务 + 现金同时存在且收入可年化时才计算。
  * 组件：净债务/年化收入（50%，缺利息时 62.5%）、利息覆盖（30%，缺利息时省略）、
  *      现金/总债务（20%，缺利息时 37.5%）。缺失时返回 null，主模型保持不变。
+ * 导出供“公开数据 → 资本结构”工具复用（输入须是月度口径的收入与支出）。
  */
-function capitalStructureDimensions(data) {
+export function computeCapitalStructure(data) {
   if (!finite(data.totalDebtUsd) || !finite(data.cashAndCashEquivalentsUsd)) return null;
   if (!finite(data.revenueUsd) || data.revenueUsd <= 0) return null;
   const totalDebtUsd = data.totalDebtUsd;
@@ -279,7 +280,7 @@ function businessDimensions(data, metrics, findings) {
     details.continuity = { historyScore: round1(history), coverageScore: round1(data.dataCoveragePct), deviationScore: round1(deviation), volatilityScore: round1(volatility) };
   }
   for (const key of ["repayment", "customer", "economics", "continuity"]) if (!finite(scores[key])) findings.push(finding("DIMENSION_NOT_COMPUTABLE", "material", `${key} credit dimension is not computable`, [key]));
-  const capital = capitalStructureDimensions(data);
+  const capital = computeCapitalStructure(data);
   if (capital) {
     scores.solvency = capital.score;
     details.solvency = capital.details;
