@@ -2,7 +2,11 @@
  * risk-tools.js — 业务风险 agent 的确定性工具集。
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
- *   1. 全部工具纯确定性：零网络、零随机；时钟只经 nowMs 注入（CSV attestation 时间）。
+ *   1. 计算类工具纯确定性：零网络、零随机；时钟只经 nowMs 注入（CSV attestation 时间）。
+ *      （2026-11-18 修订）新增唯一取数工具 lookup_public_company：只访问 SEC EDGAR
+ *      白名单域名、只读、每项带来源与申报日，不写 drafts/sessions、不产生
+ *      authoritative 字段；其余工具保持零网络。该工具返回 documented 事实，
+ *      不是评估结论，也不能替代经营方数据。
  *   2. 权威字段（TAI/CCI/grade/decision）只来自 computeRiskV021；工具结果携带
  *      authoritative 子对象（inputFingerprint/assessmentFingerprint）供引用与产物卡。
  *   3. 参数白名单（assertArgs）：LLM 传入的未知键一律拒绝；用户文本是不可信数据。
@@ -68,7 +72,7 @@ function assessDraftPure(draft, { connectors }) {
  *   connectors  connector registry（证据分级/attestation）
  *   nowMs       CSV attestation 时间注入（确定性测试可固定）
  */
-export function createRiskToolRegistry({ connectors, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -215,6 +219,24 @@ export function createRiskToolRegistry({ connectors, nowMs = () => new Date().to
           ...outcome.payload,
           authoritative: outcome.payload.authoritative
         };
+      }
+    },
+    {
+      name: "lookup_public_company",
+      description: "Read-only lookup of a US-listed company's public financial facts from SEC EDGAR: revenue, gross profit, operating income, net income, cash and debt, up to 4 filed periods, each with form (10-Q/10-K) and filing date. Use this when the user names a public company or ticker and asks for its public financials — never invent those numbers. Returns documented facts only; token activity, GPU hours, repayment and customer concentration are NOT available from this source, so a full TAI/CCI assessment still requires operator-provided data.",
+      parameters: { query: { type: "string", required: true, description: "Company name or ticker, e.g. CoreWeave or CRWV" } },
+      async execute(args) {
+        assertArgs(args, ["query"]);
+        if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 120) throw new TypeError("query must be a company name or ticker (1-120 chars)");
+        if (!secEdgar) return { ok: false, code: "SEC_CONNECTOR_UNAVAILABLE", message: "public-company lookup is not configured on this server" };
+        try {
+          return await secEdgar.lookupPublicCompany({ query: args.query.trim() });
+        } catch (error) {
+          return {
+            ok: false, code: error.code || "SEC_LOOKUP_FAILED", message: String(error.message || error),
+            ...(Array.isArray(error.candidates) ? { candidates: error.candidates } : {})
+          };
+        }
       }
     },
     {

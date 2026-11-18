@@ -60,13 +60,13 @@ function createMemoryAudit() {
   return { events, nowMs: () => Date.now(), write(event) { events.push(event); return true; } };
 }
 
-function buildAssistant(scenarios, { configured = true } = {}) {
+function buildAssistant(scenarios, { configured = true, secEdgar = null } = {}) {
   const { sessions, pipeline } = buildPipeline();
   const audit = createMemoryAudit();
   const client = createScriptedClient(scenarios, { configured });
   const assistant = createRiskAssistant({
     client,
-    registry: createRiskToolRegistry({ connectors }),
+    registry: createRiskToolRegistry({ connectors, secEdgar }),
     audit,
     deterministicChat: ({ prompt, sessionId, requestId }) =>
       pipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)
@@ -263,6 +263,7 @@ test("stream path emits delta/tool/done with identical authority semantics", asy
 
 test("system prompt keeps the engineered routing, boundary and language rules", () => {
   for (const directive of [
+    "call lookup_public_company FIRST with the name or ticker",
     "call assess_prompt ONCE with the raw user text",
     "Never pre-extract or pre-validate first",
     "never retype arrays or figures from memory",
@@ -291,4 +292,29 @@ test("finish_reason=length marks the answer as truncated with a visible note", a
   assert.equal(result.truncated, true);
   assert.match(result.answer, /已截断/);
   assert.match(result.answer, /半句结论/);
+});
+
+test("async lookup_public_company tool runs inside the loop and its facts reach the answer", async () => {
+  const secEdgar = {
+    lookupPublicCompany: async ({ query }) => ({
+      ok: true,
+      company: { name: "CoreWeave, Inc.", ticker: "CRWV", cik: 1769628 },
+      facts: [{ field: "revenueUsd", label: "Revenue", value: 3661000000, unit: "USD", periodEnd: "2026-09-30", form: "10-Q", filed: "2026-11-05", sourceUrl: "https://data.sec.gov/x" }],
+      missing: ["Gross profit"],
+      sources: [{ url: "https://data.sec.gov/x", retrievedAt: "2026-11-18T00:00:00.000Z", sha256: "a".repeat(64) }],
+      note: "documented"
+    })
+  };
+  const { assistant, client } = buildAssistant([
+    { message: { role: "assistant", content: null, tool_calls: [{ id: "call-1", type: "function", function: { name: "lookup_public_company", arguments: '{"query":"CRWV"}' } }] } },
+    { message: { role: "assistant", content: "SEC 10-Q：季度收入 36.61 亿美元（2026-09-30 申报）。" }, finishReason: "stop" }
+  ], { secEdgar });
+  const result = await assistant.askRisk({ prompt: "CoreWeave 的公开收入是多少？", modelConsent: true });
+  assert.equal(result.ok, true);
+  assert.equal(client.calls.length, 2);
+  assert.equal(result.toolCalls.length, 1);
+  assert.equal(result.toolCalls[0].name, "lookup_public_company");
+  assert.equal(result.toolCalls[0].result.company.ticker, "CRWV");
+  assert.equal(result.toolCalls[0].result.facts[0].value, 3661000000);
+  assert.match(result.answer, /36\.61/);
 });

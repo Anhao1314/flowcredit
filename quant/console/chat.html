@@ -267,6 +267,17 @@ body.has-messages .quick-chips{display:none}
       title = "字段抽取";
       metrics = [{ label: "Parsed", value: r.matchedFields.length }];
       note = r.matchedFields.join(", ");
+    } else if (call.name === "lookup_public_company" && r.company) {
+      title = "公开数据";
+      var firstPeriod = (r.facts && r.facts[0]) ? r.facts[0].periodEnd : null;
+      var compact = (r.facts || []).filter(function(f) { return f.periodEnd === firstPeriod; })
+        .map(function(f) { return f.label + " " + Math.round(f.value / 1e6) + "M"; }).join(" · ");
+      metrics = [
+        { label: "公司", value: r.company.name + " (" + r.company.ticker + ")" },
+        { label: "指标", value: (r.facts || []).length },
+        { label: "缺口", value: (r.missing || []).length }
+      ];
+      note = compact + (r.facts && r.facts[0] ? " · " + r.facts[0].form + " " + firstPeriod : "");
     } else if (call.name === "import_csv" && r.imported) {
       title = "CSV 导入";
       metrics = [
