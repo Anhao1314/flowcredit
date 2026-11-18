@@ -103,3 +103,21 @@ test("gpu hours accept integer, decimal and reordered forms", () => {
   assert.equal(extractNaturalLanguageDraft("4200 GPU hours").draft.gpuHours, 4200);
   assert.equal(extractNaturalLanguageDraft("GPU hours 4200").draft.gpuHours, 4200);
 });
+
+test("v0.4 extracts label / customerHHI / related-party and guards the revenue hijack", () => {
+  const r1 = extractNaturalLanguageDraft("公司名称：Acme Inference。月收入 100000 美元，算力支出 58000 美元，关联方收入占比 3%，客户 HHI 约 4200。");
+  assert.equal(r1.draft.label, "Acme Inference");
+  assert.equal(r1.draft.revenueUsd, 100000, "关联方收入占比 must not hijack revenueUsd");
+  assert.equal(r1.draft.relatedPartyRevenuePct, 3);
+  assert.equal(r1.draft.customerHHI, 4200);
+  const r2 = extractNaturalLanguageDraft("请评估 CoreWeave 的交易对手风险。");
+  assert.equal(r2.draft.label, "CoreWeave");
+});
+
+test("v0.4 derives the primary window from the latest monthly period", () => {
+  const text = "评估周期 2026-03-01 到 2026-08-31。近六个月：3月 token 72M、有效率 92%、收入 94000 美元、支出 55000 美元；4月 75M、93%、96000、56000；5月 77M、93%、97000、56500；6月 79M、94%、99000、57500；7月 81M、94%、101000、59000；8月 80M、94%、100000、58000。";
+  const r = extractNaturalLanguageDraft(text);
+  assert.equal(r.draft.periodStart, "2026-08-01");
+  assert.equal(r.draft.periodEnd, "2026-08-31");
+  assert.ok(r.warnings.some(w => /derived from the latest monthly period/.test(w)));
+});

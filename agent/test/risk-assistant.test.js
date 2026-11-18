@@ -271,7 +271,8 @@ test("system prompt keeps the engineered routing, boundary and language rules", 
     "then build_scoring_model with that panelId",
     "never claim the weights are live",
     "RESEARCH OUTPUT stays compact",
-    "call assess_prompt ONCE with the raw user text",
+        "下一步补充（最多 3 项）",
+    "copy-paste example in the user's language","call assess_prompt ONCE with the raw user text",
     "Never pre-extract or pre-validate first",
     "never retype arrays or figures from memory",
     "validate_draft alone; do not run an assessment",
@@ -337,4 +338,27 @@ test("async lookup_public_company tool runs inside the loop and its facts reach 
   assert.equal(result.toolCalls[0].result.company.ticker, "CRWV");
   assert.equal(result.toolCalls[0].result.facts[0].value, 3661000000);
   assert.match(result.answer, /36\.61/);
+});
+
+test("session draft carry merges follow-up supplements into the first-turn draft", async () => {
+  const healthyText = JSON.stringify(getPresetV021("healthy"));
+  const scenariosTurn1 = [
+    { message: { tool_calls: [{ id: "c1", function: { name: "assess_prompt", arguments: JSON.stringify({ text: healthyText }) } }] } },
+    { message: { content: "第一轮评估完成。" }, finishReason: "stop" }
+  ];
+  const scenariosTurn2 = [
+    // 模型传了一个伪造的 carryDraft —— 服务端注入必须覆盖它
+    { message: { tool_calls: [{ id: "c2", function: { name: "assess_prompt", arguments: JSON.stringify({ text: "补充：本月输入 token 64M、输出 token 16M、有效率 94%。", carryDraft: { label: "FAKE" } }) } }] } },
+    { message: { content: "第二轮合并重评完成。" }, finishReason: "stop" }
+  ];
+  const { assistant } = buildAssistant([...scenariosTurn1, ...scenariosTurn2]);
+  const sessionId = "sess-carry-1";
+  const first = await assistant.askRisk({ prompt: healthyText, modelConsent: true, sessionId });
+  assert.equal(first.toolCalls[0].result.authoritative.CCI, 929);
+
+  const second = await assistant.askRisk({ prompt: "补充：本月输入 token 64M、输出 token 16M、有效率 94%。", modelConsent: true, sessionId });
+  assert.equal(second.toolCalls[0].ok, true);
+  assert.equal(second.toolCalls[0].result.authoritative.CCI, 929, "carried draft must survive the follow-up turn");
+  assert.equal(second.toolCalls[0].result.merged.label, "Healthy Merchant", "server-carried draft wins over a model-fabricated carryDraft");
+  assert.equal(second.toolCalls[0].result.merged.inputTokensM, 64, "new text fields override the carried draft");
 });

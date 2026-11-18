@@ -61,6 +61,7 @@ export const SYSTEM_PROMPT_RISK = [
   "- The prompt asks to fit/build a scoring model or weights: first build_research_panel (if no panelId in this conversation), then build_scoring_model with that panelId. Present the result as a RESEARCH DRAFT that is not wired to the engine and needs human review; never claim the weights are live.",
   "- RESEARCH OUTPUT stays compact: panel summary (companies, observations, labelStatus) then ONE table `factor | periods | meanIc | tStat` plus a DD benchmark row. Never dump icSeries, factor definitions or full observation lists.",
   "- Small talk or capability questions: answer directly with no tools.",
+  "- AFTER any assessment whose decisionStatus is insufficient-evidence (or readiness limited): END the reply with a section 「下一步补充（最多 3 项）」 — the <=3 highest-priority missing fields from missingInputs/requiredActions, each on ONE line with a copy-paste example in the user's language (e.g. 「客户 HHI 约 4200」 or 「公司名称：Acme Inference」). Never ask for more than 3; never invent values; skip fields the user already supplied.",
   "OUTPUT: verdict/status first, then only authoritative numbers, then exactly what is missing. Never output PD, expected loss, credit limit or approval decisions — the engine does not produce them.",
   "LANGUAGE: reply in the language of the user's latest message. If it contains ANY Chinese characters, reply in Chinese — including refusals and error notes. Pure-JSON input defaults to Chinese."
 ].join("\n");
@@ -115,6 +116,21 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     if (!sessionId) return;
     const session = sessions.get(sessionId) || { turns: [] };
     session.turns = [...session.turns, { role: "user", content: question }, { role: "assistant", content: answer }].slice(-MAX_SESSION_TURNS_RISK);
+    sessions.set(sessionId, session);
+  }
+
+  // 会话草稿（CoALA L0 working memory 的工具路径接线）：上一轮已评估的 validated draft
+  // 存进同一会话对象，下一轮 assess_prompt 由服务端注入 carryDraft 合并——模型无权构造。
+  function sessionDraft(sessionId) {
+    if (!sessionId) return null;
+    const session = sessions.get(sessionId);
+    return session?.draft && typeof session.draft === "object" ? session.draft : null;
+  }
+
+  function sessionSaveDraft(sessionId, draft) {
+    if (!sessionId || !draft || typeof draft !== "object") return;
+    const session = sessions.get(sessionId) || { turns: [] };
+    session.draft = draft;
     sessions.set(sessionId, session);
   }
 
@@ -261,11 +277,18 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
               let toolArgs = parseToolArguments(call?.function?.arguments);
               // assess_prompt 的 text 由服务端注入用户原始 prompt：模型回显可能截断或改写
               // 大 JSON（R/C 数组曾因此丢失），工具输入必须以用户原文为准。
-              if (tool.name === "assess_prompt") toolArgs = { ...toolArgs, text: prompt };
+              if (tool.name === "assess_prompt") {
+                toolArgs = { ...toolArgs, text: prompt };
+                const carried = sessionDraft(sessionId);
+                if (carried) toolArgs.carryDraft = carried; // 服务端注入：模型不能构造或改写
+              }
               result = { ok: true, tool: tool.name, result: await tool.execute(toolArgs) };
             } catch (error) {
               result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
             }
+          }
+          if (tool?.name === "assess_prompt" && result.ok && result.result?.assessed && sessionId && result.result?.merged) {
+            sessionSaveDraft(sessionId, result.result.merged);
           }
           const authoritative = result?.result?.authoritative ?? null;
           toolCalls.push({
@@ -428,11 +451,18 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
               let toolArgs = parseToolArguments(call?.function?.arguments);
               // assess_prompt 的 text 由服务端注入用户原始 prompt：模型回显可能截断或改写
               // 大 JSON（R/C 数组曾因此丢失），工具输入必须以用户原文为准。
-              if (tool.name === "assess_prompt") toolArgs = { ...toolArgs, text: prompt };
+              if (tool.name === "assess_prompt") {
+                toolArgs = { ...toolArgs, text: prompt };
+                const carried = sessionDraft(sessionId);
+                if (carried) toolArgs.carryDraft = carried; // 服务端注入：模型不能构造或改写
+              }
               result = { ok: true, tool: tool.name, result: await tool.execute(toolArgs) };
             } catch (error) {
               result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
             }
+          }
+          if (tool?.name === "assess_prompt" && result.ok && result.result?.assessed && sessionId && result.result?.merged) {
+            sessionSaveDraft(sessionId, result.result.merged);
           }
           const authoritative = result?.result?.authoritative ?? null;
           toolCalls.push({

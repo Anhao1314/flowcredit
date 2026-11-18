@@ -58,7 +58,7 @@ test("TEST 9 natural-language chat is a canonical HTTP 200 with insufficient-evi
     assert.equal(body.data.presentation.evidenceStrength, body.data.evidenceStrength);
     assert.equal(Object.hasOwn(body.data.presentation, "fullScores"), false);
     assert.doesNotMatch(JSON.stringify(body.data.presentation), /deepseek/i);
-    assert.equal(body.data.parserVersion, "nl-draft-v0.3");
+    assert.equal(body.data.parserVersion, "nl-draft-v0.4");
     assert.match(body.data.draftId, /^nl-fc-[0-9a-f]{16}$/);
     assert.deepEqual(body.data.parsedFields, Object.keys(EXPECTED_DRAFT));
     assert.match(body.requestId, /^fc-[0-9a-f]{16}$/);

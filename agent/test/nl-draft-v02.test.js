@@ -78,11 +78,13 @@ test("v0.2 understands 回款率 and English number-before-label percentages", (
   assert.equal(english.top5ConcentrationPct, 36);
 });
 
-test("v0.2 key list is the published parser surface", () => {
+test("v0.4 key list is the published parser surface", () => {
   assert.deepEqual(NL_DRAFT_FIELDS.slice(0, 9), [
-    "taskType", "gpuModel", "gpuHours", "revenueUsd", "computeSpendUsd",
-    "repaymentRatePct", "overdue30Pct", "payingCustomers", "top5ConcentrationPct"
+    "label", "taskType", "gpuModel", "gpuHours", "revenueUsd", "computeSpendUsd",
+    "repaymentRatePct", "overdue30Pct", "payingCustomers"
   ]);
+  assert.ok(NL_DRAFT_FIELDS.includes("customerHHI"));
+  assert.ok(NL_DRAFT_FIELDS.includes("relatedPartyRevenuePct"));
   assert.ok(NL_DRAFT_FIELDS.includes("inputTokensM"));
   assert.ok(NL_DRAFT_FIELDS.includes("periodStart"));
   assert.ok(NL_DRAFT_FIELDS.includes("monthlySeries"));

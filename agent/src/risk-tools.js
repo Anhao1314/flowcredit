@@ -243,20 +243,26 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
     },
     {
       name: "assess_prompt",
-      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. The text is injected server-side with the user's raw prompt — never retype it. PREFER THIS whenever the user prompt already contains the facts, regardless of length; do not pre-extract or pre-validate.",
+      description: "One-shot: extract the whitelisted draft from the user's raw text (JSON or prose), ground it, and run the authoritative assessment. The text is injected server-side with the user's raw prompt — never retype it. PREFER THIS whenever the user prompt already contains the facts, regardless of length; do not pre-extract or pre-validate. The server merges a carried session draft automatically for follow-up turns; do not retype earlier fields.",
       parameters: { text: { type: "string" } },
       execute(args) {
-        assertArgs(args, ["text"]);
+        // carryDraft 由服务端注入（会话草稿续传）；模型传的同名键会在注入时被覆盖。
+        assertArgs(args, ["text", "carryDraft"]);
         const text = typeof args.text === "string" ? args.text : "";
         if (!text.trim() || text.length > INTAKE_SCHEMA_V03.maxTextLength) throw new TypeError(`text must contain 1 to ${INTAKE_SCHEMA_V03.maxTextLength} characters`);
-        // 解析器 v0.3 是按构造 grounded 的（只映射文本明示字段，含推导月份行）；
+        // 解析器 v0.4 是按构造 grounded 的（只映射文本明示字段，含推导月份行）；
         // 不再做二次 grounding——那会把推导型字段（如 "3月"+年份锚点的月度行）误删。
         const extraction = extractNaturalLanguageDraft(text);
         const warnings = [...extraction.warnings];
-        const outcome = assessDraftPure(extraction.draft, { connectors });
+        // 会话草稿续传（agent 循环）：上一轮已评估字段作为基座，本轮文本字段覆盖。
+        // carryDraft 由服务端注入（会话存储），模型无权构造或改写。
+        const merged = args.carryDraft && typeof args.carryDraft === "object" && !Array.isArray(args.carryDraft)
+          ? { ...args.carryDraft, ...extraction.draft }
+          : extraction.draft;
+        const outcome = assessDraftPure(merged, { connectors });
         if (!outcome.ok) {
           return {
-            assessed: false, extracted: extraction.draft, matchedFields: extraction.matchedFields, warnings,
+            assessed: false, extracted: extraction.draft, merged, matchedFields: extraction.matchedFields, warnings,
             validation: {
               valid: false, errors: outcome.validation.errors, warnings: outcome.validation.warnings,
               missingByGroup: outcome.validation.missingByGroup, missingInputs: outcome.validation.missingInputs
@@ -265,7 +271,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
           };
         }
         return {
-          assessed: true, extracted: extraction.draft, matchedFields: extraction.matchedFields, warnings,
+          assessed: true, extracted: extraction.draft, merged, matchedFields: extraction.matchedFields, warnings,
           ...outcome.payload,
           authoritative: outcome.payload.authoritative
         };

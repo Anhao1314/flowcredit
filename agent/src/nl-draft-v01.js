@@ -23,13 +23,14 @@
  */
 import { canonicalGpu } from "./intake-v03.js";
 
-export const NL_DRAFT_PARSER_VERSION = "nl-draft-v0.3";
+export const NL_DRAFT_PARSER_VERSION = "nl-draft-v0.4";
 
 // The complete set of fields this parser can ever emit, in a stable order.
 export const NL_DRAFT_FIELDS = Object.freeze([
-  "taskType", "gpuModel", "gpuHours", "revenueUsd", "computeSpendUsd",
+  "label", "taskType", "gpuModel", "gpuHours", "revenueUsd", "computeSpendUsd",
   "repaymentRatePct", "overdue30Pct", "payingCustomers", "top5ConcentrationPct",
   "inputTokensM", "outputTokensM", "validRatePct",
+  "customerHHI", "relatedPartyRevenuePct",
   "totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd",
   "periodStart", "periodEnd", "operatingHistoryDays", "dataCoveragePct",
   "monthlySeries", "R", "C"
@@ -55,9 +56,9 @@ function globalRegex(pattern) { return new RegExp(pattern.source, pattern.flags.
 const MONEY_FIELDS = Object.freeze({
   revenueUsd: [
     { rank: 2, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总收入|总营收|总流水|total\s+revenue|gross\s+revenue)`, "i")] },
-    { rank: 2, patterns: [labeled("总收入|总营收|总流水|total\\s+revenue|gross\\s+revenue", MONEY_TAIL)] },
+    { rank: 2, patterns: [labeled("总收入(?!\\s*(?:占比|比例|份额))|总营收|总流水|total\\s+revenue|gross\\s+revenue", MONEY_TAIL)] },
     { rank: 1, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:月收入|月营收|月流水|每月收入|营业收入|收入|monthly\s+revenue|revenue)`, "i")] },
-    { rank: 1, patterns: [labeled("月收入|月营收|月流水|每月收入|营业收入|收入|monthly\\s+revenue|revenue", MONEY_TAIL)] }
+    { rank: 1, patterns: [labeled("月收入|月营收|月流水|每月收入|营业收入|收入(?!\\s*(?:占比|比例|份额|环比))|monthly\\s+revenue(?!\\s*(?:share|ratio))|revenue(?!\\s*(?:share|ratio))", MONEY_TAIL)] }
   ],
   computeSpendUsd: [
     { rank: 2, reverse: true, patterns: [new RegExp(String.raw`(?<![\d.,/\-])${NUMBER_TOKEN}\s*(?:美元|USD|usd)?\s*(?:的)?\s*(?:总算力\s*(?:支出|成本|花费|费用)|total\s+compute\s+(?:spend|cost))`, "i")] },
@@ -93,6 +94,9 @@ const PERCENT_FIELDS = Object.freeze({
   validRatePct: [
     new RegExp(String.raw`${PERCENT_NUMBER}\s*[%％]\s*(?:的)?\s*(?:有效率|valid\s+rate)`, "i"),
     labeled("有效率|有效占比|valid\\s+rate|validRatePct", PERCENT_TAIL)
+  ],
+  relatedPartyRevenuePct: [
+    labeled("关联方收入占比|关联方收入比例|关联交易收入占比|关联交易收入比例|关联方占比|related[-\\s]?party\\s+(?:revenue\\s+)?(?:share|ratio|pct|percentage)", PERCENT_TAIL)
   ]
 });
 
@@ -424,6 +428,9 @@ function jsonDraft(object, warnings) {
     if (canonical === "h100-equivalent" || canonical === "mixed") values.gpuModel = canonical;
     else warnings.push(`gpuModel "${source.gpuModel}" is outside the supported values; it was ignored.`);
   }
+  if (typeof source.label === "string" && source.label.trim().length >= 2) {
+    values.label = source.label.trim().slice(0, 80);
+  }
 
   for (const [field, kind] of Object.entries(EXACT_KEYS)) {
     if (!Object.hasOwn(source, field)) continue;
@@ -585,6 +592,25 @@ function extractNaturalLanguageValues(source, warnings) {
     }
   }
 
+  if (values.customerHHI === undefined) {
+    const match = /(?:客户\s*)?HHI(?:\s*指数|\s*index)?\s*(?:约|为|:|：|=)?\s*(\d{1,5})/i.exec(scalarSource)
+      || /(\d{1,5})\s*(?:的)?\s*(?:客户\s*)?HHI(?:\s*指数)?/i.exec(scalarSource);
+    if (match) {
+      const hhi = Number(match[1]);
+      if (hhi >= 0 && hhi <= 10000) values.customerHHI = hhi;
+      else warnings.push("customerHHI must be within 0..10000; it was ignored.");
+    }
+  }
+
+  if (values.label === undefined) {
+    const match = /(?:公司名称|公司全称|公司叫|企业名称|标的名称|标的为?|运营商名称|label)\s*[:：是]\s*([^\n，。;；]{2,60})/i.exec(scalarSource)
+      || /(?:请评估|评估|考察)\s+([A-Za-z][A-Za-z0-9.&'\- ]{1,49}?)(?=\s+(?:这家|的)|[,，。;；\n]|$)/i.exec(scalarSource);
+    if (match) {
+      const label = match[1].trim().replace(/[。;；]+$/, "");
+      if (label.length >= 2) values.label = label;
+    }
+  }
+
   const SERIES_LABELS = { R: "R|申报(?:活动)?序列", C: "C|可信(?:活动)?序列" };
   for (const field of ["R", "C"]) {
     if (values[field] !== undefined) continue;
@@ -610,5 +636,20 @@ export function extractNaturalLanguageDraft(text) {
   const values = json ? json.draft : extractNaturalLanguageValues(source, warnings);
   const draft = {};
   for (const field of NL_DRAFT_FIELDS) if (values[field] !== undefined) draft[field] = values[field];
+
+  // 多期窗口派生：主评分窗不是 27–31 天时，回退到月度序列的最近一个月。
+  // 这样"近六个月：…评估周期 2026-03-01 到 2026-08-31"这类真实口径第一轮就能过校验。
+  const spanDays = draft.periodStart && draft.periodEnd
+    ? (Date.parse(draft.periodEnd) - Date.parse(draft.periodStart)) / 86_400_000
+    : null;
+  const hasSeries = Array.isArray(draft.monthlySeries) && draft.monthlySeries.length > 0;
+  if (hasSeries && (spanDays === null || spanDays < 27 || spanDays > 31)) {
+    const lastPeriod = String(draft.monthlySeries.at(-1)?.period || "");
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(lastPeriod)) {
+      draft.periodStart = `${lastPeriod}-01`;
+      draft.periodEnd = new Date(Date.UTC(Number(lastPeriod.slice(0, 4)), Number(lastPeriod.slice(5, 7)), 0)).toISOString().slice(0, 10);
+      warnings.push("Primary scoring window was derived from the latest monthly period; the stated window was not a 27-31 day month.");
+    }
+  }
   return { draft, matchedFields: Object.keys(draft), warnings };
 }

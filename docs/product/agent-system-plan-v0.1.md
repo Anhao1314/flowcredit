@@ -65,7 +65,7 @@
 | # | 能力 | 服务于 | 说明 |
 |---|---|---|---|
 | 1 | **证据连接器 v0.1** | A 面闭环 | 对话内贴月度 CSV → import_csv → sha256 attestation → evidenceStatus 升至 attested；decision 离开 insufficient-evidence 的唯一路径 |
-| 2 | **引导式追问**（prompt v3） | A 面转化率 | requiredActions → agent 主动提问策略：一次最多 3 问、每问带示例格式、按 evidenceCoverage 优先级 |
+| 2 | **引导式追问**（prompt v3）✅ 已实现 | A 面转化率 | requiredActions → agent 主动提问：一次最多 3 问、每问带可照抄示例；用户回答即触发会话草稿合并重评（parser v0.4） |
 | 3 | **体检报告卡固化** | A 面产出物 | 评估固化为可分享对象（分享链接或导出 JSON 卡）——"能拿去给资方看"是 A 面的价值闭环 |
 | 4 | **经营者档案**（记忆层 L1→L0） | 复购与 B 面 | 同一经营者的多轮评估沉淀为档案；跨会话召回历史 Grade 变化 |
 | 5 | `compare_drafts` 工具 | 漂移检测 | 两版草稿/两次评估对比（经营变化检测）——后置 |
