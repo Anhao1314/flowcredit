@@ -88,7 +88,7 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    timer.unref?.();
+    // 不 unref：请求未结束时定时器必须保持事件循环存活（CI 上 unref 会让超时用例挂起）。
     let response;
     try {
       response = await doFetch(url, { method: "GET", headers: { "User-Agent": agentHeader, Accept: "application/json" }, signal: controller.signal });
