@@ -64,18 +64,35 @@ header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:
 .live-body{white-space:pre-wrap}
 .caret{display:inline-block;width:6px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:fc-blink 1s steps(2,start) infinite}
 @keyframes fc-blink{to{visibility:hidden}}
+/* Q 版助手（与 console 同一套生成器与状态机；每实例独立渐变 id，避免冲突） */
+.bot-avatar{display:inline-block;flex-shrink:0;filter:drop-shadow(0 3px 8px rgba(61,125,255,.28))}
+.bot-avatar svg{display:block}
+.bot-avatar .eye{transform-box:fill-box;transform-origin:center;animation:avatar-blink 4.6s infinite}
+.bot-avatar.idle{animation:avatar-float 3.6s ease-in-out infinite}
+.bot-avatar.think .eye{animation:avatar-look 1.5s ease-in-out infinite}
+.bot-avatar.think{animation:avatar-float 1.1s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(90,140,255,.65))}
+.bot-avatar.alert .eye{transform:scale(1.15,1.3);animation:none}
+.bot-avatar.alert{filter:drop-shadow(0 0 12px rgba(90,140,255,.7))}
+.bot-avatar.happy .eye{transform:scaleY(.42) translateY(3.5px);animation:none}
+.bot-avatar.happy{animation:avatar-bounce .5s ease-in-out 2;filter:drop-shadow(0 0 12px rgba(90,140,255,.6))}
+@keyframes avatar-blink{0%,91%,100%{transform:scaleY(1)}94%,97%{transform:scaleY(.1)}}
+@keyframes avatar-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes avatar-look{0%,100%{transform:translate(0,0)}50%{transform:translate(1.5px,-2.5px)}}
+@keyframes avatar-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.msg-row{display:flex;gap:9px;align-items:flex-start;width:100%}
+.msg-row .msg{max-width:78%;min-width:0}
 body.has-messages .quick-chips{display:none}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">FlowCredit<span class="dot"></span></div>
+  <div class="brand"><span id="brand-avatar"></span>FlowCredit</div>
   <div class="brand-sub">Business Risk Intelligence · 评估 AI 推理 / GPU 算力运营商</div>
   <span class="mode-label" id="mode-label">deterministic · no model call</span>
 </header>
 <div class="thread" id="thread">
   <div class="empty" id="empty">
-    <div class="wordmark">FlowCredit<span class="dot"></span></div>
+    <div class="wordmark"><span id="empty-avatar"></span>FlowCredit<span class="dot"></span></div>
     <div class="wordmark-sub">评估一家 AI 推理 / GPU 算力运营商的交易对手风险</div>
   </div>
 </div>
@@ -116,6 +133,36 @@ body.has-messages .quick-chips{display:none}
   var sessionId = null;
   var busy = false;
   var controller = null;
+  // Q 版助手：与 quant/console/build.js 同一生成器（每实例独立渐变 id）与状态机。
+  var avatarSeq = 0;
+  var currentMood = "idle";
+  var moodTimer = null;
+  function botAvatarSVG(size, state, live) {
+    avatarSeq += 1;
+    var id = "bav" + avatarSeq;
+    var cls = "bot-avatar " + (state || "idle") + (live ? " live" : "");
+    return '<span class="' + cls + '" style="width:' + size + 'px;height:' + size + 'px">' +
+      '<svg width="' + size + '" height="' + size + '" viewBox="0 0 64 64" aria-hidden="true">' +
+      '<defs><radialGradient id="' + id + '" cx="35%" cy="28%" r="80%">' +
+      '<stop offset="0%" stop-color="#6fb1ff"/><stop offset="55%" stop-color="#3d7dff"/><stop offset="100%" stop-color="#2456e6"/>' +
+      '</radialGradient></defs>' +
+      '<circle cx="32" cy="32" r="29" fill="url(#' + id + ')"/>' +
+      '<ellipse class="eye" cx="23.5" cy="30" rx="5.2" ry="8.6" fill="#fff"/>' +
+      '<ellipse class="eye" cx="40.5" cy="30" rx="5.2" ry="8.6" fill="#fff"/>' +
+      '</svg></span>';
+  }
+  function setBotMood(mood, holdMs) {
+    if (mood !== "idle" && mood !== "think" && currentMood === "think") return; // 模型调用中不被低优先级状态打断
+    currentMood = mood;
+    document.querySelectorAll(".bot-avatar.live").forEach(function(a) {
+      a.classList.remove("think", "happy", "alert");
+      if (mood !== "idle") a.classList.add(mood);
+    });
+    if (moodTimer) { clearTimeout(moodTimer); moodTimer = null; }
+    if (holdMs) moodTimer = setTimeout(function() { setBotMood("idle"); }, holdMs);
+  }
+  document.getElementById("brand-avatar").innerHTML = botAvatarSVG(20, "idle", true);
+  document.getElementById("empty-avatar").innerHTML = botAvatarSVG(30, "idle", true);
 
   function newSessionId() {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return "chat-" + crypto.randomUUID();
@@ -308,7 +355,15 @@ body.has-messages .quick-chips{display:none}
       details.appendChild(pre);
       div.appendChild(details);
     }
-    thread.appendChild(div);
+    if (m.role === "user") {
+      thread.appendChild(div);
+    } else {
+      var row = document.createElement("div");
+      row.className = "msg-row";
+      row.innerHTML = botAvatarSVG(26, "idle");
+      row.appendChild(div);
+      thread.appendChild(row);
+    }
     thread.style.display = "flex";
     empty.style.display = "none";
     document.body.classList.add("has-messages");
@@ -356,11 +411,16 @@ body.has-messages .quick-chips{display:none}
     body.appendChild(caret);
     live.appendChild(meta);
     live.appendChild(body);
-    thread.appendChild(live);
+    var row = document.createElement("div");
+    row.className = "msg-row";
+    row.innerHTML = botAvatarSVG(26, "idle", true);
+    row.appendChild(live);
+    thread.appendChild(row);
     thread.style.display = "flex";
     empty.style.display = "none";
     document.body.classList.add("has-messages");
     scroll();
+    setBotMood("think");
     var finalResult = null;
     controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     function handleEvent(event) {
@@ -434,10 +494,12 @@ body.has-messages .quick-chips{display:none}
       return pump();
     }).then(function() {
       if (!finalResult) throw new Error("流式响应未返回 done 事件");
-      if (live.parentNode) live.parentNode.removeChild(live);
+      if (row.parentNode) row.parentNode.removeChild(row);
+      setBotMood(finalResult && finalResult.harnessStatus === "ok" ? "happy" : "idle", 1600);
       renderAgentResult(finalResult, started);
     }).catch(function(error) {
-      if (live.parentNode) live.parentNode.removeChild(live);
+      if (row.parentNode) row.parentNode.removeChild(row);
+      setBotMood("alert", 1600);
       if (error && error.name === "AbortError") {
         var partial = text.textContent;
         append({ role: "assistant", text: (partial ? partial + "\n\n" : "") + "（已停止）", diag: [["stopped", "badge-warn"]] });
@@ -527,11 +589,15 @@ body.has-messages .quick-chips{display:none}
   reset.addEventListener("click", function() {
     messages = [];
     sessionId = newSessionId();
-    thread.innerHTML = "";
-    thread.style.display = "none";
+    // 只移除消息节点，保留空状态元素（原实现清空 innerHTML 会把 #empty 一起删掉）
+    Array.prototype.slice.call(thread.querySelectorAll(".msg-row, .msg.user")).forEach(function(node) {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+    thread.style.display = "flex";
     empty.style.display = "flex";
     document.body.classList.remove("has-messages");
     try { localStorage.removeItem(STORE); localStorage.removeItem(SESSION); } catch (e) {}
+    setBotMood("idle");
     updateSend();
   });
   updateSend();

@@ -126,6 +126,8 @@ test("standalone chat page is served by the business agent", async () => {
     assert.match(html, /event\.type === "delta"/, "stream deltas append to the live bubble");
     assert.doesNotMatch(html, /\/api\/finch\/agent/, "agent mode no longer uses the unary finch route");
     assert.match(html, /\/api\/finch\/assess/, "deterministic mode stays on the unary assess route");
+    assert.match(html, /bot-avatar/, "Q-style assistant avatar generator present");
+    assert.match(html, /id="empty-avatar"/, "empty state shows the assistant avatar");
   }, { env: NO_MODEL_ENV });
 });
 
