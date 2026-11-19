@@ -21,6 +21,7 @@ import { buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { buildEvidencePack } from "./connectors/evidence-pack.js";
 import { observationsForCompany } from "./research/panel.js";
 import { buildPredictionReport } from "./research/predictions.js";
+import { commitmentCoverageFrom } from "./connectors/sec-filings.js";
 import { getPresetV021 } from "./presets.js";
 import { addFinchIdentity, deterministicFingerprintPayload, finchAssessmentFingerprint, finchInputFingerprint } from "./finch-contract.js";
 import { createCoreToolRegistry } from "../core/tool-registry.js";
@@ -126,7 +127,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, research = null, predictionLedger = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, research = null, predictionLedger = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -372,6 +373,24 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
       }
     },
     {
+      name: "fetch_public_commitments",
+      description: "Read the latest 10-K/10-Q/S-1/424B4 filing of a US-listed company and extract compute/lease COMMITTED SPEND (aggregate and next-12-months) plus total liquidity with frozen deterministic patterns — the off-balance-sheet figures XBRL does not carry. Returns values WITH the original filing sentences (snippets) for human verification; extraction is documented tier, weaker than XBRL facts, and a null value means 'not found', never zero. Conservative commitment coverage = liquidity ÷ 12-month committed spend.",
+      parameters: { query: { type: "string", required: true, description: "Company name or ticker, e.g. Anthropic or ANT" } },
+      async execute(args) {
+        assertArgs(args, ["query"]);
+        if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 120) throw new TypeError("query must be a company name or ticker (1-120 chars)");
+        if (!filings) return { ok: false, code: "FILINGS_CONNECTOR_UNAVAILABLE", message: "filing text connector is not configured on this server" };
+        try {
+          return await filings.fetchPublicCommitments({ query: args.query.trim() });
+        } catch (error) {
+          return {
+            ok: false, code: error.code || "FILINGS_FETCH_FAILED", message: String(error.message || error),
+            ...(Array.isArray(error.candidates) ? { candidates: error.candidates } : {})
+          };
+        }
+      }
+    },
+    {
       name: "build_research_panel",
       description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. When the market price feed is configured it also attaches market cap, Merton distance-to-default and forward 90d proxy labels (filed-aligned). Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
       parameters: {
@@ -453,6 +472,10 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
         if (!wanted.length) return { ok: false, code: "NO_MATCHING_PREDICTIONS", message: `no predictions registered for ticker ${filter}` };
         const observationsByTicker = {};
         const dataNotes = [];
+        const commitmentSummaries = {};
+        const needCommitments = new Set(predictionLedger.predictions
+          .filter(item => item.metric === "commitmentCoverage" && (!filter || String(item.subject.ticker).toUpperCase() === filter))
+          .map(item => String(item.subject.ticker).toUpperCase()));
         for (const ticker of wanted) {
           try {
             const lookup = await secEdgar.lookupPublicCompany({ query: ticker, periods: 12 });
@@ -462,10 +485,40 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
             observationsByTicker[ticker] = [];
             dataNotes.push(`${ticker}: ${error.code || "SEC_LOOKUP_FAILED"} — ${String(error.message || error)}`);
           }
+          // commitmentCoverage 行来自申报文本抽取（documented 级），与 XBRL 观测合并供裁判使用。
+          if (needCommitments.has(ticker)) {
+            if (!filings) {
+              dataNotes.push(`${ticker}: commitmentCoverage needs the filing-text connector, which is not configured`);
+              continue;
+            }
+            try {
+              const filingData = await filings.fetchPublicCommitments({ query: ticker });
+              if (filingData.ok && filingData.commitments) {
+                const coverage = commitmentCoverageFrom(filingData.commitments);
+                commitmentSummaries[ticker] = {
+                  form: filingData.filing?.form ?? null, filed: filingData.filing?.filed ?? null,
+                  asOfDate: filingData.commitments.asOfDate ?? null,
+                  aggregateCommittedSpendUsd: filingData.commitments.aggregateCommittedSpendUsd,
+                  twelveMonthCommittedSpendUsd: filingData.commitments.twelveMonthCommittedSpendUsd,
+                  liquidityUsd: filingData.commitments.liquidityUsd,
+                  commitmentCoverageConservativeX: coverage
+                };
+                if (coverage !== null) {
+                  const periodEnd = filingData.commitments.asOfDate || filingData.filing?.filed || null;
+                  if (periodEnd) observationsByTicker[ticker] = [...(observationsByTicker[ticker] || []), { periodEnd, filed: filingData.filing?.filed ?? null, commitmentCoverage: coverage }];
+                  else dataNotes.push(`${ticker}: commitments extracted but no as-of/filing date to anchor the observation`);
+                } else {
+                  dataNotes.push(`${ticker}: commitments not fully extractable from the filing (values missing — manual review required)`);
+                }
+              }
+            } catch (error) {
+              dataNotes.push(`${ticker}: commitments fetch failed (${error.code || "FILINGS_FETCH_FAILED"}) — ${String(error.message || error)}`);
+            }
+          }
         }
         const clock = Date.parse(nowMs());
         const report = buildPredictionReport(predictionLedger, observationsByTicker, Number.isFinite(clock) ? clock : Date.now());
-        return { ok: true, ...report, dataNotes };
+        return { ok: true, ...report, ...(Object.keys(commitmentSummaries).length ? { commitments: commitmentSummaries } : {}), dataNotes };
       }
     },
     {

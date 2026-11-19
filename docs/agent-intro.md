@@ -22,7 +22,7 @@
 
 **核心机制**：LLM 收集事实、选择工具、解释结果；所有数字（TAI / CCI / Risk Grade / decision）由确定性引擎 `computeRiskV021` 唯一产出；每一条回答都带指纹引用（`assessmentFingerprint` / `inputFingerprint`），可反查、可审计；模型失败/超步/未授权时优雅降级为同一条确定性管线，绝不编造。
 
-## 2. 它能做什么（15 个确定性工具）
+## 2. 它能做什么（16 个确定性工具）
 
 | 工具 | 能力 |
 | --- | --- |
@@ -35,6 +35,7 @@
 | `attach_evidence` | 证据包（`evidence-pack/v0.1` JSON）→ sha256 摘要 + documented 级证据记录；只对**与申报一致**的白名单字段附加证据，不一致字段 fail-closed（不覆盖申报值）；上传文件永远不等于独立验证 |
 | `lookup_public_company` | 自己去 SEC EDGAR 取上市公司公开财务（收入/毛利/经营利润/净利/现金/债务，带表单、申报日、来源哈希；不取 token/回款/客户集中度） |
 | `assess_public_company` | 公开数据 → 资本结构叠加：用申报的收入/成本/债务/现金/利息算 solvency 与 CCI 上限，并列出做完整评级仍缺的经营字段 |
+| `fetch_public_commitments` | 读最新 10-K/10-Q/S-1/424B4 全文，用冻结正则抽取**算力/租赁承诺**（总额、未来 12 个月）与流动性总额——XBRL 没有的表外数据；每项带原文句子片段供人工核对，documented 级（弱于 XBRL 事实），抽不到 = null 绝不编数；保守承诺覆盖度 = 流动性 ÷ 12 个月承诺 |
 | `build_research_panel` | 自行抓取上市算力运营商 SEC 申报与日线价格，构建 point-in-time 季度面板（periodEnd + 申报日、市值/Merton DD、前瞻 90d 代理标签），供因子研究/校准；不改权威评分 |
 | `factor_report` | 面板的因子覆盖率与描述统计；标签状态如实标注（显式/`proxy-market` 代理/`unavailable`），有标签时报每期 Rank IC/ICIR/t 值，并以 Merton DD 为结构基准（看增量 IC，不当已验证 alpha） |
 | `build_scoring_model` | 面板 → 评分模型草案：截面稳健 z + 收缩权重（方向取样本内 IC 符号、幅度向等权收缩，λ=IC 可用期/(期+K)）+ 因子相关矩阵 + walk-forward 样本外对照 DD；仅研究工件，不接入引擎，采纳需人工评审与版本升级 |

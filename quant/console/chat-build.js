@@ -359,6 +359,19 @@ const html = `<!doctype html>
         { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
       ];
       note = r.digest || "";
+    } else if (call.name === "fetch_public_commitments" && r.company) {
+      title = "算力承诺 · 文本抽取";
+      var cm = r.commitments || {};
+      var fmtB = function(v) { return v == null ? "n/a" : Math.round(v / 1e9 * 10) / 10 + "B"; };
+      metrics = [
+        { label: "公司", value: r.company.name + " (" + r.company.ticker + ")" },
+        { label: "总承诺", value: fmtB(cm.aggregateCommittedSpendUsd) },
+        { label: "12个月内", value: fmtB(cm.twelveMonthCommittedSpendUsd) },
+        { label: "流动性", value: fmtB(cm.liquidityUsd) }
+      ];
+      note = (cm.commitmentCoverageConservativeX != null ? "保守覆盖 " + cm.commitmentCoverageConservativeX + "x · " : "抽取不完整 · ")
+        + (r.filing ? r.filing.form + " " + r.filing.filed + " · " : "")
+        + "文本摘录（documented 级）· 需人工核对原文片段";
     } else if (call.name === "check_predictions" && r.summary) {
       title = "预测裁判";
       metrics = [

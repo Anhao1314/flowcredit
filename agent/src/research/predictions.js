@@ -26,14 +26,15 @@ export const DEFAULT_PREDICTIONS_FILE = resolve(dirname(fileURLToPath(import.met
 const OPERATORS = Object.freeze([">=", "<=", ">", "<"]);
 const QUANTIFIERS = Object.freeze(["any", "all", "mean"]);
 
-/** v0.1 可由面板/SEC 观测直接计算的指标 → 观测字段名映射。 */
+/** v0.1 可计算的指标 → 观测字段名映射（commitmentCoverage 行由调用方从申报文本抽取合成）。 */
 export const COMPUTABLE_METRICS = Object.freeze([
-  "operatingMarginQuarterPct", "revenueGrowthQoQPct", "netDebtToRevenueX"
+  "operatingMarginQuarterPct", "revenueGrowthQoQPct", "netDebtToRevenueX", "commitmentCoverage"
 ]);
 const METRIC_FIELDS = Object.freeze({
   operatingMarginQuarterPct: "operatingMarginPct",
   revenueGrowthQoQPct: "revenueGrowthQoQ",
-  netDebtToRevenueX: "netDebtToRevenueX"
+  netDebtToRevenueX: "netDebtToRevenueX",
+  commitmentCoverage: "commitmentCoverage"
 });
 
 const finite = value => typeof value === "number" && Number.isFinite(value);

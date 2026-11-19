@@ -94,12 +94,13 @@ test("'mean' quantifier is only judged at window close", () => {
 test("non-computable metrics are unverifiable with an explicit connector reason", () => {
   const ledger = loadPredictionLedger(JSON.stringify({
     version: PREDICTIONS_VERSION,
-    predictions: [{ ...JSON.parse(LEDGER_TEXT).predictions[0], id: "T-CC", metric: "commitmentCoverage" }]
+    predictions: [{ ...JSON.parse(LEDGER_TEXT).predictions[0], id: "T-FIN", metric: "externalFinancingUsd" }]
   }));
   const result = evaluatePrediction(ledger.predictions[0], [obs("2026-12-31", 5)], NOW_MID_WINDOW);
   assert.equal(result.status, "unverifiable");
   assert.match(result.checks[0].reason, /not computable by current connectors/);
-  assert.ok(!COMPUTABLE_METRICS.includes("commitmentCoverage"));
+  assert.ok(COMPUTABLE_METRICS.includes("commitmentCoverage"), "commitmentCoverage is now computable via the filing-text connector");
+  assert.ok(!COMPUTABLE_METRICS.includes("externalFinancingUsd"));
 });
 
 test("overall status: a failed check dominates an unverifiable one", () => {
@@ -170,8 +171,8 @@ test("check_predictions tool: unconfigured ledger fails closed; scripted SEC dat
   });
   const result = await registry.get("check_predictions").execute({});
   assert.equal(result.ok, true);
-  assert.deepEqual(result.summary, { total: 2, pass: 1, fail: 0, pending: 0, unverifiable: 1 });
-  assert.ok(result.dataNotes.length === 0, "facts were available for TST");
+  assert.deepEqual(result.summary, { total: 2, pass: 1, fail: 0, pending: 1, unverifiable: 0 }, "T-CC is pending (window open) and the missing filing connector is disclosed, not silent");
+  assert.match(result.dataNotes.find(note => note.includes("filing-text connector")), /not configured/);
 
   const filtered = await registry.get("check_predictions").execute({ ticker: "TST" });
   assert.equal(filtered.ok, true);
