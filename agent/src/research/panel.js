@@ -14,6 +14,7 @@
 import { createHash } from "node:crypto";
 import { annualizedVolPct, closeAsOf, distanceToDefault } from "./merton.js";
 import { forwardMarketLabels } from "./labels.js";
+import { buildReplayReport } from "./replay.js";
 
 export const RESEARCH_PANEL_VERSION = "ai-compute-panel/v0.1.0";
 
@@ -628,5 +629,12 @@ export function createResearchService({ secEdgar, priceFeed = null, explicitLabe
     return { ok: true, modelId, ...result };
   }
 
-  return Object.freeze({ buildPanel, factorReport, buildScoringModel, version: RESEARCH_PANEL_VERSION });
+  function replayReport({ panelId } = {}) {
+    evict();
+    const entry = store.get(String(panelId || ""));
+    if (!entry) return { ok: false, code: "PANEL_NOT_FOUND", message: "panel not found or expired; build it again" };
+    return { ok: true, panelId, ...buildReplayReport(entry.panel) };
+  }
+
+  return Object.freeze({ buildPanel, factorReport, buildScoringModel, replayReport, version: RESEARCH_PANEL_VERSION });
 }

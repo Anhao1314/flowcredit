@@ -17,7 +17,7 @@ const CSV = [
 test("risk tool registry is closed, schema-safe and exposes the deterministic tools plus the SEC lookup", () => {
   const registry = createRiskToolRegistry({ connectors });
   assert.deepEqual(registry.list.map(tool => tool.name).sort(), [
-    "assess_draft", "assess_prompt", "assess_public_company", "attach_evidence", "build_research_panel", "build_scoring_model", "extract_from_text", "factor_report", "import_csv", "lookup_public_company", "preset_draft", "validate_draft", "what_if"
+    "assess_draft", "assess_prompt", "assess_public_company", "attach_evidence", "build_research_panel", "build_scoring_model", "extract_from_text", "factor_report", "import_csv", "lookup_public_company", "preset_draft", "replay_report", "validate_draft", "what_if"
   ]);
   for (const schema of registry.schemas) {
     assert.equal(schema.type, "function");

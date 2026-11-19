@@ -425,6 +425,17 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
       }
     },
     {
+      name: "replay_report",
+      description: "Replay the frozen capital-structure distress gates across a research panel, point-in-time (filed-aligned): each scored observation is flagged if any distress gate fires, then compared against the panel's forward-90d market-proxy labels. Returns confusion matrix, recall/false-positive-rate/precision and per-company lead times. Labels are MARKET PROXIES, not credit events; this is a replay statistic, not proof of predictive validity. Never tune the flag rule here.",
+      parameters: { panelId: { type: "string", required: true, description: "panelId returned by build_research_panel" } },
+      execute(args) {
+        assertArgs(args, ["panelId"]);
+        if (typeof args.panelId !== "string" || !args.panelId.trim()) throw new TypeError("panelId is required");
+        if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
+        return research.replayReport({ panelId: args.panelId.trim() });
+      }
+    },
+    {
       name: "preset_draft",
       description: "Return one of the synthetic example drafts (healthy | watch | sybil) so the user can try a complete assessment. These are fixtures, not real companies.",
       parameters: { key: { type: "string", required: true, enum: ["healthy", "watch", "sybil"] } },

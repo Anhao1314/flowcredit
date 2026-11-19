@@ -338,6 +338,15 @@ body.has-messages .quick-chips{display:none}
         { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
       ];
       note = r.digest || "";
+    } else if (call.name === "replay_report" && r.rule) {
+      title = "评估回放";
+      metrics = [
+        { label: "标注观测", value: (r.coverage || {}).labeled ?? "n/a" },
+        { label: "命中", value: (r.rates || {}).recall ?? "n/a" },
+        { label: "误报率", value: (r.rates || {}).falsePositiveRate ?? "n/a" },
+        { label: "精确率", value: (r.rates || {}).precision ?? "n/a" }
+      ];
+      note = "代理标签（前瞻 90d 跌幅 ≤ −40%）· 非信用事件 · 回放统计，非预测有效性证明";
     } else if (call.name === "attach_evidence" && r.attached) {
       title = "证据接入";
       var es = r.evidenceStatus || {};
