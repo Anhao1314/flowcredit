@@ -210,6 +210,15 @@ function deriveBusinessMetrics(data) {
  *      现金/总债务（20%，缺利息时 37.5%）。缺失时返回 null，主模型保持不变。
  * 导出供“公开数据 → 资本结构”工具复用（输入须是月度口径的收入与支出）。
  */
+/**
+ * 资本结构叠加层 v0.2（可选，含 distress overlay）：
+ * 基础 solvency = 净债务/年化收入（50%）、EBIT 利息覆盖（30%）、现金/债务（20%）。
+ * EBIT 优先用 operatingIncomeUsd，缺失时退回“收入−算力支出”；利息取绝对值
+ * （净利息收支可能为负）。distress 闸门只封顶、不加分：
+ *   EBIT 覆盖 < 1 → cap ≤ 650；经营利润率 < −50% → cap ≤ 600；
+ *   现金跑道 < 6 个月 → cap ≤ 650；净资产为负 → cap ≤ 550。
+ * 以上输入缺失时行为与 v0.1 完全一致（旧结果/指纹不变）。
+ */
 export function computeCapitalStructure(data) {
   if (!finite(data.totalDebtUsd) || !finite(data.cashAndCashEquivalentsUsd)) return null;
   if (!finite(data.revenueUsd) || data.revenueUsd <= 0) return null;
@@ -220,8 +229,16 @@ export function computeCapitalStructure(data) {
   const netDebtToRevenueX = round3(netDebtUsd / annualizedRevenueUsd);
   const cashToDebtPct = totalDebtUsd > 0 ? clamp((cashUsd / totalDebtUsd) * 100) : 100;
   const contributionUsd = data.revenueUsd - data.computeSpendUsd;
-  const interestExpenseUsd = finite(data.interestExpenseUsd) && data.interestExpenseUsd > 0 ? data.interestExpenseUsd : null;
-  const interestCoverageX = interestExpenseUsd ? round3(contributionUsd / interestExpenseUsd) : null;
+  const ebitUsd = finite(data.operatingIncomeUsd) ? data.operatingIncomeUsd : contributionUsd;
+  const interestExpenseUsd = finite(data.interestExpenseUsd) && data.interestExpenseUsd !== 0 ? Math.abs(data.interestExpenseUsd) : null;
+  const interestCoverageX = interestExpenseUsd ? round3(ebitUsd / interestExpenseUsd) : null;
+  const operatingMarginPct = finite(data.operatingIncomeUsd) ? round1(ebitUsd / data.revenueUsd * 100) : null;
+  // 现金跑道：仅当经营现金流为负时定义（月度口径）。burn = 算力支出−收入 或 经营亏损，取较大者。
+  const burnCandidates = [contributionUsd < 0 ? -contributionUsd : 0, finite(data.operatingIncomeUsd) && data.operatingIncomeUsd < 0 ? -data.operatingIncomeUsd : 0];
+  const monthlyBurnUsd = Math.max(...burnCandidates);
+  const cashRunwayMonths = monthlyBurnUsd > 0 ? round1(cashUsd / monthlyBurnUsd) : null;
+  const equityUsd = finite(data.equityUsd) ? data.equityUsd : null;
+  const negativeEquity = equityUsd !== null && equityUsd < 0;
 
   const components = {
     netDebtToRevenue: round1(interpolateV021(netDebtToRevenueX, KNOTS_V021.netDebtToRevenue)),
@@ -232,15 +249,31 @@ export function computeCapitalStructure(data) {
     ? { netDebtToRevenue: 0.625, liquidity: 0.375 }
     : { netDebtToRevenue: 0.5, interestCoverage: 0.3, liquidity: 0.2 };
   const score = round1(Object.entries(weights).reduce((sum, [key, weight]) => sum + components[key] * weight, 0));
+  const baseCap = Math.round(600 + score * 4);
+
+  const distressCaps = [];
+  if (finite(interestCoverageX) && interestCoverageX < 1) distressCaps.push({ code: "EBIT_COVERAGE_BELOW_1", cap: 650, value: interestCoverageX });
+  if (finite(operatingMarginPct) && operatingMarginPct < -50) distressCaps.push({ code: "OPERATING_MARGIN_BELOW_MINUS_50", cap: 600, value: operatingMarginPct });
+  if (finite(cashRunwayMonths) && cashRunwayMonths < 6) distressCaps.push({ code: "CASH_RUNWAY_BELOW_6M", cap: 650, value: cashRunwayMonths });
+  if (negativeEquity) distressCaps.push({ code: "NEGATIVE_EQUITY", cap: 550, value: equityUsd });
+  const cap = distressCaps.length ? Math.min(baseCap, ...distressCaps.map(item => item.cap)) : baseCap;
 
   return {
     score,
-    cap: Math.round(600 + score * 4), // solvency 100 → 1000（不封顶），50 → 800，25 → 700
+    cap,
+    baseCap,
     details: {
       version: CAPITAL_STRUCTURE_VERSION,
       totalDebtUsd, cashAndCashEquivalentsUsd: cashUsd, netDebtUsd,
       annualizedRevenueUsd, netDebtToRevenueX, cashToDebtPct: round1(cashToDebtPct),
       interestExpenseUsd, interestCoverageX,
+      ebitUsd: finite(ebitUsd) ? Math.round(ebitUsd) : null,
+      operatingMarginPct,
+      monthlyBurnUsd: finite(monthlyBurnUsd) ? Math.round(monthlyBurnUsd) : null,
+      cashRunwayMonths,
+      equityUsd: equityUsd === null ? null : Math.round(equityUsd),
+      negativeEquity,
+      distressCaps,
       components
     }
   };
@@ -455,6 +488,7 @@ export function computeRiskV021(input) {
       ...business.capital.details,
       score: business.capital.score,
       cciCap: business.capital.cap,
+      baseCap: business.capital.baseCap,
       cciBeforeCap: baseCci,
       capApplied: finite(baseCci) && baseCci > business.capital.cap
     };

@@ -21,7 +21,7 @@ export const CREDIT_DIMENSION_WEIGHTS_V021 = Object.freeze({
 // 资本结构叠加层 v0.1（可选）：只有同时提供债务与现金才参与。它不改变基础五维
 // 权重与分数，而是给出 CCI 上限（600 + 4 × solvency，solvency 100 → 不封顶）；
 // 未提供时结果与 v0.2.1 完全一致（指纹不变）。
-export const CAPITAL_STRUCTURE_VERSION = "flowcredit.capital_structure/v0.1.0";
+export const CAPITAL_STRUCTURE_VERSION = "flowcredit.capital_structure/v0.2.0";
 export const CAPITAL_FIELD_KEYS = Object.freeze(["totalDebtUsd", "cashAndCashEquivalentsUsd", "interestExpenseUsd"]);
 
 export const REQUIRED_DECISION_FIELDS_V021 = Object.freeze([

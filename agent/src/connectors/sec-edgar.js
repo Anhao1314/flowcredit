@@ -37,6 +37,7 @@ const CONCEPT_MAP = Object.freeze([
   { field: "netIncomeUsd", label: "Net income", kind: "flow", names: ["NetIncomeLoss"] },
   { field: "cashUsd", label: "Cash & equivalents", kind: "stock", names: ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"] },
   { field: "debtUsd", label: "Debt (carrying amount)", kind: "stock", names: ["DebtInstrumentCarryingAmount", "LongTermDebt", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "NotesPayableCurrent", "LongTermNotesPayable", "ConvertibleNotesPayable", "LiabilitiesSubjectToCompromiseDebtAndAccruedInterest"] },
+  { field: "equityUsd", label: "Stockholders' equity", kind: "stock", names: ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"] },
   { field: "costOfRevenueUsd", label: "Cost of revenue", kind: "flow", names: ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"] },
   { field: "interestExpenseUsd", label: "Interest expense", kind: "flow", names: ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestIncomeExpenseNonoperatingNet"] }
 ]);

@@ -38,6 +38,7 @@ const FACTS = {
       NetIncomeLoss: { units: { USD: [quarter("2026-09-30", -709000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
       CashAndCashEquivalentsAtCarryingValue: { units: { USD: [quarter("2026-09-30", 4122000000, "2026-11-05")] } },
       DebtInstrumentCarryingAmount: { units: { USD: [quarter("2026-09-30", 47505000000, "2026-11-05")] } },
+      StockholdersEquity: { units: { USD: [quarter("2026-09-30", 2500000000, "2026-11-05")] } },
       CostOfRevenue: { units: { USD: [quarter("2026-09-30", 1183000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
       InterestExpense: { units: { USD: [quarter("2026-09-30", 120000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } }
     }
@@ -170,4 +171,5 @@ test("assess_public_company builds a monthly-equivalent draft and computes the c
   assert.ok(result.missingInputs.includes("inputTokensM"), "full CCI still requires operator token data");
   assert.ok(result.missingInputs.includes("gpuHours"));
   assert.equal(result.facts.some(fact => fact.field === "interestExpenseUsd"), true);
+  assert.equal(result.facts.some(fact => fact.field === "equityUsd"), true);
 });

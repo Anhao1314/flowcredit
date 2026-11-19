@@ -60,6 +60,7 @@ export function observationsForCompany(lookup) {
     const interestExpenseUsd = valueAt(lookup.facts, "interestExpenseUsd", end);
     const cashUsd = valueAt(lookup.facts, "cashUsd", end);
     const debtUsd = valueAt(lookup.facts, "debtUsd", end);
+    const equityUsd = valueAt(lookup.facts, "equityUsd", end);
 
     const grossMarginPct = finite(grossProfitUsd) && revenueUsd > 0
       ? grossProfitUsd / revenueUsd * 100
@@ -86,6 +87,7 @@ export function observationsForCompany(lookup) {
       interestExpenseUsd,
       cashUsd,
       debtUsd,
+      equityUsd,
       netDebtUsd,
       grossMarginPct: round1(grossMarginPct),
       operatingMarginPct: finite(operatingIncomeUsd) && revenueUsd > 0 ? round1(operatingIncomeUsd / revenueUsd * 100) : null,

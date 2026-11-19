@@ -94,3 +94,24 @@ test("what_if supports capital overrides and reports the cap change", () => {
   assert.equal(result.after.capitalStructure.capApplied, true);
   assert.ok(result.delta.CCI < 0);
 });
+
+test("distress overlay caps CCI on bankruptcy-style inputs", () => {
+  const draft = {
+    ...base(),
+    totalDebtUsd: 10_000_000,
+    cashAndCashEquivalentsUsd: 500_000,
+    interestExpenseUsd: -20_000,
+    operatingIncomeUsd: -300_000,
+    equityUsd: -50_000
+  };
+  const result = computeRiskV021(draft);
+  const capital = result.capitalStructure;
+  assert.equal(capital.negativeEquity, true, "negative equity must be flagged");
+  assert.ok(capital.distressCaps.some(c => c.code === "EBIT_COVERAGE_BELOW_1"));
+  assert.ok(capital.distressCaps.some(c => c.code === "OPERATING_MARGIN_BELOW_MINUS_50"));
+  assert.ok(capital.distressCaps.some(c => c.code === "CASH_RUNWAY_BELOW_6M"));
+  assert.equal(capital.cciCap, 550, "the strictest distress gate wins");
+  assert.equal(result.CCI, 550);
+  assert.equal(result.riskGrade, "C");
+  assert.ok(capital.baseCap > 550);
+});

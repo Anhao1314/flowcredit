@@ -104,9 +104,13 @@ function publicDraftFromLookup(lookup) {
   const debt = latestFact(lookup.facts, "debtUsd", revenue.periodEnd);
   const cash = latestFact(lookup.facts, "cashUsd", revenue.periodEnd);
   const interest = latestFact(lookup.facts, "interestExpenseUsd", revenue.periodEnd);
+  const operating = latestFact(lookup.facts, "operatingIncomeUsd", revenue.periodEnd);
+  const equity = latestFact(lookup.facts, "equityUsd", revenue.periodEnd);
   if (debt) draft.totalDebtUsd = debt.value;
   if (cash) draft.cashAndCashEquivalentsUsd = cash.value;
   if (interest) draft.interestExpenseUsd = Math.round(interest.value / months);
+  if (operating) draft.operatingIncomeUsd = Math.round(operating.value / months);
+  if (equity) draft.equityUsd = equity.value;
   return {
     draft,
     derived: {
