@@ -55,6 +55,7 @@ export const SYSTEM_PROMPT_RISK = [
   "- The prompt names a public company and asks for a risk/leverage/solvency view: call assess_public_company (SEC facts → capital-structure overlay). Report the solvency score, CCI cap and the missing operator fields; do not claim a full TAI/CCI grade from public data alone.",
   "- The prompt already contains business facts (a JSON object, or two or more concrete figures): call assess_prompt ONCE with the raw user text. Never pre-extract or pre-validate first.",
   "- CSV payload: import_csv, then assess_draft on its draft.",
+  "- Evidence pack supplied as proof (JSON with version \"evidence-pack/v0.1\" and a fields map): if the draft is not already in this conversation, call assess_prompt first; then call attach_evidence with that returned draft (or the draft from the previous assessment) and the exact raw pack text, then assess_draft on the returned draft. Report attached vs mismatched fields and ignored keys. An uploaded pack is documented tier, NEVER independently verified; declared values are never overwritten by evidence.",
   "- The user ONLY asks what is missing (no scoring requested): validate_draft alone; do not run an assessment.",
   "- The user asks about a change or a hypothetical (what-if): rebuild the draft by re-running assess_prompt/extract_from_text on the earlier user text from this conversation — never retype arrays or figures from memory — then call what_if with numeric overrides.",
   "- The prompt asks for research/calibration (panel, factors, IC, score weights): call build_research_panel, then factor_report with the returned panelId. Label status must be stated honestly (proxy-market labels are market-implied, NOT credit events; unavailable → no IC). DD is the structural benchmark: describe factors by incremental IC versus DD. Never invent IC, labels or weights.",
@@ -290,6 +291,10 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
           if (tool?.name === "assess_prompt" && result.ok && result.result?.assessed && sessionId && result.result?.merged) {
             sessionSaveDraft(sessionId, result.result.merged);
           }
+          // 证据接入后把带 attestation 的草稿写入会话，后续 what-if/追问不丢证据。
+          if (tool?.name === "attach_evidence" && result.ok && result.result?.attached && sessionId && result.result?.draft) {
+            sessionSaveDraft(sessionId, result.result.draft);
+          }
           const authoritative = result?.result?.authoritative ?? null;
           toolCalls.push({
             step, name: call?.function?.name ?? null, ok: result.ok,
@@ -463,6 +468,10 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
           }
           if (tool?.name === "assess_prompt" && result.ok && result.result?.assessed && sessionId && result.result?.merged) {
             sessionSaveDraft(sessionId, result.result.merged);
+          }
+          // 证据接入后把带 attestation 的草稿写入会话，后续 what-if/追问不丢证据。
+          if (tool?.name === "attach_evidence" && result.ok && result.result?.attached && sessionId && result.result?.draft) {
+            sessionSaveDraft(sessionId, result.result.draft);
           }
           const authoritative = result?.result?.authoritative ?? null;
           toolCalls.push({

@@ -338,6 +338,17 @@ body.has-messages .quick-chips{display:none}
         { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
       ];
       note = r.digest || "";
+    } else if (call.name === "attach_evidence" && r.attached) {
+      title = "证据接入";
+      var es = r.evidenceStatus || {};
+      metrics = [
+        { label: "附加字段", value: (r.attachedFields || []).length },
+        { label: "不一致", value: (r.mismatched || []).length },
+        { label: "Basis", value: es.basis || "n/a" },
+        { label: "Documented", value: es.counts ? es.counts.documented : "n/a" }
+      ];
+      note = String(r.digest || "").slice(0, 23) + "… · documented 级（上传文件）· 非独立验证"
+        + ((r.mismatched || []).length ? " · 不一致字段未采信" : "");
     } else if (call.name === "preset_draft" && r.draft) {
       title = "示例草稿";
       metrics = [{ label: "Key", value: r.key }];

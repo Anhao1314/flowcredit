@@ -18,6 +18,7 @@ import { computeRiskV021, computeCapitalStructure } from "./risk-core-v021.js";
 import { extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { buildMonthlyDraftFromCsv } from "./connectors/csv.js";
+import { buildEvidencePack } from "./connectors/evidence-pack.js";
 import { getPresetV021 } from "./presets.js";
 import { addFinchIdentity, deterministicFingerprintPayload, finchAssessmentFingerprint, finchInputFingerprint } from "./finch-contract.js";
 import { createCoreToolRegistry } from "../core/tool-registry.js";
@@ -243,6 +244,42 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
           evidenceStatus: summarizeEvidenceStatus(imported.draft.evidence, { connectors }),
           authoritative: { inputFingerprint: imported.digest, assessmentFingerprint: imported.digest }
         };
+      }
+    },
+    {
+      name: "attach_evidence",
+      description: "Attach a structured evidence pack (JSON: {version:'evidence-pack/v0.1', asOf, sourceDomain, coveragePct?, fields:{...}}) to a draft. The pack is sha256-hashed and documented-tier evidence is attached ONLY for whitelisted fields whose values match the declared draft. Mismatched fields are rejected and listed; declared values are never overwritten by evidence, and an uploaded pack never becomes independently verified. After attaching, call assess_draft on the returned draft.",
+      parameters: {
+        draft: { type: "object", required: true },
+        pack: { type: "string", required: true, description: "Raw evidence-pack JSON text supplied by the user" }
+      },
+      execute(args) {
+        assertArgs(args, ["draft", "pack"]);
+        const clock = Date.parse(nowMs());
+        try {
+          const built = buildEvidencePack({
+            draft: args.draft,
+            packText: String(args.pack),
+            nowMs: Number.isFinite(clock) ? clock : Date.now()
+          });
+          return {
+            attached: true,
+            digest: built.digest,
+            sourceDomain: built.sourceDomain,
+            attachedFields: built.attached,
+            mismatched: built.mismatched,
+            ignored: built.ignored,
+            draft: built.draft,
+            evidenceStatus: summarizeEvidenceStatus(built.draft.evidence, { connectors }),
+            note: "Evidence packs are documented tier (uploaded document), not independent verification. Mismatched fields were NOT attested; declared values were not overwritten.",
+            authoritative: null
+          };
+        } catch (error) {
+          return {
+            attached: false, code: error.code || "EVIDENCE_PACK_FAILED",
+            message: String(error.message || error), authoritative: null
+          };
+        }
       }
     },
     {

@@ -362,3 +362,28 @@ test("session draft carry merges follow-up supplements into the first-turn draft
   assert.equal(second.toolCalls[0].result.merged.label, "Healthy Merchant", "server-carried draft wins over a model-fabricated carryDraft");
   assert.equal(second.toolCalls[0].result.merged.inputTokensM, 64, "new text fields override the carried draft");
 });
+
+test("attach_evidence persists the attested draft into the session for follow-up turns", async () => {
+  const pack = JSON.stringify({
+    version: "evidence-pack/v0.1", asOf: "2026-08-31T00:00:00Z",
+    sourceDomain: "billing", coveragePct: 98,
+    fields: { repaymentRatePct: 96, overdue30Pct: 2 }
+  });
+  const { assistant } = buildAssistant([
+    { message: { tool_calls: [{ id: "c1", function: { name: "attach_evidence", arguments: JSON.stringify({ draft: getPresetV021("healthy"), pack }) } }] } },
+    { message: { content: "证据已接入。" }, finishReason: "stop" },
+    { message: { tool_calls: [{ id: "c2", function: { name: "assess_prompt", arguments: JSON.stringify({ text: "补充：本月输入 token 64M、输出 token 16M。" }) } }] } },
+    { message: { content: "已合并重评。" }, finishReason: "stop" }
+  ]);
+  const sessionId = "sess-evidence-carry-1";
+  const first = await assistant.askRisk({ prompt: "这是我们的账单导出证据包，请接入", modelConsent: true, sessionId });
+  assert.equal(first.toolCalls[0].name, "attach_evidence");
+  assert.equal(first.toolCalls[0].result.attached, true);
+
+  const second = await assistant.askRisk({ prompt: "补充：本月输入 token 64M、输出 token 16M。", modelConsent: true, sessionId });
+  const merged = second.toolCalls[0].result.merged;
+  assert.equal(merged.repaymentRatePct, 96, "evidence-carried draft must survive into the follow-up turn");
+  assert.equal(merged.inputTokensM, 64, "new text fields still override the carried draft");
+  const attested = merged.evidence.filter(record => record.attestation?.connector === "evidence-pack-v1");
+  assert.equal(attested.length, 2, "attested evidence must survive into the session draft");
+});

@@ -22,7 +22,7 @@
 
 **核心机制**：LLM 收集事实、选择工具、解释结果；所有数字（TAI / CCI / Risk Grade / decision）由确定性引擎 `computeRiskV021` 唯一产出；每一条回答都带指纹引用（`assessmentFingerprint` / `inputFingerprint`），可反查、可审计；模型失败/超步/未授权时优雅降级为同一条确定性管线，绝不编造。
 
-## 2. 它能做什么（7 个确定性工具）
+## 2. 它能做什么（13 个确定性工具）
 
 | 工具 | 能力 |
 | --- | --- |
@@ -32,6 +32,7 @@
 | `validate_draft` | 只校验不打分：精确列出缺什么 |
 | `extract_from_text` | 白名单抽取（中英文、JSON、倒装、单位换算）+ 原文 grounding 围栏 |
 | `import_csv` | 月度 CSV → 完整 draft + sha256 证据认证 |
+| `attach_evidence` | 证据包（`evidence-pack/v0.1` JSON）→ sha256 摘要 + documented 级证据记录；只对**与申报一致**的白名单字段附加证据，不一致字段 fail-closed（不覆盖申报值）；上传文件永远不等于独立验证 |
 | `lookup_public_company` | 自己去 SEC EDGAR 取上市公司公开财务（收入/毛利/经营利润/净利/现金/债务，带表单、申报日、来源哈希；不取 token/回款/客户集中度） |
 | `assess_public_company` | 公开数据 → 资本结构叠加：用申报的收入/成本/债务/现金/利息算 solvency 与 CCI 上限，并列出做完整评级仍缺的经营字段 |
 | `build_research_panel` | 自行抓取上市算力运营商 SEC 申报与日线价格，构建 point-in-time 季度面板（periodEnd + 申报日、市值/Merton DD、前瞻 90d 代理标签），供因子研究/校准；不改权威评分 |
@@ -56,7 +57,7 @@
 - **不做交易**：没有任何下单/执行工具（架构级禁令，测试锁定）
 - **不编数据**：缺失字段如实列出，绝不插值、估算或补全
 - **不越范围**：只评估 AI 推理 / GPU 算力运营商；其他业务明确告知不支持
-- **不假装修验证**：无独立证据连接器时，`decision = insufficient-evidence` 是诚实结论而非缺陷
+- **不假装修验证**：证据包连接器只到 documented 级（上传文件 + sha256 摘要）；没有 rest_pull / third_party 独立连接器时，`basis` 恒为 `declared_only`，`decision = insufficient-evidence` 是诚实结论而非缺陷
 
 ## 4. 输入长什么样（data contract）
 
@@ -64,6 +65,20 @@
 `taskType, gpuModel, gpuHours, revenueUsd, computeSpendUsd, repaymentRatePct, overdue30Pct, payingCustomers, top5ConcentrationPct, inputTokensM, outputTokensM, validRatePct, periodStart, periodEnd, operatingHistoryDays, dataCoveragePct, monthlySeries, R, C`
 
 主评分窗口：一个自然月或 27–31 天滚动窗口。完整字段清单、文本/JSON 模板与 R/C 定义见 [`docs/public-api-v1.md`](./public-api-v1.md)。
+
+**证据包（可选，documented 级）**：
+
+```json
+{
+  "version": "evidence-pack/v0.1",
+  "asOf": "2026-08-31T00:00:00Z",
+  "sourceDomain": "billing",
+  "coveragePct": 98,
+  "fields": { "repaymentRatePct": 96, "overdue30Pct": 2, "payingCustomers": 168 }
+}
+```
+
+字段值必须与草稿申报值一致才会被附加证据；不一致字段原样退回申报值并列入 `mismatched`；白名单外字段进入 `ignored`。
 
 ## 5. 端点
 

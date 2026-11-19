@@ -20,6 +20,7 @@ import {
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { createConnectorRegistry } from "./connectors/contract.js";
 import { createCsvConnector, buildMonthlyDraftFromCsv } from "./connectors/csv.js";
+import { createEvidencePackConnector } from "./connectors/evidence-pack.js";
 import { RunRecord } from "../core/run-record.js";
 import { readJsonBody } from "../core/http-util.js";
 import { createAssessmentService, withTimeout } from "./assessment-service.js";
@@ -46,8 +47,8 @@ const BODY_LIMIT = 64 * 1024;
 const sessions = new SessionStore();
 const logger = new SafeLogger(join(RUNTIME_ROOT, "logs"));
 const brain = new HarnessBrain({});
-// 连接器注册表：默认只注册 CSV（documented 级）；REST/第三方连接器需显式注册。
-const connectors = createConnectorRegistry([createCsvConnector()]);
+// 连接器注册表：默认注册 CSV 与证据包（均为 documented 级）；REST/第三方连接器需显式注册。
+const connectors = createConnectorRegistry([createCsvConnector(), createEvidencePackConnector()]);
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
