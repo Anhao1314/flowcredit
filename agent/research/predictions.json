@@ -1,0 +1,42 @@
+{
+  "version": "flowcredit.predictions/v0.1",
+  "predictions": [
+    {
+      "id": "ANT-C01",
+      "writtenAt": "2026-11-20T00:00:00Z",
+      "subject": { "ticker": "ANT", "cik": 2130357, "name": "Anthropic, PBC" },
+      "claim": "未来 4 个季度，12 个月到期的算力承诺覆盖度 CC（(流动性+年化经营现金流)/未来 12 个月到期承诺）每个季度均 >= 1.0。",
+      "basis": "424B4 filed 2026-11-19 (CIK 2130357): liquidity $146.6B (cash $95.6B + ST investments $36.3B + $14.8B facility availability), 12-month commitments $70.7B, 9M2026 operating cash flow +$6.6B → CC ≈ 2.2x at writing.",
+      "metric": "commitmentCoverage",
+      "checks": [
+        { "windowStart": "2026-10-01", "windowEnd": "2027-09-30", "operator": ">=", "threshold": 1.0, "quantifier": "all" }
+      ],
+      "disclosure": "commitmentCoverage 需要 10-K/10-Q 承诺注释文本数据（当前连接器只有 XBRL）——账本登记时即为 unverifiable，待 S-1/10-K 文本抽取连接器上线后自动可判。"
+    },
+    {
+      "id": "ANT-M01",
+      "writtenAt": "2026-11-20T00:00:00Z",
+      "subject": { "ticker": "ANT", "cik": 2130357, "name": "Anthropic, PBC" },
+      "claim": "季度经营利润率在 2026Q4–2027Q1 之间至少一个季度 >= 0；且 FY2027（2027-01-01~2027-12-31）全部季度经营利润率均值 >= 0。",
+      "basis": "424B4 filed 2026-11-19: operating margin trajectory 2023 −1344% → 2024 −772% → 2025 −176% → 9M2026 −3.8%; 9M2026 operating cash flow +$6.6B (first positive).",
+      "metric": "operatingMarginQuarterPct",
+      "checks": [
+        { "windowStart": "2026-10-01", "windowEnd": "2027-03-31", "operator": ">=", "threshold": 0, "quantifier": "any" },
+        { "windowStart": "2027-01-01", "windowEnd": "2027-12-31", "operator": ">=", "threshold": 0, "quantifier": "mean" }
+      ],
+      "disclosure": "证据来自 PIT 最早申报的 10-Q/10-K XBRL；首份申报文件落地后自动逐季判定。"
+    },
+    {
+      "id": "ANT-F01",
+      "writtenAt": "2026-11-20T00:00:00Z",
+      "subject": { "ticker": "ANT", "cik": 2130357, "name": "Anthropic, PBC" },
+      "claim": "FY2027（2027-01-01~2027-12-31）期间不需要宣布超出已承诺容量（NPA/授信）的新的大额外部融资即可履约。",
+      "basis": "424B4 filed 2026-11-19: liquidity $146.6B + strategic partner financing capacity up to $77.0B (incl. $42.0B Broadcom NPA capacity); revolver undrawn at 2026-09-30.",
+      "metric": "externalFinancingUsd",
+      "checks": [
+        { "windowStart": "2027-01-01", "windowEnd": "2027-12-31", "operator": "<", "threshold": 1000000000, "quantifier": "all" }
+      ],
+      "disclosure": "externalFinancingUsd 需要融资事件数据（8-K/公告文本或现金流表细分）——当前连接器不可算，登记为 unverifiable。"
+    }
+  ]
+}

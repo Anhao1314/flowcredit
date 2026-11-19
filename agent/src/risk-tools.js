@@ -19,6 +19,8 @@ import { extractNaturalLanguageDraft } from "./nl-draft-v01.js";
 import { summarizeEvidenceStatus } from "./evidence-status.js";
 import { buildMonthlyDraftFromCsv } from "./connectors/csv.js";
 import { buildEvidencePack } from "./connectors/evidence-pack.js";
+import { observationsForCompany } from "./research/panel.js";
+import { buildPredictionReport } from "./research/predictions.js";
 import { getPresetV021 } from "./presets.js";
 import { addFinchIdentity, deterministicFingerprintPayload, finchAssessmentFingerprint, finchInputFingerprint } from "./finch-contract.js";
 import { createCoreToolRegistry } from "../core/tool-registry.js";
@@ -124,7 +126,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, research = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, research = null, predictionLedger = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -433,6 +435,37 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, research =
         if (typeof args.panelId !== "string" || !args.panelId.trim()) throw new TypeError("panelId is required");
         if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
         return research.replayReport({ panelId: args.panelId.trim() });
+      }
+    },
+    {
+      name: "check_predictions",
+      description: "The automated referee: score the frozen prediction ledger against the latest point-in-time SEC data. Each prediction is graded pass / fail / pending / unverifiable with periodEnd+filed evidence and an evaluationFingerprint. FAILs are permanent records and must be reported as-is; UNVERIFIABLE means the required data source is not wired yet, never a pass. The ledger itself is never edited.",
+      parameters: { ticker: { type: "string", required: false, description: "Optional ticker filter (e.g. ANT); default scores the whole ledger" } },
+      async execute(args) {
+        assertArgs(args, ["ticker"]);
+        if (!predictionLedger) return { ok: false, code: "PREDICTIONS_UNCONFIGURED", message: "no prediction ledger is configured on this server" };
+        if (args.ticker !== undefined && (typeof args.ticker !== "string" || !args.ticker.trim() || args.ticker.length > 20)) throw new TypeError("ticker must be a short symbol string");
+        if (!secEdgar) return { ok: false, code: "SEC_CONNECTOR_UNAVAILABLE", message: "SEC connector is not configured on this server" };
+        const filter = args.ticker ? args.ticker.trim().toUpperCase() : null;
+        const wanted = [...new Set(predictionLedger.predictions
+          .map(item => String(item.subject.ticker).toUpperCase())
+          .filter(ticker => !filter || ticker === filter))];
+        if (!wanted.length) return { ok: false, code: "NO_MATCHING_PREDICTIONS", message: `no predictions registered for ticker ${filter}` };
+        const observationsByTicker = {};
+        const dataNotes = [];
+        for (const ticker of wanted) {
+          try {
+            const lookup = await secEdgar.lookupPublicCompany({ query: ticker, periods: 12 });
+            observationsByTicker[ticker] = observationsForCompany(lookup);
+            if (!observationsByTicker[ticker].length) dataNotes.push(`${ticker}: registrant found but no XBRL facts yet (no 10-Q/10-K filed)`);
+          } catch (error) {
+            observationsByTicker[ticker] = [];
+            dataNotes.push(`${ticker}: ${error.code || "SEC_LOOKUP_FAILED"} — ${String(error.message || error)}`);
+          }
+        }
+        const clock = Date.parse(nowMs());
+        const report = buildPredictionReport(predictionLedger, observationsByTicker, Number.isFinite(clock) ? clock : Date.now());
+        return { ok: true, ...report, dataNotes };
       }
     },
     {

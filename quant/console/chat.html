@@ -338,6 +338,16 @@ body.has-messages .quick-chips{display:none}
         { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
       ];
       note = r.digest || "";
+    } else if (call.name === "check_predictions" && r.summary) {
+      title = "预测裁判";
+      metrics = [
+        { label: "预测", value: r.summary.total },
+        { label: "PASS", value: r.summary.pass },
+        { label: "FAIL", value: r.summary.fail },
+        { label: "PENDING", value: r.summary.pending },
+        { label: "不可验证", value: r.summary.unverifiable }
+      ];
+      note = "账本冻结 · 证据带 periodEnd/filed + 指纹 · FAIL 永久记录";
     } else if (call.name === "replay_report" && r.rule) {
       title = "评估回放";
       metrics = [
