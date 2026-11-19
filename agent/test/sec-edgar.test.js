@@ -74,10 +74,10 @@ test("lookup by ticker returns filed facts with provenance and latest-filed dedu
   const revenue = result.facts.filter(fact => fact.field === "revenueUsd");
   assert.equal(revenue.length, 4);
   assert.equal(revenue[0].periodEnd, "2026-09-30");
-  assert.equal(revenue[0].value, 3661000000, "later 10-Q filing wins over the earlier duplicate");
+  assert.equal(revenue[0].value, 3600000000, "point-in-time policy: the earliest filing wins over a later restatement");
   assert.ok(!revenue.some(fact => fact.value === 8314000000), "year-to-date row is excluded from quarterly revenue");
   assert.equal(revenue[0].form, "10-Q");
-  assert.equal(revenue[0].filed, "2026-11-05");
+  assert.equal(revenue[0].filed, "2026-10-01", "earliest filing is the point-in-time source");
   assert.match(revenue[0].sourceUrl, /data\.sec\.gov/);
   const debt = result.facts.find(fact => fact.field === "debtUsd");
   assert.equal(debt.value, 47505000000);
@@ -158,8 +158,8 @@ test("assess_public_company builds a monthly-equivalent draft and computes the c
   const registry = createRiskToolRegistry({ connectors, secEdgar });
   const result = await registry.get("assess_public_company").execute({ query: "CRWV" });
   assert.equal(result.ok, true);
-  assert.equal(result.draft.revenueUsd, Math.round(3661000000 / 3));
-  assert.equal(result.draft.computeSpendUsd, Math.round((3661000000 - 2478000000) / 3));
+  assert.equal(result.draft.revenueUsd, Math.round(3600000000 / 3));
+  assert.equal(result.draft.computeSpendUsd, Math.round((3600000000 - 2478000000) / 3));
   assert.equal(result.draft.interestExpenseUsd, 40000000);
   assert.equal(result.draft.totalDebtUsd, 47505000000);
   assert.equal(result.draft.cashAndCashEquivalentsUsd, 4122000000);

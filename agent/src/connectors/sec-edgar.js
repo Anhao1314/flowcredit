@@ -36,9 +36,9 @@ const CONCEPT_MAP = Object.freeze([
   { field: "operatingIncomeUsd", label: "Operating income", kind: "flow", names: ["OperatingIncomeLoss"] },
   { field: "netIncomeUsd", label: "Net income", kind: "flow", names: ["NetIncomeLoss"] },
   { field: "cashUsd", label: "Cash & equivalents", kind: "stock", names: ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"] },
-  { field: "debtUsd", label: "Debt (carrying amount)", kind: "stock", names: ["DebtInstrumentCarryingAmount", "LongTermDebt", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations"] },
+  { field: "debtUsd", label: "Debt (carrying amount)", kind: "stock", names: ["DebtInstrumentCarryingAmount", "LongTermDebt", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "NotesPayableCurrent", "LongTermNotesPayable", "ConvertibleNotesPayable", "LiabilitiesSubjectToCompromiseDebtAndAccruedInterest"] },
   { field: "costOfRevenueUsd", label: "Cost of revenue", kind: "flow", names: ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"] },
-  { field: "interestExpenseUsd", label: "Interest expense", kind: "flow", names: ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt"] }
+  { field: "interestExpenseUsd", label: "Interest expense", kind: "flow", names: ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestIncomeExpenseNonoperatingNet"] }
 ]);
 
 const FAILING_FORMS = new Set(["10-Q", "10-K"]);
@@ -79,7 +79,7 @@ function extractSharesOutstanding(payload) {
   const rows = unit
     .filter(row => typeof row.val === "number" && row.end)
     .slice()
-    .sort((a, b) => String(b.end).localeCompare(String(a.end)) || String(b.filed || "").localeCompare(String(a.filed || "")));
+    .sort((a, b) => String(b.end).localeCompare(String(a.end)) || String(a.filed || "").localeCompare(String(b.filed || ""))); // PIT: 同期末取最早申报，避免读到事后重述
   const row = rows[0];
   return row ? { value: row.val, end: row.end, filed: row.filed || null, form: String(row.form) } : null;
 }
@@ -153,7 +153,7 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
         return Math.abs(days - target) <= (String(row.form) === "10-K" ? 20 : 12);
       })
       .slice()
-      .sort((a, b) => String(b.end).localeCompare(String(a.end)) || String(b.filed || "").localeCompare(String(a.filed || "")));
+      .sort((a, b) => String(b.end).localeCompare(String(a.end)) || String(a.filed || "").localeCompare(String(b.filed || ""))); // PIT: 同期末取最早申报，避免读到事后重述
     const seen = new Set();
     const out = [];
     for (const row of rows) {
@@ -166,7 +166,7 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
   }
 
   async function lookupPublicCompany({ query, periods = 4 } = {}) {
-    const wantPeriods = Number.isInteger(periods) ? Math.max(1, Math.min(12, periods)) : 4;
+    const wantPeriods = Number.isInteger(periods) ? Math.max(1, Math.min(48, periods)) : 4;
     const company = await resolveCompany(query);
     const tickersRaw = await fetchText(SEC_TICKERS_URL); // 命中缓存；仅用于来源哈希
     const factsUrl = SEC_FACTS_URL(company.cik);
@@ -178,19 +178,28 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
     const missing = [];
 
     for (const mapping of CONCEPT_MAP) {
-      let chosen = null;
-      for (const name of mapping.names) {
-        const unit = gaap[name]?.units?.USD;
-        if (Array.isArray(unit) && unit.length) { chosen = { name, unit }; break; }
+      // 逐期回退：同一字段在不同年代可能用不同 XBRL 概念（如 Revenues → 新收入准则科目，
+      // 破产期用 LiabilitiesSubjectToCompromise*）。对每个期末取候选概念中第一个有值的，
+      // 而不是全局选一个概念——否则旧季度永远缺失（CORZ 2022 的教训）。
+      const candidates = mapping.names
+        .map(name => ({ name, unit: gaap[name]?.units?.USD }))
+        .filter(candidate => Array.isArray(candidate.unit) && candidate.unit.length);
+      if (!candidates.length) { missing.push(mapping.label); continue; }
+      const byEnd = new Map();
+      for (const candidate of candidates) {
+        for (const row of latestFacts(mapping, candidate.unit, 48)) {
+          if (!byEnd.has(row.end)) byEnd.set(row.end, { row, concept: candidate.name });
+        }
       }
-      if (!chosen) { missing.push(mapping.label); continue; }
-      const rows = latestFacts(mapping, chosen.unit, wantPeriods);
-      if (!rows.length) { missing.push(mapping.label); continue; }
-      for (const row of rows) {
+      const ends = [...byEnd.keys()].sort().reverse().slice(0, wantPeriods);
+      if (!ends.length) { missing.push(mapping.label); continue; }
+      for (const end of ends) {
+        const { row, concept } = byEnd.get(end);
         facts.push({
-          field: mapping.field, label: mapping.label, concept: chosen.name,
+          field: mapping.field, label: mapping.label, concept,
           value: row.val, unit: "USD", periodEnd: row.end,
           form: String(row.form), filed: row.filed || null,
+          lateFiling: row.filed && row.end ? (Date.parse(row.filed) - Date.parse(row.end)) / 86_400_000 > 120 : false,
           fiscalYear: row.fy ?? null, fiscalPeriod: row.fp ?? null,
           sourceUrl: factsUrl
         });

@@ -73,6 +73,7 @@ export function observationsForCompany(lookup) {
       name: lookup.company.name,
       periodEnd: end,
       filed: revenueFact.filed || null,
+      lateFiling: revenueFact.lateFiling === true,
       form: revenueFact.form,
       fiscalYear: revenueFact.fiscalYear ?? null,
       fiscalPeriod: revenueFact.fiscalPeriod ?? null,
