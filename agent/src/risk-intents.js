@@ -73,7 +73,7 @@ function tryParseJsonObject(prompt) {
 function looksLikeCsv(prompt) {
   const text = String(prompt || "").trim();
   const firstLine = text.split(/\r?\n/, 1)[0] || "";
-  if ((firstLine.match(/,/g) || []).length < 3) return false;
+  if ((firstLine.match(/,/g) || []).length < 2) return false;
   if (text.split(/\r?\n/).length < 2) return false;
   return CSV_HEADER_TOKENS.test(firstLine);
 }
