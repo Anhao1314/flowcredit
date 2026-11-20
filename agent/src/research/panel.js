@@ -17,6 +17,7 @@ import { forwardMarketLabels } from "./labels.js";
 import { buildReplayReport } from "./replay.js";
 import { annotateObservationsWithCreditEvents, creditEventLabelMap } from "./credit-events.js";
 import { buildCalibrationReport } from "./calibration.js";
+import { deflateIcEvidence, icSeriesCorrelation } from "./multiple-testing.js";
 
 export const RESEARCH_PANEL_VERSION = "ai-compute-panel/v0.1.0";
 
@@ -336,6 +337,11 @@ export function computeFactorReport(panel, { labels = null, labelsSource = null 
 
   const summary = [...PANEL_FACTORS].map(factor => summarizeIc(factor, icSeries));
   const benchmark = summarizeIc("dd", icSeries);
+  // 多重检验校正（量化侧 DSR 思想的 IC 版）：有效试验数来自因子间 IC 相关性；
+  // DD 是结构基准而非被挑选的试验，不计入家族。
+  const factorList = [...PANEL_FACTORS];
+  const correlationMatrix = icSeries.length >= 3 ? icSeriesCorrelation(icSeries, factorList) : null;
+  const multipleTesting = deflateIcEvidence(summary, correlationMatrix, { additionalTrials: 0 });
   const distressed = observations.filter(item => item.labelDistressed === true).length;
   const labelMeta = explicit
     ? { source: labelsSource || "explicit", count: Object.keys(explicit).length }
@@ -348,6 +354,7 @@ export function computeFactorReport(panel, { labels = null, labelsSource = null 
     factors,
     labelStatus,
     labels: { ...labelMeta, periods: icSeries.length },
+    multipleTesting,
     benchmark,
     icSeries,
     icSummary: summary,

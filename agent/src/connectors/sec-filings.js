@@ -21,7 +21,7 @@
 
 import { createHash } from "node:crypto";
 
-export const SEC_FILINGS_VERSION = "sec-filings/v0.2.0";
+export const SEC_FILINGS_VERSION = "sec-filings/v0.3.0";
 export const EXTRACTION_PATTERN_VERSION = "commitments-text/v0.2";
 export const SEC_FILINGS_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_SUBMISSIONS_URL = cik => `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;
@@ -44,7 +44,7 @@ export function isAllowedFilingUrl(value) {
   try { url = new URL(String(value)); } catch { return false; }
   if (url.protocol !== "https:") return false;
   if (!SEC_FILINGS_ALLOWED_HOSTS.includes(url.hostname)) return false;
-  if (url.hostname === "data.sec.gov") return /^\/submissions\/CIK\d{10}\.json$/.test(url.pathname);
+  if (url.hostname === "data.sec.gov") return /^\/submissions\/CIK\d{10}(-submissions-\d{1,4})?\.json$/.test(url.pathname);
   if (url.pathname === "/files/company_tickers.json") return true;
   return /^\/Archives\/edgar\/data\/\d+\/[0-9a-zA-Z-]+\/[A-Za-z0-9._-]+\.(htm|html|txt)$/.test(url.pathname);
 }
@@ -194,8 +194,40 @@ export function commitmentCoverageFrom(extracted) {
 }
 
 /**
+ * 事件文档核实（纯函数）：识别破产/退市/重组三类一手披露，提取事件日期与原文片段。
+ * verified=false 时必须带 reason——机器只提议，入库由人工评审决定。
+ */
+export function classifyEventDocument(text) {
+  const source = String(text || "");
+  if (!source) return { verified: false, eventType: null, eventDate: null, snippet: null, reason: "empty document" };
+  const markers = [
+    { eventType: "bankruptcy", pattern: /Item\s*1\.03|Bankruptcy or Receivership/i },
+    { eventType: "delisting", pattern: /Item\s*3\.01|Notice of Delisting/i },
+    { eventType: "restructuring", pattern: /Restructuring Support Agreement|debt.?for.?equity|debt exchange|recapitalization/i }
+  ];
+  for (const marker of markers) {
+    const match = source.match(marker.pattern);
+    if (!match) continue;
+    const start = match.index ?? 0;
+    const window = source.slice(start, start + 600);
+    const dateMatch = window.match(/([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/);
+    const eventDate = dateMatch ? filingDateToIso(dateMatch[1], dateMatch[2], dateMatch[3]) : null;
+    const fallback = source.match(/Date of Report:\s*([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/);
+    const resolved = eventDate ?? (fallback ? filingDateToIso(fallback[1], fallback[2], fallback[3]) : null);
+    return {
+      verified: true,
+      eventType: marker.eventType,
+      eventDate: resolved,
+      dateResolvedFrom: eventDate ? "document" : fallback ? "report-date" : "none",
+      snippet: window.slice(0, 300)
+    };
+  }
+  return { verified: false, eventType: null, eventDate: null, snippet: null, reason: "no bankruptcy/delisting/restructuring marker in the document" };
+}
+
+/**
  * 输入：{ transport?, userAgent?, timeoutMs?, maxBytes?, now? }
- * 输出：{ fetchPublicCommitments({ query }), version, allowedHosts }
+ * 输出：{ fetchPublicCommitments({ query }), listFilings({ query, form, from, to, maxFilings }), verifyEventDocument({...}), version, allowedHosts }
  */
 export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15_000, maxBytes = SEC_FILINGS_MAX_BYTES, now = () => Date.now() } = {}) {
   const doFetch = transport || (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
@@ -263,6 +295,54 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
     return null;
   }
 
+  /** submissions 全量索引（recent + files[] 旧页，缓存复用 fetchText）。 */
+  async function fetchSubmissionsIndex(cik) {
+    const first = JSON.parse(await fetchText(SEC_SUBMISSIONS_URL(cik)));
+    const pages = [{ form: first.filings.recent.form, filed: first.filings.recent.filingDate, acc: first.filings.recent.accessionNumber, doc: first.filings.recent.primaryDocument, items: first.filings.recent.items }];
+    for (const file of first.filings.files ?? []) {
+      const older = JSON.parse(await fetchText(`https://data.sec.gov/submissions/${file.name}`));
+      pages.push({ form: older.form, filed: older.filingDate, acc: older.accessionNumber, doc: older.primaryDocument, items: older.items });
+    }
+    return pages;
+  }
+
+  /** 按表单类型 + 日期窗口列出申报（供事件核实流水线用；确定性过滤）。 */
+  async function listFilings({ query, form = "8-K", from = null, to = null, maxFilings = 12 } = {}) {
+    if (!form) throw filingError("FILING_FORM_REQUIRED", "form is required");
+    const company = await resolveCompany(query);
+    const pages = await fetchSubmissionsIndex(company.cik);
+    const out = [];
+    for (const page of pages) {
+      for (let index = 0; index < page.form.length; index += 1) {
+        if (String(page.form[index]) !== String(form)) continue;
+        const filed = String(page.filed[index] || "");
+        if (from && filed < String(from)) continue;
+        if (to && filed > String(to)) continue;
+        const accession = String(page.acc[index] || "");
+        if (!accession) continue;
+        out.push({
+          filed,
+          accession,
+          items: String(page.items?.[index] || "") || null,
+          primaryDocument: String(page.doc[index] || "") || null,
+          sourceUrl: `https://www.sec.gov/Archives/edgar/data/${company.cik}/${accession.replace(/-/g, "")}/${page.doc[index] ?? ""}`
+        });
+        if (out.length >= Math.max(1, maxFilings)) return { company, filings: out };
+      }
+    }
+    return { company, filings: out };
+  }
+
+  /** 抓取一份申报主文档并做事件分类（破产/退市/重组），带 sha256 与片段。 */
+  async function verifyEventDocument({ cik, accession, primaryDocument } = {}) {
+    if (!cik || !accession || !primaryDocument) throw filingError("FILING_ARGS_REQUIRED", "cik, accession and primaryDocument are required");
+    const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${String(accession).replace(/-/g, "")}/${primaryDocument}`;
+    if (!isAllowedFilingUrl(url)) throw filingError("FILING_HOST_NOT_ALLOWED", "URL is outside the SEC filings allowlist");
+    const raw = await fetchText(url);
+    const classified = classifyEventDocument(htmlToText(raw).slice(0, SEC_FILINGS_MAX_TEXT));
+    return { ...classified, sha256: sha256(raw), bytes: Buffer.byteLength(raw, "utf8"), sourceUrl: url };
+  }
+
   async function fetchPublicCommitments({ query } = {}) {
     const company = await resolveCompany(query);
     const submissionsRaw = await fetchText(SEC_SUBMISSIONS_URL(company.cik));
@@ -290,5 +370,5 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
     };
   }
 
-  return Object.freeze({ fetchPublicCommitments, version: SEC_FILINGS_VERSION, allowedHosts: SEC_FILINGS_ALLOWED_HOSTS });
+  return Object.freeze({ fetchPublicCommitments, listFilings, verifyEventDocument, version: SEC_FILINGS_VERSION, allowedHosts: SEC_FILINGS_ALLOWED_HOSTS });
 }

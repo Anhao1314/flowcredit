@@ -414,6 +414,57 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
       }
     },
     {
+      name: "verify_credit_events",
+      description: "The event-verification pipeline (machine proposes, human approves): scan a company's 8-K filings in a date window, fetch each primary document and deterministically verify bankruptcy/delisting/restructuring disclosures (Item 1.03/3.01 markers, RSA/debt-exchange keywords), extracting the event date and an original-text snippet. Verified candidates come with citations (accession + sha256) but are PROPOSALS — adding one to the credit-event label file requires human review; nothing is written automatically.",
+      parameters: {
+        query: { type: "string", required: true, description: "Company name or ticker, e.g. CORZ" },
+        from: { type: "string", required: false, description: "Window start YYYY-MM-DD" },
+        to: { type: "string", required: false, description: "Window end YYYY-MM-DD" },
+        maxFilings: { type: "integer", required: false, description: "Maximum 8-Ks to verify, 1-20 (default 12)" }
+      },
+      async execute(args) {
+        assertArgs(args, ["query", "from", "to", "maxFilings"]);
+        if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 120) throw new TypeError("query must be a company name or ticker (1-120 chars)");
+        for (const key of ["from", "to"]) {
+          if (args[key] !== undefined && (typeof args[key] !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(args[key]))) throw new TypeError(`${key} must be YYYY-MM-DD`);
+        }
+        if (args.maxFilings !== undefined && (!Number.isInteger(args.maxFilings) || args.maxFilings < 1 || args.maxFilings > 20)) throw new TypeError("maxFilings must be an integer within 1-20");
+        if (!filings) return { ok: false, code: "FILINGS_CONNECTOR_UNAVAILABLE", message: "filing text connector is not configured on this server" };
+        let listed;
+        try {
+          listed = await filings.listFilings({
+            query: args.query.trim(), form: "8-K",
+            ...(args.from ? { from: args.from } : {}), ...(args.to ? { to: args.to } : {}),
+            ...(args.maxFilings ? { maxFilings: args.maxFilings } : {})
+          });
+        } catch (error) {
+          return { ok: false, code: error.code || "FILINGS_FETCH_FAILED", message: String(error.message || error) };
+        }
+        const candidates = [];
+        for (const filing of listed.filings) {
+          if (!filing.primaryDocument) {
+            candidates.push({ filed: filing.filed, accession: filing.accession, items: filing.items, verified: false, reason: "no primary document in the index" });
+            continue;
+          }
+          try {
+            const verified = await filings.verifyEventDocument({ cik: listed.company.cik, accession: filing.accession, primaryDocument: filing.primaryDocument });
+            candidates.push({ filed: filing.filed, accession: filing.accession, items: filing.items, ...verified });
+          } catch (error) {
+            candidates.push({ filed: filing.filed, accession: filing.accession, items: filing.items, verified: false, reason: `${error.code || "FILING_FETCH_FAILED"}: ${String(error.message || error)}` });
+          }
+        }
+        const verifiedCount = candidates.filter(candidate => candidate.verified).length;
+        return {
+          ok: true,
+          company: listed.company,
+          scanned: listed.filings.length,
+          verifiedCount,
+          candidates,
+          note: "verified candidates are PROPOSALS with citations (accession + sha256) — human review is required before any is added to agent/research/credit-events.json; nothing is written automatically"
+        };
+      }
+    },
+    {
       name: "build_research_panel",
       description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. When the market price feed is configured it also attaches market cap, Merton distance-to-default and forward 90d proxy labels (filed-aligned). Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
       parameters: {
