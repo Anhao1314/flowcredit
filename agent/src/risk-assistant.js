@@ -204,7 +204,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const intentInfo = typeof prompt === "string" ? classifyDeterministicIntent(prompt) : { intent: "unclear" };
     const finish = result => {
       const finalIntent = intentInfo.intent !== "unclear"
-        ? { intent: intentInfo.intent, intentSource: "deterministic" }
+        ? { intent: intentInfo.intent, intentSource: intentInfo.confidence === "semantic" ? "semantic" : "deterministic" }
         : { intent: intentFromTools(result.toolCalls ?? []), intentSource: "derived" };
       const enriched = { ...result, ...finalIntent };
       const finishedAt = auditLogger.nowMs();
@@ -374,7 +374,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const finish = result => {
       if (reasoning) result.reasoning = reasoning;
       const finalIntent = intentInfo.intent !== "unclear"
-        ? { intent: intentInfo.intent, intentSource: "deterministic" }
+        ? { intent: intentInfo.intent, intentSource: intentInfo.confidence === "semantic" ? "semantic" : "deterministic" }
         : { intent: intentFromTools(result.toolCalls ?? []), intentSource: "derived" };
       const enriched = { ...result, ...finalIntent };
       const finishedAt = auditLogger.nowMs();

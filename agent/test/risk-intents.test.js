@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   classifyDeterministicIntent, isToolAllowed, allowedFamiliesFor, intentFromTools,
-  RISK_INTENT_VERSION, RISK_INTENTS, TOOL_FAMILIES
+  RISK_INTENT_VERSION, RISK_INTENTS, SEMANTIC_INTENTS, SEMANTIC_THRESHOLD, TOOL_FAMILIES
 } from "../src/risk-intents.js";
 import { SessionStore } from "../src/session-store.js";
 import { createConnectorRegistry } from "../src/connectors/contract.js";
@@ -34,10 +34,43 @@ test("deterministic intent classification covers the crisp cases and abstains ot
   for (const [prompt, expected] of cases) {
     const result = classifyDeterministicIntent(prompt);
     assert.equal(result.intent, expected, `prompt: ${prompt}`);
-    assert.equal(result.confidence, expected === "unclear" ? "abstain" : "deterministic");
+    assert.equal(result.confidence, expected === "unclear" ? "abstain" : "deterministic", `prompt: ${prompt}`);
   }
-  assert.equal(RISK_INTENT_VERSION, "flowcredit.risk_intents/v0.1.0");
+  assert.equal(RISK_INTENT_VERSION, "flowcredit.risk_intents/v0.2.0");
   assert.deepEqual(RISK_INTENTS.length, 8);
+  assert.deepEqual(SEMANTIC_INTENTS.length, 8);
+  assert.equal(SEMANTIC_THRESHOLD, 0.45, "阈值由评估集调参冻结（intent-eval-once.mjs）");
+});
+
+test("semantic routing: paraphrases hit white-listed intents, ambiguity still abstains", () => {
+  const cases = [
+    ["查一下 CoreWeave 的公开收入", "public-financials"],
+    ["做一个算力运营商的因子研究面板", "research"],
+    ["拟合一个评分模型", "scoring-model"],
+    ["回放一下历史表现", "replay"],
+    ["校准一下评分和结果", "calibration"],
+    ["我们写的预测判分了吗", "predictions"],
+    ["它承诺了多少算力", "commitments"],
+    ["什么是承购承诺", "knowledge"],
+    ["这家公司看起来不错", "unclear"],
+    ["我喜欢 GPU", "unclear"]
+  ];
+  for (const [prompt, expected] of cases) {
+    const result = classifyDeterministicIntent(prompt);
+    assert.equal(result.intent, expected, `prompt: ${prompt}`);
+    if (expected !== "unclear") {
+      assert.equal(result.confidence, "semantic");
+      assert.ok(Number.isFinite(parseFloat(result.evidence.match(/semantic match ([\d.]+)/)?.[1])), "evidence carries the similarity score");
+    }
+  }
+});
+
+test("numeric guard: assessment prose skips the semantic tier (stays with the model routing tree)", () => {
+  const prose = "请评估这家 AI 推理服务商的交易对手风险。GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元，回款率约 96%，逾期 2%，客户 168 家。";
+  const result = classifyDeterministicIntent(prose);
+  assert.equal(result.intent, "unclear");
+  assert.equal(result.confidence, "abstain");
+  assert.match(result.evidence, /no deterministic\/semantic match/);
 });
 
 test("tool-family matrix: deterministic intents block cross-domain tools, unclear does not", () => {

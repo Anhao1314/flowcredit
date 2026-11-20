@@ -1,0 +1,70 @@
+{
+  "version": "flowcredit.intent_eval/v0.1",
+  "meta": {
+    "purpose": "意图层验收口径：classifyDeterministicIntent 的标注评估集。阈值/语料变更必须重跑 scripts/intent-eval-once.mjs 并留存结果。",
+    "rule": "expected 只允许 RISK_INTENTS ∪ SEMANTIC_INTENTS；新增用例 = 人工标注 + 评审。"
+  },
+  "cases": [
+    { "prompt": "{\"taskType\":\"inference\",\"gpuModel\":\"h100\",\"revenueUsd\":100000,\"repaymentRatePct\":96,\"overdue30Pct\":2,\"payingCustomers\":168}", "expected": "facts" },
+    { "prompt": "{\"taskType\":\"inference\",\"gpuModel\":\"h100\"}", "expected": "facts", "note": "2 个 intake 键即算事实输入（taskType+gpuModel）" },
+    { "prompt": "period,input_tokens_m,output_tokens_m,valid_rate_pct,gpu_model,gpu_hours,revenue_usd,compute_spend_usd,repayment_rate_pct,overdue_30_pct,paying_customers,top5_concentration_pct,data_coverage_pct\n2026-03,64,16,96.5,h100,4200,100000,58000,94.3,3,168,36,100\n2026-04,65,16,96.5,h100,4200,101000,58000,94.3,3,168,36,100", "expected": "csv" },
+    { "prompt": "period,revenue_usd\n2026-03,100000\n2026-04,101000", "expected": "csv", "note": "3 列最小 CSV" },
+    { "prompt": "{\"version\":\"evidence-pack/v0.1\",\"asOf\":\"2026-08-31\",\"sourceDomain\":\"billing\",\"fields\":{\"repaymentRatePct\":96}}", "expected": "evidence-pack" },
+    { "prompt": "如果回款率降到 90% 会怎样？", "expected": "what-if" },
+    { "prompt": "如果 GPU 小时涨到 6000，结果怎么变？", "expected": "what-if" },
+    { "prompt": "What if the repayment rate drops to 88%?", "expected": "what-if" },
+    { "prompt": "你好", "expected": "small-talk" },
+    { "prompt": "谢谢", "expected": "small-talk" },
+    { "prompt": "你能做什么？", "expected": "help" },
+    { "prompt": "R 和 C 是什么意思？", "expected": "help" },
+    { "prompt": "帮我写一份电商营销方案", "expected": "out-of-scope" },
+    { "prompt": "游戏公司的广告收入能评估吗", "expected": "out-of-scope" },
+    { "prompt": "存储协议怎么优化", "expected": "out-of-scope" },
+
+    { "prompt": "查一下 CoreWeave 的公开收入", "expected": "public-financials" },
+    { "prompt": "NBIS 在 SEC 的财务数据有哪些", "expected": "public-financials" },
+    { "prompt": "这家上市公司最近一个季度的现金和债务", "expected": "public-financials" },
+    { "prompt": "看看它的 10-Q 披露了什么", "expected": "public-financials" },
+    { "prompt": "CoreWeave 的债务情况怎么样", "expected": "public-financials" },
+    { "prompt": "它最近一个季度的收入是多少", "expected": "public-financials" },
+
+    { "prompt": "做一个算力运营商的因子研究面板", "expected": "research" },
+    { "prompt": "跑一下 IC 分析", "expected": "research" },
+    { "prompt": "对比这几家的因子暴露", "expected": "research" },
+    { "prompt": "算一算 Rank IC", "expected": "research" },
+
+    { "prompt": "拟合一个评分模型", "expected": "scoring-model" },
+    { "prompt": "给这些因子配个权重", "expected": "scoring-model" },
+    { "prompt": "把因子合成一个分数", "expected": "scoring-model" },
+
+    { "prompt": "回放一下历史表现", "expected": "replay" },
+    { "prompt": "用 2022 年矿业寒冬验证一下模型", "expected": "replay" },
+    { "prompt": "历史上误报了多少", "expected": "replay" },
+
+    { "prompt": "校准一下评分和结果", "expected": "calibration" },
+    { "prompt": "800 分以上的公司后来都怎么样了", "expected": "calibration" },
+
+    { "prompt": "我们写的预测判分了吗", "expected": "predictions" },
+    { "prompt": "ANT 的预测现在结果如何", "expected": "predictions" },
+    { "prompt": "裁判记分了吗", "expected": "predictions" },
+
+    { "prompt": "它承诺了多少算力", "expected": "commitments" },
+    { "prompt": "未来 12 个月算力支出义务有多大", "expected": "commitments" },
+    { "prompt": "承诺覆盖度是多少", "expected": "commitments" },
+
+    { "prompt": "什么是承购承诺", "expected": "knowledge" },
+    { "prompt": "算力券是什么意思", "expected": "knowledge" },
+    { "prompt": "GPU 抵押贷款是什么意思", "expected": "knowledge" },
+    { "prompt": "TAI 是怎么算的", "expected": "knowledge" },
+    { "prompt": "前面和后面分别指什么", "expected": "knowledge" },
+
+    { "prompt": "请评估 NovaRack Compute 这家 AI 推理运营商。评估周期 2026-03-01 到 2026-08-31，主卡 H100，GPU 使用量约 4200 小时。近六个月：3月 token 72M、有效率 92%、收入 94000 美元、支出 55000 美元；4月 75M、93%、96000、56000；5月 77M、93%、97000、56500；6月 79M、94%、99000、57500；7月 81M、94%、101000、59000；8月 80M、94%、100000、58000。月收入 100000 美元，算力支出 58000 美元。回款率 96%，30 天逾期 2%，付费客户 168 家，前五大占 36%，客户 HHI 约 1200，关联方收入占比 3%，经营 720 天，数据覆盖率 100%。", "expected": "unclear", "note": "评估叙述（≥3 数字）跳过语义层，交给模型路由树" },
+    { "prompt": "请评估这家 AI 推理服务商的交易对手风险。GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元，回款率约 96%，逾期 2%，客户 168 家。", "expected": "unclear", "note": "评估叙述（≥3 数字）" },
+    { "prompt": "评估一家算力公司", "expected": "unclear" },
+    { "prompt": "这家公司看起来不错", "expected": "unclear" },
+    { "prompt": "继续", "expected": "unclear" },
+    { "prompt": "token 真好用", "expected": "unclear", "note": "含领域词但不是查询" },
+    { "prompt": "我喜欢 GPU", "expected": "unclear" },
+    { "prompt": "{\"foo\": 1}", "expected": "unclear" }
+  ]
+}
