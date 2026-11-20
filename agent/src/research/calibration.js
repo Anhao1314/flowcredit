@@ -123,7 +123,10 @@ export function buildCalibrationReport(panel) {
       "Descriptive calibration table only: bucket event rates are sample statistics, not fitted default probabilities.",
       "Samples are small (often one credit event); any single bucket rate is indicative at best.",
       "Brier scores are in-sample and optimistic; the base-rate Brier is the naive reference.",
-      "No PD / expected-loss output: the engine's red line; this table does not lift it."
+      "No PD / expected-loss output: the engine's red line; this table does not lift it.",
+      ...(labeled.length > 0 && positives === 0
+        ? ["No positive labels in this panel window — rebuild with a deeper period window (up to 24 quarters) so historical credit events are in-sample."]
+        : [])
     ]
   };
 }
