@@ -414,6 +414,16 @@ const html = `<!doctype html>
       ];
       note = String(r.digest || "").slice(0, 23) + "… · documented 级（上传文件）· 非独立验证"
         + ((r.mismatched || []).length ? " · 不一致字段未采信" : "");
+    } else if (call.name === "query_compute_knowledge" && (r.concept || r.concepts || r.chains || r.seam || r.overview)) {
+      title = "知识图谱";
+      var kg = r.concept
+        ? [{ label: "概念", value: r.concept.label }, { label: "类型", value: r.concept.type }, { label: "关联边", value: (r.concept.related ? (r.concept.related.out.length + r.concept.related.in.length) : 0) }]
+        : r.concepts ? [{ label: "候选", value: r.concepts.length }]
+        : r.chains ? [{ label: "链", value: r.chains.map(function(c) { return c.name; }).join(",") }]
+        : r.seam ? [{ label: "接缝", value: r.seam.seam }, { label: "风险", value: r.seam.risks.length }]
+        : [{ label: "节点", value: (r.overview ? r.overview.stats.nodes : "n/a") }, { label: "链", value: (r.overview ? r.overview.chains.length : "n/a") }];
+      metrics = kg;
+      note = "领域底图 · 事实带出处 · 非评估输入";
     } else if (call.name === "preset_draft" && r.draft) {
       title = "示例草稿";
       metrics = [{ label: "Key", value: r.key }];

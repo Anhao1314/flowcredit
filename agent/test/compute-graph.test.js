@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   loadComputeGraph, loadComputeGraphFile, seamMap, neighborsOf, chainByName, graphStats,
-  COMPUTE_KG_VERSION, DEFAULT_COMPUTE_GRAPH_FILE, KG_SEAMS
+  queryComputeKnowledge, COMPUTE_KG_VERSION, DEFAULT_COMPUTE_GRAPH_FILE, KG_SEAMS
 } from "../src/knowledge/compute-graph.js";
 
 const graph = loadComputeGraphFile(DEFAULT_COMPUTE_GRAPH_FILE);
@@ -77,4 +77,29 @@ test("malformed graphs fail with coded errors", () => {
 
 test("missing file is null (honest unconfigured)", () => {
   assert.equal(loadComputeGraphFile("/nonexistent/graph.json"), null);
+});
+
+test("queryComputeKnowledge: concept / chain / seam / overview paths", () => {
+  const single = queryComputeKnowledge(graph, { concept: "I_offtake" });
+  assert.equal(single.concept.id, "I_offtake");
+  assert.equal(single.concept.type, "instrument");
+  assert.ok(single.concept.facts[0].text.includes("900.9"));
+  assert.ok(single.concept.related.out.some(edge => edge.to === "M_commitment_coverage"));
+
+  const fuzzy = queryComputeKnowledge(graph, { concept: "承购" });
+  assert.ok(fuzzy.concepts.length >= 1, "label substring matches 承购承诺");
+
+  const chain = queryComputeKnowledge(graph, { chain: "credit" });
+  assert.equal(chain.chains[0].steps[0].id, "A_enduser");
+  assert.equal(chain.chains[0].steps.at(-1).id, "I_debt_service");
+
+  const seam = queryComputeKnowledge(graph, { seam: "front" });
+  assert.equal(seam.seam.risks.length, 4);
+
+  const overview = queryComputeKnowledge(graph, { overview: true });
+  assert.equal(overview.overview.stats.nodes, graph.nodes.length);
+  assert.equal(overview.overview.chains.length, graph.chains.length);
+
+  assert.throws(() => queryComputeKnowledge(graph, {}), { code: "KG_QUERY_EMPTY" });
+  assert.throws(() => queryComputeKnowledge(graph, { seam: "side" }), { code: "KG_INVALID_SEAM" });
 });

@@ -22,7 +22,7 @@
 
 **核心机制**：LLM 收集事实、选择工具、解释结果；所有数字（TAI / CCI / Risk Grade / decision）由确定性引擎 `computeRiskV021` 唯一产出；每一条回答都带指纹引用（`assessmentFingerprint` / `inputFingerprint`），可反查、可审计；模型失败/超步/未授权时优雅降级为同一条确定性管线，绝不编造。
 
-## 2. 它能做什么（18 个确定性工具）
+## 2. 它能做什么（19 个确定性工具）
 
 | 工具 | 能力 |
 | --- | --- |
@@ -43,6 +43,7 @@
 | `check_predictions` | 预测裁判：用最新 PIT 数据给冻结的预测账本记分（pass/fail/pending/unverifiable），每条带 periodEnd/filed 证据与判定指纹；FAIL 是永久记录，绝不改写；不可验证 ≠ 通过 |
 | `verify_credit_events` | 事件核实流水线（机器提议、人工批准）：扫描公司 8-K 窗口，抓取原文并确定性识别破产/退市/重组披露（Item 1.03/3.01、RSA/债转股关键词），提取事件日期与原文片段；候选带出处（accession + sha256）但只是**提案**——入库需人工评审，绝不自动写入标签文件 |
 | `calibration_report` | 校准表：把评分观测按 cap 分桶（≤550…951–1000），给出桶内事件率、基准率、样本内 Brier 与单调性红旗；桶率是样本统计**不是拟合违约概率**；空桶显示"样本不足"；不输出 PD |
+| `query_compute_knowledge` | 知识图谱查询（确定性）：按概念/链/接缝检索算力领域底图——定义、出处事实、关联边、前中后接缝风险；图谱是领域底图而非评估输入 |
 | `preset_draft` | 合成示例草稿（healthy / watch / sybil） |
 
 **配套能力**：

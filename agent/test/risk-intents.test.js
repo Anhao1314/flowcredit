@@ -50,10 +50,13 @@ test("tool-family matrix: deterministic intents block cross-domain tools, unclea
   assert.equal(isToolAllowed("out-of-scope", "lookup_public_company"), false);
   assert.equal(isToolAllowed("unclear", "build_research_panel"), true, "unclear leaves routing to the model");
   assert.equal(isToolAllowed("csv", "no_such_tool"), false);
-  assert.deepEqual(allowedFamiliesFor("csv"), ["assessment"]);
+  assert.deepEqual(allowedFamiliesFor("csv"), ["assessment", "knowledge"], "评估流程中知识查询随时可用");
   assert.equal(allowedFamiliesFor("unclear"), null);
   assert.equal(TOOL_FAMILIES.check_predictions, "predictions");
   assert.equal(TOOL_FAMILIES.calibration_report, "research");
+  assert.equal(TOOL_FAMILIES.query_compute_knowledge, "knowledge");
+  assert.equal(isToolAllowed("facts", "query_compute_knowledge"), true, "评估流程中可随时问领域知识");
+  assert.equal(isToolAllowed("help", "query_compute_knowledge"), false);
 });
 
 test("post-hoc intent attribution from tool calls", () => {

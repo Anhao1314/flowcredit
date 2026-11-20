@@ -32,6 +32,7 @@ import { createPriceFeed } from "./connectors/prices.js";
 import { createResearchService } from "./research/panel.js";
 import { loadPredictionLedgerFile, DEFAULT_PREDICTIONS_FILE } from "./research/predictions.js";
 import { loadCreditEventsFile, DEFAULT_CREDIT_EVENTS_FILE } from "./research/credit-events.js";
+import { loadComputeGraphFile, DEFAULT_COMPUTE_GRAPH_FILE } from "./knowledge/compute-graph.js";
 import { createRiskAssistant } from "./risk-assistant.js";
 import { createRiskClient } from "./risk-client.js";
 import { createRiskAuditLogger } from "./audit-risk.js";
@@ -474,6 +475,11 @@ function creditEventsForServer(env) {
   return loadCreditEventsFile(env?.FC_CREDIT_EVENTS_FILE || DEFAULT_CREDIT_EVENTS_FILE);
 }
 
+/** 算力知识图谱：默认 agent/knowledge/compute-graph.json，FC_COMPUTE_GRAPH_FILE 可覆盖；缺失 → null，非法 → 抛错。 */
+function computeGraphForServer(env) {
+  return loadComputeGraphFile(env?.FC_COMPUTE_GRAPH_FILE || DEFAULT_COMPUTE_GRAPH_FILE);
+}
+
 export function createFlowCreditServer(options = {}) {
   const security = securityConfig(options.env || process.env);
   const limiter = new FixedWindowRateLimiter({ windowMs: security.rateLimitWindowMs, maxRequests: security.rateLimitMaxRequests, now: options.now || Date.now });
@@ -505,6 +511,7 @@ export function createFlowCreditServer(options = {}) {
   const researchLabels = options.researchLabels ?? loadResearchLabelsFile(options.env || process.env);
   const predictionLedger = options.predictionLedger ?? predictionLedgerForServer(options.env || process.env);
   const creditEvents = options.creditEvents ?? creditEventsForServer(options.env || process.env);
+  const computeGraph = options.computeGraph ?? computeGraphForServer(options.env || process.env);
   const research = options.researchService || createResearchService({
     secEdgar,
     priceFeed,
@@ -514,7 +521,7 @@ export function createFlowCreditServer(options = {}) {
   });
   const riskAgent = options.riskAssistant || createRiskAssistant({
     client: options.riskAgentClient || createRiskClient({ env: options.env || process.env }),
-    registry: createRiskToolRegistry({ connectors, secEdgar, filings, priceFeed, research, predictionLedger }),
+    registry: createRiskToolRegistry({ connectors, secEdgar, filings, priceFeed, research, predictionLedger, computeGraph }),
     audit: options.riskAudit || createRiskAuditLogger(),
     deterministicChat: ({ prompt, sessionId, requestId }) =>
       chatPipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)

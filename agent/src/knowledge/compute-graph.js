@@ -116,3 +116,76 @@ export function graphStats(graph) {
   const facts = graph.nodes.reduce((sum, node) => sum + (node.facts?.length ?? 0), 0);
   return { nodes: graph.nodes.length, edges: graph.edges.length, chains: graph.chains.length, facts, byType };
 }
+
+const nodeById = (graph, id) => graph.nodes.find(node => node.id === id) ?? null;
+
+/**
+ * 知识查询（纯确定性）：概念（id/标签/摘要子串）、链、接缝风险、总览。
+ * 单一概念命中 → 返回完整记录 + 出入关系；多命中 → 返回候选列表提示收窄。
+ * 至少提供一个查询维度，否则拒绝（不返回整图）。
+ */
+export function queryComputeKnowledge(graph, { concept = null, chain = null, seam = null, overview = false } = {}) {
+  const result = { ok: true, version: graph.version };
+  let matched = false;
+
+  if (overview) {
+    matched = true;
+    result.overview = {
+      stats: graphStats(graph),
+      chains: graph.chains.map(item => ({ name: item.name, label: item.label, steps: item.steps })),
+      seams: seamMap(graph)
+    };
+  }
+
+  if (chain) {
+    matched = true;
+    const needle = String(chain).toLowerCase();
+    const found = graph.chains.filter(item => item.name.toLowerCase().includes(needle) || item.label.includes(String(chain)));
+    result.chains = found.map(item => ({
+      name: item.name, label: item.label,
+      steps: item.steps.map(stepId => {
+        const node = nodeById(graph, stepId);
+        return { id: stepId, label: node?.label ?? stepId, type: node?.type ?? null };
+      })
+    }));
+  }
+
+  if (seam) {
+    matched = true;
+    if (!KG_SEAMS.includes(seam)) throw kgError("KG_INVALID_SEAM", `seam must be one of ${KG_SEAMS.join("/")}`);
+    result.seam = {
+      seam,
+      risks: graph.nodes
+        .filter(node => node.type === "risk" && node.seam === seam)
+        .map(node => ({ id: node.id, label: node.label, summary: node.summary, facts: node.facts ?? [] }))
+    };
+  }
+
+  if (concept) {
+    matched = true;
+    const needle = String(concept).toLowerCase();
+    const matches = graph.nodes.filter(node =>
+      node.id.toLowerCase().includes(needle)
+      || node.label.toLowerCase().includes(needle)
+      || String(node.summary ?? "").includes(String(concept))
+    );
+    if (matches.length === 1) {
+      const node = matches[0];
+      const { out, in: incoming } = neighborsOf(graph, node.id);
+      result.concept = {
+        id: node.id, type: node.type, label: node.label, summary: node.summary,
+        seam: node.seam ?? null, facts: node.facts ?? [],
+        related: {
+          out: out.map(edge => ({ type: edge.type, label: edge.label, to: edge.to, toLabel: nodeById(graph, edge.to)?.label ?? edge.to })),
+          in: incoming.map(edge => ({ type: edge.type, label: edge.label, from: edge.from, fromLabel: nodeById(graph, edge.from)?.label ?? edge.from }))
+        }
+      };
+    } else {
+      result.concepts = matches.map(node => ({ id: node.id, type: node.type, label: node.label }));
+      result.hint = matches.length > 1 ? "multiple matches — narrow the query or use an exact id" : "no concept matched — try overview";
+    }
+  }
+
+  if (!matched) throw kgError("KG_QUERY_EMPTY", "provide concept, chain, seam or overview");
+  return result;
+}

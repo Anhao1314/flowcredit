@@ -22,6 +22,7 @@ import { buildEvidencePack } from "./connectors/evidence-pack.js";
 import { observationsForCompany } from "./research/panel.js";
 import { buildPredictionReport } from "./research/predictions.js";
 import { commitmentCoverageFrom } from "./connectors/sec-filings.js";
+import { queryComputeKnowledge } from "./knowledge/compute-graph.js";
 import { getPresetV021 } from "./presets.js";
 import { addFinchIdentity, deterministicFingerprintPayload, finchAssessmentFingerprint, finchInputFingerprint } from "./finch-contract.js";
 import { createCoreToolRegistry } from "../core/tool-registry.js";
@@ -127,7 +128,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, priceFeed = null, research = null, predictionLedger = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, priceFeed = null, research = null, predictionLedger = null, computeGraph = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -604,6 +605,31 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
         if (typeof args.panelId !== "string" || !args.panelId.trim()) throw new TypeError("panelId is required");
         if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
         return research.calibrationReport({ panelId: args.panelId.trim() });
+      }
+    },
+    {
+      name: "query_compute_knowledge",
+      description: "Query the compute knowledge graph (domain base-map, deterministic): look up a concept by id/label substring (e.g. token, 承购, TAI) and get its definition, source-cited facts and related edges; resolve a named chain (physical/commercial/financial/credit/thesis); list seam risks (front/back/core: 算力变现面/支撑面/计量本体); or return the graph overview. Knowledge is a base-map, NOT evaluation input — numbers still come from the deterministic tools.",
+      parameters: {
+        concept: { type: "string", required: false, description: "Concept id or label substring, e.g. token, 承购, TAI" },
+        chain: { type: "string", required: false, description: "Chain name or label substring: physical | commercial | financial | credit | thesis" },
+        seam: { type: "string", required: false, enum: ["front", "back", "core"], description: "List seam risks: front (变现面) / back (支撑面) / core (计量本体)" },
+        overview: { type: "boolean", required: false, description: "Return graph stats, chains and seam map" }
+      },
+      execute(args) {
+        assertArgs(args, ["concept", "chain", "seam", "overview"]);
+        if (!computeGraph) return { ok: false, code: "KNOWLEDGE_UNCONFIGURED", message: "compute knowledge graph is not configured on this server" };
+        if (!args.concept && !args.chain && !args.seam && !args.overview) throw new TypeError("provide one of concept, chain, seam or overview");
+        try {
+          return queryComputeKnowledge(computeGraph, {
+            ...(args.concept !== undefined ? { concept: String(args.concept) } : {}),
+            ...(args.chain !== undefined ? { chain: String(args.chain) } : {}),
+            ...(args.seam !== undefined ? { seam: args.seam } : {}),
+            ...(args.overview !== undefined ? { overview: args.overview === true } : {})
+          });
+        } catch (error) {
+          return { ok: false, code: error.code || "KG_QUERY_FAILED", message: String(error.message || error) };
+        }
       }
     },
     {
