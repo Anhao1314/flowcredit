@@ -5,8 +5,22 @@
       "ticker": "CORZ",
       "eventType": "bankruptcy",
       "eventDate": "2022-12-21",
-      "source": "SEC 8-K Item 1.03 Bankruptcy or Receivership, accession 0001193125-22-310173, filed 2022-12-21（已对文档正文核实：\"On December 21, 2022, Core Scientific, Inc. ... filed voluntary petitions for relief under Chapter 11\"）",
-      "note": "Core Scientific 于 2022-12-21 自愿申请 Chapter 11；2024 年完成重组并重新上市。同一窗口另有 2022-12-16 8-K Item 3.01（纳斯达克退市通知）。"
+      "source": "SEC 8-K Item 1.03 Bankruptcy or Receivership, accession 0001193125-22-310173, filed 2022-12-21（已对文档正文核实：\"On December 21, 2022, Core Scientific, Inc. ... filed voluntary petitions for relief under Chapter 11\"；2026-11-20 事件核实流水线独立复核一致）",
+      "note": "Core Scientific 于 2022-12-21 自愿申请 Chapter 11；2024 年完成重组并重新上市。同一集集内的退市通知（2022-12-22 8-K）视为冗余，未单独入库。"
+    },
+    {
+      "ticker": "CIFR",
+      "eventType": "delisting",
+      "eventDate": "2022-12-15",
+      "source": "SEC 8-K Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule, accession 0001083301-22-000070, filed 2022-12-21（事件核实流水线 2026-11-20 对文档正文核实：\"On December 15, 2022, Cipher Mining Inc. ...\"）",
+      "note": "Cipher Mining 在矿业寒冬中收到纳斯达克合规通知（2022-12-15）；后经补救未实际退市。作为信用事件登记的是「收到通知」这一披露事实。"
+    },
+    {
+      "ticker": "MARA",
+      "eventType": "delisting",
+      "eventDate": "2020-04-20",
+      "source": "SEC 8-K Item 3.01 Notification of Failure to Satisfy a Continued Listing Rule or Standard, accession 0001493152-20-006932, filed 2020-04-22（事件核实流水线 2026-11-20 对文档正文核实：\"On April 20, 2020, Marathon Patent Group, Inc. ...\"）",
+      "note": "Marathon（当时还是 Marathon Patent Group）2020 年 4 月收到纳斯达克持续上市合规通知；其后补救。同期 2020-04-06 的通知视为同一事件，未重复入库。"
     }
   ]
 }

@@ -26,11 +26,12 @@ test("credit events validation rejects malformed ledgers with coded errors", () 
 test("credit events file: missing is null, the committed CORZ ledger loads and cites its filing", () => {
   assert.equal(loadCreditEventsFile("/nonexistent/credit-events.json"), null);
   const ledger = loadCreditEventsFile(DEFAULT_CREDIT_EVENTS_FILE);
-  assert.ok(ledger, "the committed CORZ event file must exist");
-  assert.equal(ledger.events.length, 1);
+  assert.ok(ledger, "the committed credit-event file must exist");
+  assert.equal(ledger.events.length, 3, "CORZ bankruptcy + CIFR delisting + MARA compliance notice");
   assert.equal(ledger.events[0].ticker, "CORZ");
   assert.equal(ledger.events[0].eventType, "bankruptcy");
   assert.match(ledger.events[0].source, /0001193125-22-310173/);
+  for (const event of ledger.events) assert.ok(event.source && event.source.length > 20, "every event carries a filing citation");
 });
 
 test("PIT annotation: only filings followed by an event within the frozen window are positives", () => {
