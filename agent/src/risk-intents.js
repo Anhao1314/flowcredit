@@ -37,7 +37,8 @@ export const TOOL_FAMILIES = Object.freeze({
   build_scoring_model: "research",
   replay_report: "research",
   calibration_report: "research",
-  check_predictions: "predictions"
+  check_predictions: "predictions",
+  query_compute_knowledge: "knowledge"
 });
 
 /** 确定性意图 → 允许的工具家族；null = 不限制（unclear 交给模型）。 */
@@ -45,10 +46,10 @@ const INTENT_FAMILIES = Object.freeze({
   help: [],
   "small-talk": [],
   "out-of-scope": [],
-  csv: ["assessment"],
-  "evidence-pack": ["assessment"],
-  facts: ["assessment"],
-  "what-if": ["assessment"],
+  csv: ["assessment", "knowledge"],
+  "evidence-pack": ["assessment", "knowledge"],
+  facts: ["assessment", "knowledge"],
+  "what-if": ["assessment", "knowledge"],
   unclear: null
 });
 
@@ -124,5 +125,6 @@ export function intentFromTools(toolCalls) {
   if (families.has("research")) return "research";
   if (families.has("public-data")) return "public-data";
   if (families.has("assessment")) return "assessment";
+  if (families.has("knowledge")) return "knowledge";
   return "none";
 }
