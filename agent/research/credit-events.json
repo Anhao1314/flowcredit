@@ -1,0 +1,12 @@
+{
+  "version": "flowcredit.credit-events/v0.2",
+  "events": [
+    {
+      "ticker": "CORZ",
+      "eventType": "bankruptcy",
+      "eventDate": "2022-12-21",
+      "source": "SEC 8-K Item 1.03 Bankruptcy or Receivership, accession 0001193125-22-310173, filed 2022-12-21（已对文档正文核实：\"On December 21, 2022, Core Scientific, Inc. ... filed voluntary petitions for relief under Chapter 11\"）",
+      "note": "Core Scientific 于 2022-12-21 自愿申请 Chapter 11；2024 年完成重组并重新上市。同一窗口另有 2022-12-16 8-K Item 3.01（纳斯达克退市通知）。"
+    }
+  ]
+}

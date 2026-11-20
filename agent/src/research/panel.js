@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { annualizedVolPct, closeAsOf, distanceToDefault } from "./merton.js";
 import { forwardMarketLabels } from "./labels.js";
 import { buildReplayReport } from "./replay.js";
+import { annotateObservationsWithCreditEvents, creditEventLabelMap } from "./credit-events.js";
 
 export const RESEARCH_PANEL_VERSION = "ai-compute-panel/v0.1.0";
 
@@ -560,9 +561,10 @@ export function buildScoringModelDraft(panel, { labels = null, labelsSource = nu
 }
 
 /** 进程内面板存储（TTL + 容量上限；不落盘）。 */
-export function createResearchService({ secEdgar, priceFeed = null, explicitLabels = null, labelsSource = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
+export function createResearchService({ secEdgar, priceFeed = null, explicitLabels = null, labelsSource = null, creditEvents = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
   const store = new Map();
   let sequence = 0;
+  const hasCreditEvents = !!(creditEvents && Array.isArray(creditEvents.events) && creditEvents.events.length);
 
   function evict() {
     const current = now();
@@ -581,6 +583,11 @@ export function createResearchService({ secEdgar, priceFeed = null, explicitLabe
     });
     if (!panel.observations.length) {
       return { ok: false, code: "PANEL_EMPTY", message: "no observations could be built", failures: panel.failures };
+    }
+    // 显式信用事件标签（可选）：filed 对齐的前瞻窗口映射，优先于市场代理标签。
+    if (hasCreditEvents) {
+      panel.observations = annotateObservationsWithCreditEvents(panel.observations, creditEvents.events);
+      panel.labelStatus = "credit-events";
     }
     sequence += 1;
     const panelId = `rp-${createHash("sha256").update(`${panel.generatedAt}|${sequence}|${panel.requested.join(",")}`).digest("hex").slice(0, 12)}`;
@@ -603,10 +610,15 @@ export function createResearchService({ secEdgar, priceFeed = null, explicitLabe
     evict();
     const entry = store.get(String(panelId || ""));
     if (!entry) return { ok: false, code: "PANEL_NOT_FOUND", message: "panel not found or expired; build it again" };
+    // 标签优先级：显式数值标签文件 > 信用事件库 > 市场代理。
+    const eventLabels = hasCreditEvents ? creditEventLabelMap(entry.panel.observations, creditEvents.events) : null;
     const effective = explicitLabels && typeof explicitLabels === "object" && Object.keys(explicitLabels).length
       ? explicitLabels
+      : eventLabels && Object.keys(eventLabels).length ? eventLabels
       : (labels || null);
-    const source = explicitLabels && Object.keys(explicitLabels).length ? (labelsSource || "explicit-file") : null;
+    const source = explicitLabels && Object.keys(explicitLabels).length ? (labelsSource || "explicit-file")
+      : eventLabels && Object.keys(eventLabels).length ? "credit-events-file"
+      : null;
     const report = computeFactorReport(entry.panel, { ...(effective ? { labels: effective } : {}), ...(source ? { labelsSource: source } : {}) });
     return { ok: true, panelId, ...report };
   }

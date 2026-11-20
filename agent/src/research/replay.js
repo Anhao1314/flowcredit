@@ -72,11 +72,15 @@ export function buildReplayReport(panel) {
       skippedNoCapitalData.push({ ticker: item.ticker, periodEnd: item.periodEnd });
       continue;
     }
+    // 标签来源：配置了信用事件库 → 只用事件标签（labelCreditEvent）；否则市场代理。
+    const creditLabel = item.labelCreditEvent === 0 || item.labelCreditEvent === 1 ? item.labelCreditEvent : null;
+    const labeled = creditLabel !== null ? true : finite(item.labelForwardReturnPct);
+    const distressed = creditLabel !== null ? creditLabel === 1 : item.labelDistressed === true;
     scored.push({
       ticker: item.ticker, periodEnd: item.periodEnd, filed: item.filed, form: item.form,
       result, flagged: (result.details.distressCaps || []).length > 0,
-      distressed: item.labelDistressed === true,
-      labeled: finite(item.labelForwardReturnPct)
+      distressed,
+      labeled
     });
   }
 
@@ -144,7 +148,9 @@ export function buildReplayReport(panel) {
     leadTimes,
     skippedNoCapitalData,
     honestNotes: [
-      "Labels are market-implied proxies (forward 90d max decline from filed date), NOT credit events such as bankruptcy or default.",
+      panel.labelStatus === "credit-events"
+        ? "Labels are explicit credit events from the configured event file (each event carries its filing citation) — not market proxies."
+        : "Labels are market-implied proxies (forward 90d max decline from filed date), NOT credit events such as bankruptcy or default.",
       "Sample sizes are small; no statistical significance is claimed. This is a replay statistic, not proof of predictive validity.",
       "Flag rule is frozen (any capital-structure distress gate); changing it requires a version bump and human review.",
       "Observations without sufficient capital data are excluded from the confusion matrix and counted in skippedNoCapitalData."

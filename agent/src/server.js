@@ -31,6 +31,7 @@ import { createSecFilingsConnector } from "./connectors/sec-filings.js";
 import { createPriceFeed } from "./connectors/prices.js";
 import { createResearchService } from "./research/panel.js";
 import { loadPredictionLedgerFile, DEFAULT_PREDICTIONS_FILE } from "./research/predictions.js";
+import { loadCreditEventsFile, DEFAULT_CREDIT_EVENTS_FILE } from "./research/credit-events.js";
 import { createRiskAssistant } from "./risk-assistant.js";
 import { createRiskClient } from "./risk-client.js";
 import { createRiskAuditLogger } from "./audit-risk.js";
@@ -468,6 +469,11 @@ function predictionLedgerForServer(env) {
   return loadPredictionLedgerFile(env?.FC_PREDICTIONS_FILE || DEFAULT_PREDICTIONS_FILE);
 }
 
+/** 信用事件库：默认 agent/research/credit-events.json，FC_CREDIT_EVENTS_FILE 可覆盖；缺失 → null，非法 → 抛错。 */
+function creditEventsForServer(env) {
+  return loadCreditEventsFile(env?.FC_CREDIT_EVENTS_FILE || DEFAULT_CREDIT_EVENTS_FILE);
+}
+
 export function createFlowCreditServer(options = {}) {
   const security = securityConfig(options.env || process.env);
   const limiter = new FixedWindowRateLimiter({ windowMs: security.rateLimitWindowMs, maxRequests: security.rateLimitMaxRequests, now: options.now || Date.now });
@@ -498,10 +504,12 @@ export function createFlowCreditServer(options = {}) {
   // 文件缺失 → null（走市场代理标签）；存在但非法 → 启动即失败（fail-fast）。
   const researchLabels = options.researchLabels ?? loadResearchLabelsFile(options.env || process.env);
   const predictionLedger = options.predictionLedger ?? predictionLedgerForServer(options.env || process.env);
+  const creditEvents = options.creditEvents ?? creditEventsForServer(options.env || process.env);
   const research = options.researchService || createResearchService({
     secEdgar,
     priceFeed,
     ...(researchLabels ? { explicitLabels: researchLabels, labelsSource: "explicit-file" } : {}),
+    ...(creditEvents ? { creditEvents } : {}),
     ...(options.now ? { now: options.now } : {})
   });
   const riskAgent = options.riskAssistant || createRiskAssistant({
