@@ -53,7 +53,7 @@ const CHAT_JSON_EXAMPLE = JSON.stringify({
   C: [62, 63, 62, 65, 66, 65, 68, 69]
 });
 
-function isHelpIntent(prompt) {
+export function isHelpIntent(prompt) {
   const text = String(prompt || "").trim();
   if (!text || text.length > 160) return false;
   if (/R\s*(?:和|and|&)\s*C|怎么给|怎么填|什么意思|what\s+(?:is|are)\s+(?:R|C)\b|how\s+(?:do\s+i|to)\s+(?:provide|give)/i.test(text)) return true;
@@ -114,7 +114,7 @@ function scopeMessage(english, extraction) {
   ].join("\n");
 }
 
-function looksOutOfScope(prompt) {
+export function looksOutOfScope(prompt) {
   return /arweave|storage|存储|protocol|协议|saas|e-?commerce|电商|marketplace|advertis|广告|bank|银行|lending|借贷|game|游戏|defi|nft/i.test(prompt);
 }
 

@@ -26,7 +26,7 @@ export function defaultRiskAuditDir() {
 /**
  * 输入：{ dir?, now? }（now 可注入以便测试）。
  * 输出：{ dir, nowMs(), write(event) -> boolean }。
- * event 允许字段：sessionId/question/answer/harnessStatus/code/toolCalls/steps/usage/durationMs/model/agentVersion。
+ * event 允许字段：sessionId/question/answer/harnessStatus/code/toolCalls/steps/usage/durationMs/model/agentVersion/intent/intentSource（intent 仅标签，不含 prompt 文本）。
  */
 export function createRiskAuditLogger({ dir = defaultRiskAuditDir(), now } = {}) {
   return createJsonlAuditLogger({

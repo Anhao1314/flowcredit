@@ -25,6 +25,7 @@ import { AGENT_VERSION } from "./risk-client.js";
 import { TtlSessionStore } from "../core/session-store.js";
 import { RunRecord } from "../core/run-record.js";
 import { INTAKE_SCHEMA_V03 } from "./intake-v03.js";
+import { classifyDeterministicIntent, isToolAllowed, allowedFamiliesFor, intentFromTools } from "./risk-intents.js";
 
 export const MAX_STEPS_RISK = 4;
 export const RETRY_BUDGET_RISK = 1;
@@ -198,17 +199,24 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const startedAt = auditLogger.nowMs();
     const run = beginRun("ask", startedAt);
     const requestId = `risk-${startedAt}-${runSequence}`;
+    // 意图层 v0.1：确定性意图（高置信才判定）；其余交回模型，unclear 不施加工具限制。
+    const intentInfo = typeof prompt === "string" ? classifyDeterministicIntent(prompt) : { intent: "unclear" };
     const finish = result => {
+      const finalIntent = intentInfo.intent !== "unclear"
+        ? { intent: intentInfo.intent, intentSource: "deterministic" }
+        : { intent: intentFromTools(result.toolCalls ?? []), intentSource: "derived" };
+      const enriched = { ...result, ...finalIntent };
       const finishedAt = auditLogger.nowMs();
       auditLogger.write({
-        run: completeRun(run, result, finishedAt),
-        sessionId: sessionId ?? null, prompt, answer: result.answer ?? "",
-        harnessStatus: result.harnessStatus ?? null, code: result.code ?? null,
-        toolCalls: result.toolCalls ?? [], steps: result.steps ?? null,
-        usage: result.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
+        run: completeRun(run, enriched, finishedAt),
+        sessionId: sessionId ?? null, question: prompt, answer: enriched.answer ?? "",
+        harnessStatus: enriched.harnessStatus ?? null, code: enriched.code ?? null,
+        toolCalls: enriched.toolCalls ?? [], steps: enriched.steps ?? null,
+        usage: enriched.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
+        intent: enriched.intent, intentSource: enriched.intentSource,
         durationMs: finishedAt - startedAt
       });
-      return result;
+      return enriched;
     };
 
     if (typeof prompt !== "string" || !prompt.trim() || prompt.length > PROMPT_MAX_CHARS) {
@@ -234,7 +242,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     }
 
     const messages = [
-      { role: "system", content: SYSTEM_PROMPT_RISK },
+      { role: "system", content: SYSTEM_PROMPT_RISK + (intentInfo.intent !== "unclear" ? `\nDETECTED INTENT (deterministic): ${intentInfo.intent}. Only tools allowed for this intent may be used; never switch domains.` : "") },
       ...sessionTurns(sessionId),
       { role: "user", content: prompt }
     ];
@@ -287,7 +295,15 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
                 const carried = sessionDraft(sessionId);
                 if (carried) toolArgs.carryDraft = carried; // 服务端注入：模型不能构造或改写
               }
-              result = { ok: true, tool: tool.name, result: await tool.execute(toolArgs) };
+              if (!isToolAllowed(intentInfo.intent, tool.name)) {
+                // 意图层 v0.1：确定性意图下的跨域工具调用直接拒绝（家族级边界，交模型纠正路由）。
+                result = {
+                  ok: false, tool: tool.name, error: "INTENT_TOOL_MISMATCH",
+                  message: `tool "${tool.name}" is outside the detected intent "${intentInfo.intent}" (allowed families: ${(allowedFamiliesFor(intentInfo.intent) || []).join(", ") || "none"})`
+                };
+              } else {
+                result = { ok: true, tool: tool.name, result: await tool.execute(toolArgs) };
+              }
             } catch (error) {
               result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
             }
@@ -345,6 +361,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const startedAt = auditLogger.nowMs();
     const run = beginRun("ask-stream", startedAt);
     const requestId = `risk-${startedAt}-${runSequence}`;
+    const intentInfo = typeof prompt === "string" ? classifyDeterministicIntent(prompt) : { intent: "unclear" };
     const emit = event => { try { onEvent(event); } catch { /* 观察者异常不污染主流程 */ } };
     // 思考链：确定性路由说明 + 模型 reasoning_content（如有）。全部是注记层，非权威。
     let reasoning = "";
@@ -355,17 +372,22 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     };
     const finish = result => {
       if (reasoning) result.reasoning = reasoning;
+      const finalIntent = intentInfo.intent !== "unclear"
+        ? { intent: intentInfo.intent, intentSource: "deterministic" }
+        : { intent: intentFromTools(result.toolCalls ?? []), intentSource: "derived" };
+      const enriched = { ...result, ...finalIntent };
       const finishedAt = auditLogger.nowMs();
       auditLogger.write({
-        run: completeRun(run, result, finishedAt),
-        sessionId: sessionId ?? null, prompt, answer: result.answer ?? "",
-        harnessStatus: result.harnessStatus ?? null, code: result.code ?? null,
-        toolCalls: result.toolCalls ?? [], steps: result.steps ?? null,
-        usage: result.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
+        run: completeRun(run, enriched, finishedAt),
+        sessionId: sessionId ?? null, question: prompt, answer: enriched.answer ?? "",
+        harnessStatus: enriched.harnessStatus ?? null, code: enriched.code ?? null,
+        toolCalls: enriched.toolCalls ?? [], steps: enriched.steps ?? null,
+        usage: enriched.usage ?? null, model: client.model, agentVersion: AGENT_VERSION,
+        intent: enriched.intent, intentSource: enriched.intentSource,
         durationMs: finishedAt - startedAt
       });
-      emit({ type: "done", result });
-      return result;
+      emit({ type: "done", result: enriched });
+      return enriched;
     };
 
     if (typeof prompt !== "string" || !prompt.trim() || prompt.length > PROMPT_MAX_CHARS) {
@@ -400,7 +422,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     }
 
     const messages = [
-      { role: "system", content: SYSTEM_PROMPT_RISK },
+      { role: "system", content: SYSTEM_PROMPT_RISK + (intentInfo.intent !== "unclear" ? `\nDETECTED INTENT (deterministic): ${intentInfo.intent}. Only tools allowed for this intent may be used; never switch domains.` : "") },
       ...sessionTurns(sessionId),
       { role: "user", content: prompt }
     ];
@@ -465,7 +487,15 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
                 const carried = sessionDraft(sessionId);
                 if (carried) toolArgs.carryDraft = carried; // 服务端注入：模型不能构造或改写
               }
-              result = { ok: true, tool: tool.name, result: await tool.execute(toolArgs) };
+              if (!isToolAllowed(intentInfo.intent, tool.name)) {
+                // 意图层 v0.1：确定性意图下的跨域工具调用直接拒绝（家族级边界，交模型纠正路由）。
+                result = {
+                  ok: false, tool: tool.name, error: "INTENT_TOOL_MISMATCH",
+                  message: `tool "${tool.name}" is outside the detected intent "${intentInfo.intent}" (allowed families: ${(allowedFamiliesFor(intentInfo.intent) || []).join(", ") || "none"})`
+                };
+              } else {
+                result = { ok: true, tool: tool.name, result: await tool.execute(toolArgs) };
+              }
             } catch (error) {
               result = { ok: false, tool: call?.function?.name, error: "TOOL_EXECUTION_ERROR", message: String(error?.message || error) };
             }

@@ -24,7 +24,7 @@ const defaultNow = () => new Date().toISOString();
  * 输入：{ dir, now?, eventType, auditVersion, fileName? }
  *   eventType: 字符串，或 (event) => string（按事件选择类型，如量化侧 narrative）。
  * 输出：{ dir, nowMs(), write(event) -> boolean }。
- * event 允许字段：sessionId/question/answer/harnessStatus/code/toolCalls/steps/usage/durationMs/model/agentVersion。
+ * event 允许字段：sessionId/question/answer/harnessStatus/code/toolCalls/steps/usage/durationMs/model/agentVersion/intent/intentSource。
  */
 export function createJsonlAuditLogger({ dir, now = defaultNow, eventType, auditVersion, fileName = "agent-audit.jsonl" } = {}) {
   if (!dir) throw new TypeError("audit logger requires a dir (outside the repository)");
@@ -54,7 +54,9 @@ export function createJsonlAuditLogger({ dir, now = defaultNow, eventType, audit
             usage: event.usage ?? null,
             durationMs: event.durationMs ?? null,
             model: event.model ?? null,
-            agentVersion: event.agentVersion ?? null
+            agentVersion: event.agentVersion ?? null,
+            intent: event.intent ?? null,
+            intentSource: event.intentSource ?? null
           }
         });
         appendFileSync(join(dir, fileName), `${JSON.stringify(allowed)}\n`, { encoding: "utf8" });
