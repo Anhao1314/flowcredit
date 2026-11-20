@@ -545,6 +545,17 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
       }
     },
     {
+      name: "calibration_report",
+      description: "Descriptive calibration table for the capital-structure overlay: group scored panel observations into CAP buckets (≤550 … 951-1000) and report the observed event rate per bucket, the base rate, in-sample Brier scores and a monotonicity red-flag check. Labels prefer explicit credit events over market proxies. These are sample statistics, not fitted default probabilities; no PD is produced. Small samples mean single-bucket rates are indicative at best.",
+      parameters: { panelId: { type: "string", required: true, description: "panelId returned by build_research_panel" } },
+      execute(args) {
+        assertArgs(args, ["panelId"]);
+        if (typeof args.panelId !== "string" || !args.panelId.trim()) throw new TypeError("panelId is required");
+        if (!research) return { ok: false, code: "RESEARCH_UNAVAILABLE", message: "research service is not configured on this server" };
+        return research.calibrationReport({ panelId: args.panelId.trim() });
+      }
+    },
+    {
       name: "preset_draft",
       description: "Return one of the synthetic example drafts (healthy | watch | sybil) so the user can try a complete assessment. These are fixtures, not real companies.",
       parameters: { key: { type: "string", required: true, enum: ["healthy", "watch", "sybil"] } },

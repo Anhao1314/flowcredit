@@ -359,6 +359,16 @@ const html = `<!doctype html>
         { label: "Basis", value: r.evidenceStatus ? r.evidenceStatus.basis : "n/a" }
       ];
       note = r.digest || "";
+    } else if (call.name === "calibration_report" && r.buckets) {
+      title = "校准表";
+      var populated = (r.buckets || []).filter(function(b) { return b.n > 0; });
+      metrics = [
+        { label: "标注观测", value: (r.coverage || {}).labeled ?? "n/a" },
+        { label: "基准事件率", value: r.baseRate != null ? r.baseRate : "n/a" },
+        { label: "分桶", value: populated.length },
+        { label: "单调性", value: r.monotonicity && r.monotonicity.ok ? "ok" : "违反" }
+      ];
+      note = "分桶事件率是样本统计，非拟合违约概率 · Brier 为样本内（乐观）· 小样本";
     } else if (call.name === "fetch_public_commitments" && r.company) {
       title = "算力承诺 · 文本抽取";
       var cm = r.commitments || {};

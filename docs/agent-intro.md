@@ -22,7 +22,7 @@
 
 **核心机制**：LLM 收集事实、选择工具、解释结果；所有数字（TAI / CCI / Risk Grade / decision）由确定性引擎 `computeRiskV021` 唯一产出；每一条回答都带指纹引用（`assessmentFingerprint` / `inputFingerprint`），可反查、可审计；模型失败/超步/未授权时优雅降级为同一条确定性管线，绝不编造。
 
-## 2. 它能做什么（16 个确定性工具）
+## 2. 它能做什么（17 个确定性工具）
 
 | 工具 | 能力 |
 | --- | --- |
@@ -41,6 +41,7 @@
 | `build_scoring_model` | 面板 → 评分模型草案：截面稳健 z + 收缩权重（方向取样本内 IC 符号、幅度向等权收缩，λ=IC 可用期/(期+K)）+ 因子相关矩阵 + walk-forward 样本外对照 DD；仅研究工件，不接入引擎，采纳需人工评审与版本升级 |
 | `replay_report` | 历史回放：把冻结的 distress 闸门逐观测（PIT，filed 对齐）跑在面板上，与前瞻 90d 市场代理标签对照 → 混淆矩阵、召回/误报率/精确率、逐公司领先期；标签是市场代理而非信用事件，样本小无显著性声明，规则冻结不可调参 |
 | `check_predictions` | 预测裁判：用最新 PIT 数据给冻结的预测账本记分（pass/fail/pending/unverifiable），每条带 periodEnd/filed 证据与判定指纹；FAIL 是永久记录，绝不改写；不可验证 ≠ 通过 |
+| `calibration_report` | 校准表：把评分观测按 cap 分桶（≤550…951–1000），给出桶内事件率、基准率、样本内 Brier 与单调性红旗；桶率是样本统计**不是拟合违约概率**；空桶显示"样本不足"；不输出 PD |
 | `preset_draft` | 合成示例草稿（healthy / watch / sybil） |
 
 **配套能力**：
