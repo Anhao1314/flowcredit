@@ -506,7 +506,7 @@ export function createFlowCreditServer(options = {}) {
   });
   const riskAgent = options.riskAssistant || createRiskAssistant({
     client: options.riskAgentClient || createRiskClient({ env: options.env || process.env }),
-    registry: createRiskToolRegistry({ connectors, secEdgar, filings, research, predictionLedger }),
+    registry: createRiskToolRegistry({ connectors, secEdgar, filings, priceFeed, research, predictionLedger }),
     audit: options.riskAudit || createRiskAuditLogger(),
     deterministicChat: ({ prompt, sessionId, requestId }) =>
       chatPipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)

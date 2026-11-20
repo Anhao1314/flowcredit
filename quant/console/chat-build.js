@@ -369,7 +369,9 @@ const html = `<!doctype html>
         { label: "12个月内", value: fmtB(cm.twelveMonthCommittedSpendUsd) },
         { label: "流动性", value: fmtB(cm.liquidityUsd) }
       ];
+      if (r.marketData) metrics.push({ label: "市值", value: fmtB(r.marketData.marketCapUsd) + " (" + r.marketData.priceDate + ")" });
       note = (cm.commitmentCoverageConservativeX != null ? "保守覆盖 " + cm.commitmentCoverageConservativeX + "x · " : "抽取不完整 · ")
+        + (r.marketData ? "股本来源 " + r.marketData.sharesSource + " · " : "")
         + (r.filing ? r.filing.form + " " + r.filing.filed + " · " : "")
         + "文本摘录（documented 级）· 需人工核对原文片段";
     } else if (call.name === "check_predictions" && r.summary) {

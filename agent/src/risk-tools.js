@@ -127,7 +127,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, research = null, predictionLedger = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, priceFeed = null, research = null, predictionLedger = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -374,20 +374,43 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
     },
     {
       name: "fetch_public_commitments",
-      description: "Read the latest 10-K/10-Q/S-1/424B4 filing of a US-listed company and extract compute/lease COMMITTED SPEND (aggregate and next-12-months) plus total liquidity with frozen deterministic patterns — the off-balance-sheet figures XBRL does not carry. Returns values WITH the original filing sentences (snippets) for human verification; extraction is documented tier, weaker than XBRL facts, and a null value means 'not found', never zero. Conservative commitment coverage = liquidity ÷ 12-month committed spend.",
+      description: "Read the latest 10-K/10-Q/S-1/424B4 filing of a US-listed company and extract compute/lease COMMITTED SPEND (aggregate and next-12-months), total liquidity, and SHARES OUTSTANDING (per class plus the filing's own combined total) with frozen deterministic patterns — off-balance-sheet and cap-table figures XBRL does not carry. When the price feed is configured it also reports market cap = share count × latest close. Returns values WITH the original filing sentences (snippets) for human verification; extraction is documented tier, weaker than XBRL facts, and a null value means 'not found', never zero. Conservative commitment coverage = liquidity ÷ 12-month committed spend.",
       parameters: { query: { type: "string", required: true, description: "Company name or ticker, e.g. Anthropic or ANT" } },
       async execute(args) {
         assertArgs(args, ["query"]);
         if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 120) throw new TypeError("query must be a company name or ticker (1-120 chars)");
         if (!filings) return { ok: false, code: "FILINGS_CONNECTOR_UNAVAILABLE", message: "filing text connector is not configured on this server" };
+        let result;
         try {
-          return await filings.fetchPublicCommitments({ query: args.query.trim() });
+          result = await filings.fetchPublicCommitments({ query: args.query.trim() });
         } catch (error) {
           return {
             ok: false, code: error.code || "FILINGS_FETCH_FAILED", message: String(error.message || error),
             ...(Array.isArray(error.candidates) ? { candidates: error.candidates } : {})
           };
         }
+        // 市值组合：股本（申报文本，documented 级）× 最新收盘（价格源）；任一缺失如实披露，绝不编数。
+        if (result.ok && result.commitments?.sharesOutstanding?.totalShares && priceFeed) {
+          try {
+            const price = await priceFeed.fetchDaily({ symbol: result.company.ticker });
+            const row = price?.rows?.length ? price.rows[price.rows.length - 1] : null;
+            if (row && Number.isFinite(row.close) && row.date) {
+              result.marketData = {
+                priceDate: row.date,
+                closeUsd: row.close,
+                sharesOutstanding: result.commitments.sharesOutstanding.totalShares,
+                sharesSource: result.commitments.sharesOutstanding.totalSharesSource,
+                marketCapUsd: Math.round(result.commitments.sharesOutstanding.totalShares * row.close),
+                note: "market cap = filing-text share count × latest close. Structural DD additionally needs an equity-volatility window that a freshly listed name does not have yet."
+              };
+            } else {
+              result.marketNote = "price feed returned no usable rows; market cap not computed";
+            }
+          } catch (error) {
+            result.marketNote = `price feed failed (${error.code || "PRICE_FAILED"}) — market cap not computed`;
+          }
+        }
+        return result;
       }
     },
     {

@@ -1,24 +1,28 @@
 /*
- * agent/src/connectors/sec-filings.js — SEC 申报全文抽取连接器 v0.1.0（documented 级）
+ * agent/src/connectors/sec-filings.js — SEC 申报全文抽取连接器 v0.2.0（documented 级）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 只读白名单域名（www.sec.gov / data.sec.gov）：submissions 索引、Archives 主文档、
  *      company_tickers；URL 由本文件构造并经 isAllowedFilingUrl 校验，绝不接受
  *      调用方传入的任意 URL（无 SSRF 面）。
- *   2. 确定性抽取：正则模式冻结（commitments-text/v0.1），零 LLM、零推断、零换算
+ *   2. 确定性抽取：正则模式冻结（commitments-text/v0.2），零 LLM、零推断、零换算
  *      之外的加工；抽不到 → null + 说明，绝不编数、绝不插值。
+ *      v0.2 变更（人工评审通过）：新增流通股本模式（逐类 + 多类合并总数行）。
  *   3. 抽取结果定性为"文本摘录"（documented 级，弱于 XBRL 事实）：每项带原文句子
  *      片段（snippet）供人工核对；这是本连接器与 companyfacts 的本质区别。
  *   4. fail-closed：超时/HTTP 错误/超限/非法响应抛带 code 的错误；缓存只存原文
  *      （内存 TTL：submissions 6h / 文档 6h），不落盘、审计只记 URL/哈希/字节数。
  *   5. 不改权威字段：本连接器只供数，不评估、不打分；承诺覆盖度采用保守口径
  *      （流动性 ÷ 12 个月到期承诺，不含经营现金流），口径差异显式披露。
+ *   6. 股本总和的口径风险：多股权结构可能含无经济权利类别（如 Anthropic 的
+ *      T/E/F）——优先采用申报自己的合并总数行，其次才是逐类求和；口径在结果中
+ *      显式标注（byClass + combinedTotalShares + totalShares）。
  */
 
 import { createHash } from "node:crypto";
 
-export const SEC_FILINGS_VERSION = "sec-filings/v0.1.0";
-export const EXTRACTION_PATTERN_VERSION = "commitments-text/v0.1";
+export const SEC_FILINGS_VERSION = "sec-filings/v0.2.0";
+export const EXTRACTION_PATTERN_VERSION = "commitments-text/v0.2";
 export const SEC_FILINGS_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_SUBMISSIONS_URL = cik => `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;
 export const SEC_FILINGS_ALLOWED_HOSTS = Object.freeze(["www.sec.gov", "data.sec.gov"]);
@@ -87,6 +91,48 @@ function parseUsdFigure(value, unit) {
 
 const FIGURE = String.raw`\$\s?([\d,]+(?:\.\d+)?)\s*(trillion|billion|million)`;
 
+const SHARE_CLASS_ENUM = String.raw`Class\s+[A-Z](?:\s*,\s*(?:and\s+)?Class\s+[A-Z])+`;
+const SHARE_SINGLE_CLASS = String.raw`Class\s+[A-Z]`;
+const SHARE_TAIL = String.raw`\s+common stock to be outstanding after this offering[^.;]{0,140}?\s([\d,]+)\s+shares?\b`;
+
+function sharesOutstandingFromSentences(sentences) {
+  const combined = [];
+  const byClass = [];
+  for (const sentence of sentences) {
+    for (const match of sentence.matchAll(new RegExp(`(${SHARE_CLASS_ENUM})${SHARE_TAIL}`, "gi"))) {
+      // snippet 以匹配区为中心：巨型申报表句子里合并行可能在句尾，句首截断会丢掉总数。
+      combined.push({
+        classes: match[1].replace(/\s+/g, " ").trim(),
+        shares: Number(match[2].replace(/,/g, "")),
+        snippet: sentence.slice(Math.max(0, match.index - 120), Math.min(sentence.length, match.index + match[0].length + 120))
+      });
+    }
+    for (const match of sentence.matchAll(new RegExp(`(${SHARE_SINGLE_CLASS})${SHARE_TAIL}`, "gi"))) {
+      // 多类合并行的最后一个类别（"...and Class F common stock ..."）前面必然是逗号枚举——剔除，防止总数被当成单类。
+      const prefix = sentence.slice(Math.max(0, match.index - 24), match.index);
+      if (/,\s*(and\s+)?$/i.test(prefix)) continue;
+      byClass.push({ class: match[1].replace(/\s+/g, " ").trim(), shares: Number(match[2].replace(/,/g, "")) });
+    }
+  }
+  if (!combined.length && !byClass.length) return null;
+  const dedupedClasses = [];
+  const seen = new Set();
+  for (const entry of byClass) {
+    if (seen.has(entry.class)) continue;
+    seen.add(entry.class);
+    dedupedClasses.push(entry);
+  }
+  const combinedTotalShares = combined.length ? combined[0].shares : null;
+  const sum = dedupedClasses.reduce((total, entry) => total + entry.shares, 0);
+  return {
+    byClass: dedupedClasses,
+    combinedTotalShares,
+    totalShares: combinedTotalShares ?? (sum > 0 ? sum : null),
+    totalSharesSource: combinedTotalShares != null ? "combined-line" : "per-class-sum",
+    snippet: combined[0]?.snippet ?? null
+  };
+}
+
 function sentencesOf(text) {
   return String(text).split(/(?<=[.;])\s+/);
 }
@@ -102,11 +148,14 @@ export function extractCommitmentsFromText(text) {
     aggregateCommittedSpendUsd: null, aggregateSnippet: null,
     twelveMonthCommittedSpendUsd: null, twelveMonthSnippet: null,
     liquidityUsd: null, liquiditySnippet: null,
-    asOfDate: null
+    asOfDate: null,
+    sharesOutstanding: null
   };
   if (!source) return result;
+  const sentences = sentencesOf(source);
+  result.sharesOutstanding = sharesOutstandingFromSentences(sentences);
 
-  for (const sentence of sentencesOf(source)) {
+  for (const sentence of sentences) {
     // 总承诺：句内含 "committed spend" 且带 $ 数字（取最靠近 "committed spend" 的数字）
     if (result.aggregateCommittedSpendUsd === null && /committed spend/i.test(sentence)) {
       const match = sentence.match(new RegExp(`committed spend[^$]{0,200}?${FIGURE}`, "i"));

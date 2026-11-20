@@ -13,7 +13,8 @@ const connectors = createConnectorRegistry([]);
 const FILING_TEXT = [
   "As of and subsequent to September 30, 2026, we have entered into purchase commitments and lease agreements, including short-term commitments, as well as leases not yet commenced, with an aggregate committed spend of approximately $900.9 billion.",
   "Approximately $70.7 billion of these commitments are due in the 12 months following September 30, 2026, and substantially all of the remainder is expected to be incurred between 2031 and 2045.",
-  "As of September 30, 2026, and prior to taking into account the net proceeds, we had $146.6 billion of liquidity, consisting of $95.6 billion of cash and cash equivalents and $36.3 billion of short-term investments."
+  "As of September 30, 2026, and prior to taking into account the net proceeds, we had $146.6 billion of liquidity, consisting of $95.6 billion of cash and cash equivalents and $36.3 billion of short-term investments.",
+  "Class A common stock to be outstanding after this offering and the concurrent private placement 7,583,103,996 shares (or 7,730,103,996 shares if the underwriters exercise their option to purchase additional shares of our Class A common stock in full) Class N common stock to be outstanding after this offering and the concurrent private placement 5,636,538,278 shares Class T common stock to be outstanding after this offering and the concurrent private placement 1 share Class E common stock to be outstanding after this offering and the concurrent private placement 0 shares Class F common stock to be outstanding after this offering and the concurrent private placement 1 share Class A, Class N, Class T, Class E, and Class F common stock to be outstanding after this offering and the concurrent private placement 13,219,642,276 shares"
 ].join(" ");
 
 test("filing URL allowlist is exact-host, path-shaped and extension-bound", () => {
@@ -43,6 +44,31 @@ test("frozen patterns extract aggregate, 12-month, liquidity and as-of from fili
     assert.ok(snippet && snippet.length > 20 && snippet.length <= 400, "snippets carry the original sentence");
   }
   assert.equal(commitmentCoverageFrom(extracted), 2.074, "146.6 / 70.7");
+});
+
+test("shares outstanding: per-class entries plus the filing's own combined total line", () => {
+  const extracted = extractCommitmentsFromText(FILING_TEXT);
+  const shares = extracted.sharesOutstanding;
+  assert.ok(shares, "share patterns fire on prospectus-style tables");
+  assert.deepEqual(shares.byClass.map(entry => entry.class), ["Class A", "Class N", "Class T", "Class E", "Class F"]);
+  assert.deepEqual(shares.byClass.map(entry => entry.shares), [7_583_103_996, 5_636_538_278, 1, 0, 1]);
+  assert.equal(shares.combinedTotalShares, 13_219_642_276, "the multi-class enumeration line is used verbatim");
+  assert.equal(shares.totalShares, 13_219_642_276);
+  assert.equal(shares.totalSharesSource, "combined-line");
+  assert.ok(shares.snippet && shares.snippet.includes("13,219,642,276"));
+});
+
+test("shares outstanding: without a combined line the per-class sum is the honest fallback", () => {
+  const text = "Class A common stock to be outstanding after this offering 100 shares Class N common stock to be outstanding after this offering 250 shares";
+  const shares = extractCommitmentsFromText(text).sharesOutstanding;
+  assert.equal(shares.combinedTotalShares, null);
+  assert.equal(shares.totalShares, 350);
+  assert.equal(shares.totalSharesSource, "per-class-sum");
+});
+
+test("shares outstanding: absent patterns yield null, never a fabricated count", () => {
+  const extracted = extractCommitmentsFromText("Revenue grew strongly in 2026. The company invests in data centers.");
+  assert.equal(extracted.sharesOutstanding, null);
 });
 
 test("missing patterns yield nulls (never zeros) and no coverage", () => {
@@ -154,6 +180,33 @@ test("check_predictions: a failing commitments fetch degrades to a data note, ne
   assert.equal(result.predictions[0].status, "pending");
   assert.ok(!result.commitments, "no commitments map when the fetch failed");
   assert.match(result.dataNotes.find(note => note.includes("commitments fetch failed")), /FILING_HTTP_ERROR/);
+});
+
+test("market cap composition: filing-text share count × price-feed close, failures disclosed honestly", async () => {
+  // 每次调用返回全新对象：工具会原地附加 marketData/marketNote，共享对象会跨用例泄漏。
+  const sharesResult = () => ({
+    ok: true,
+    company: { ticker: "ANT", cik: 2130357, name: "Anthropic, PBC" },
+    filing: { form: "424B4", filed: "2026-11-19" },
+    commitments: {
+      asOfDate: "2026-09-30", aggregateCommittedSpendUsd: 900.9e9, twelveMonthCommittedSpendUsd: 70.7e9, liquidityUsd: 146.6e9,
+      sharesOutstanding: { byClass: [{ class: "Class A", shares: 7_583_103_996 }], combinedTotalShares: 13_219_642_276, totalShares: 13_219_642_276, totalSharesSource: "combined-line", snippet: "s" }
+    }
+  });
+  const goodPrice = { fetchDaily: async ({ symbol }) => ({ ok: true, symbol, rows: [{ date: "2026-11-19", close: 97.17 }] }) };
+  const registry = createRiskToolRegistry({ connectors, filings: { fetchPublicCommitments: async () => sharesResult() }, priceFeed: goodPrice });
+  const result = await registry.get("fetch_public_commitments").execute({ query: "ANT" });
+  assert.equal(result.ok, true);
+  assert.equal(result.marketData.sharesOutstanding, 13_219_642_276);
+  assert.equal(result.marketData.closeUsd, 97.17);
+  assert.equal(result.marketData.marketCapUsd, Math.round(13_219_642_276 * 97.17));
+
+  const brokenPrice = { fetchDaily: async () => { const e = new Error("boom"); e.code = "PRICE_TIMEOUT"; throw e; } };
+  const degraded = await createRiskToolRegistry({ connectors, filings: { fetchPublicCommitments: async () => sharesResult() }, priceFeed: brokenPrice })
+    .get("fetch_public_commitments").execute({ query: "ANT" });
+  assert.equal(degraded.ok, true, "a price failure must not destroy the extraction result");
+  assert.match(degraded.marketNote, /PRICE_TIMEOUT/);
+  assert.equal(degraded.marketData, undefined);
 });
 
 test("sec filings connector resolves and fails closed with coded transport errors", async () => {
