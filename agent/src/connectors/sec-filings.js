@@ -21,11 +21,12 @@
 
 import { createHash } from "node:crypto";
 
-export const SEC_FILINGS_VERSION = "sec-filings/v0.3.0";
+export const SEC_FILINGS_VERSION = "sec-filings/v0.4.0";
 export const EXTRACTION_PATTERN_VERSION = "commitments-text/v0.2";
 export const SEC_FILINGS_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_SUBMISSIONS_URL = cik => `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;
-export const SEC_FILINGS_ALLOWED_HOSTS = Object.freeze(["www.sec.gov", "data.sec.gov"]);
+export const SEC_FILINGS_ALLOWED_HOSTS = Object.freeze(["www.sec.gov", "data.sec.gov", "efts.sec.gov"]);
+export const SEC_FTS_URL = "https://efts.sec.gov/LATEST/search-index";
 export const SEC_FILINGS_MAX_BYTES = 25 * 1024 * 1024;
 export const SEC_FILINGS_MAX_TEXT = 4 * 1024 * 1024;
 
@@ -45,6 +46,7 @@ export function isAllowedFilingUrl(value) {
   if (url.protocol !== "https:") return false;
   if (!SEC_FILINGS_ALLOWED_HOSTS.includes(url.hostname)) return false;
   if (url.hostname === "data.sec.gov") return /^\/submissions\/CIK\d{10}(-submissions-\d{1,4})?\.json$/.test(url.pathname);
+  if (url.hostname === "efts.sec.gov") return url.pathname === "/LATEST/search-index";
   if (url.pathname === "/files/company_tickers.json") return true;
   return /^\/Archives\/edgar\/data\/\d+\/[0-9a-zA-Z-]+\/[A-Za-z0-9._-]+\.(htm|html|txt)$/.test(url.pathname);
 }
@@ -343,6 +345,42 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
     return { ...classified, sha256: sha256(raw), bytes: Buffer.byteLength(raw, "utf8"), sourceUrl: url };
   }
 
+  /**
+   * EDGAR 全文搜索（死公司/退市公司的 CIK 发现入口）：FTS 索引覆盖全部备案，
+   * 按短语 + 表单 + 日期窗口检索，返回候选（CIK/名称/代码/accession/来源 URL）。
+   */
+  async function searchFilings({ q, forms = ["8-K"], from = null, to = null, maxResults = 10 } = {}) {
+    const needle = String(q ?? "").trim();
+    if (!needle) throw filingError("QUERY_REQUIRED", "search phrase is required");
+    const params = new URLSearchParams({ q: `"${needle}"`, forms: (Array.isArray(forms) ? forms : [forms]).join(","), dateRange: "custom" });
+    if (from) params.set("startdt", String(from));
+    if (to) params.set("enddt", String(to));
+    const raw = await fetchText(`${SEC_FTS_URL}?${params.toString()}`);
+    let payload;
+    try { payload = JSON.parse(raw); } catch { throw filingError("FTS_INVALID_JSON", "full-text search response was not valid JSON"); }
+    const hits = payload?.hits?.hits ?? [];
+    const out = [];
+    for (const hit of hits) {
+      const src = hit._source ?? {};
+      const [accession, doc] = String(hit._id ?? "").split(":");
+      if (!accession) continue;
+      const displayName = String(src.display_names?.[0] ?? "");
+      const tickerMatch = displayName.match(/\(([A-Z.]+)\)/);
+      out.push({
+        cik: Array.isArray(src.ciks) && src.ciks[0] ? Number(src.ciks[0]) : null,
+        displayName,
+        ticker: tickerMatch ? tickerMatch[1] : null,
+        form: String(src.file_type ?? ""),
+        filed: String(src.file_date ?? ""),
+        accession,
+        primaryDocument: doc ?? null,
+        sourceUrl: `https://www.sec.gov/Archives/edgar/data/${src.ciks?.[0] ?? ""}/${accession.replace(/-/g, "")}/${doc ?? ""}`
+      });
+      if (out.length >= Math.max(1, maxResults)) break;
+    }
+    return { ok: true, query: needle, total: payload?.hits?.total?.value ?? hits.length, results: out, sources: [{ url: `${SEC_FTS_URL}?${params.toString()}`, retrievedAt: new Date(now()).toISOString(), sha256: sha256(raw), bytes: Buffer.byteLength(raw, "utf8") }] };
+  }
+
   async function fetchPublicCommitments({ query } = {}) {
     const company = await resolveCompany(query);
     const submissionsRaw = await fetchText(SEC_SUBMISSIONS_URL(company.cik));
@@ -370,5 +408,5 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
     };
   }
 
-  return Object.freeze({ fetchPublicCommitments, listFilings, verifyEventDocument, version: SEC_FILINGS_VERSION, allowedHosts: SEC_FILINGS_ALLOWED_HOSTS });
+  return Object.freeze({ fetchPublicCommitments, listFilings, verifyEventDocument, searchFilings, version: SEC_FILINGS_VERSION, allowedHosts: SEC_FILINGS_ALLOWED_HOSTS });
 }

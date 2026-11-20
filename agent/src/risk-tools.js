@@ -466,6 +466,34 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
       }
     },
     {
+      name: "search_filing_texts",
+      description: "EDGAR full-text search (the CIK-discovery entry for dead/delisted companies): find filings mentioning a phrase (e.g. a company name) across ALL registrants, including delisted ones absent from the ticker registry. Returns CIK, display name, ticker, form, filed date, accession and source URL per hit — feed candidates into verify_credit_events / verifyEventDocument. Discovery only: CIK hit ≠ distress event.",
+      parameters: {
+        q: { type: "string", required: true, description: "Phrase to search, e.g. \"Stronghold Digital Mining\"" },
+        forms: { type: "string", required: false, description: "Comma-separated forms, default 8-K" },
+        from: { type: "string", required: false, description: "Window start YYYY-MM-DD" },
+        to: { type: "string", required: false, description: "Window end YYYY-MM-DD" },
+        maxResults: { type: "integer", required: false, description: "Max hits, 1-20 (default 10)" }
+      },
+      async execute(args) {
+        assertArgs(args, ["q", "forms", "from", "to", "maxResults"]);
+        if (typeof args.q !== "string" || !args.q.trim() || args.q.length > 200) throw new TypeError("q must be a search phrase (1-200 chars)");
+        if (!filings) return { ok: false, code: "FILINGS_CONNECTOR_UNAVAILABLE", message: "filing text connector is not configured on this server" };
+        const forms = args.forms ? String(args.forms).split(/[,\s]+/).filter(Boolean) : undefined;
+        try {
+          return await filings.searchFilings({
+            q: args.q.trim(),
+            ...(forms && forms.length ? { forms } : {}),
+            ...(args.from ? { from: args.from } : {}),
+            ...(args.to ? { to: args.to } : {}),
+            ...(args.maxResults ? { maxResults: args.maxResults } : {})
+          });
+        } catch (error) {
+          return { ok: false, code: error.code || "FTS_FAILED", message: String(error.message || error) };
+        }
+      }
+    },
+    {
       name: "build_research_panel",
       description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. When the market price feed is configured it also attaches market cap, Merton distance-to-default and forward 90d proxy labels (filed-aligned). Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
       parameters: {
