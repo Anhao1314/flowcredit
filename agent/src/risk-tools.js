@@ -418,7 +418,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
       description: "Build a point-in-time research panel of US-listed AI compute operators from SEC EDGAR: quarterly revenue, margins, debt, cash, interest, coverage and growth, each observation carrying periodEnd and filed date. When the market price feed is configured it also attaches market cap, Merton distance-to-default and forward 90d proxy labels (filed-aligned). Use this for calibration/factor research requests (panel, IC, scoring model). Returns a panelId for factor_report plus sample rows and coverage; research-only, never writes scores or grades.",
       parameters: {
         tickers: { type: "string", required: false, description: "Comma-separated tickers (max 14); defaults to the built-in compute-operator universe" },
-        periods: { type: "integer", required: false, description: "Quarters per company, 4-12 (default 8)" }
+        periods: { type: "integer", required: false, description: "Quarters per company, 4-24 (default 8); deeper windows reach historical distress episodes such as the 2022 mining winter" }
       },
       async execute(args) {
         assertArgs(args, ["tickers", "periods"]);
@@ -431,7 +431,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
         }
         let periods;
         if (args.periods !== undefined) {
-          if (!Number.isInteger(args.periods) || args.periods < 4 || args.periods > 12) throw new TypeError("periods must be an integer within 4-12");
+          if (!Number.isInteger(args.periods) || args.periods < 4 || args.periods > 24) throw new TypeError("periods must be an integer within 4-24");
           periods = args.periods;
         }
         return await research.buildPanel({ ...(tickers ? { tickers } : {}), ...(periods ? { periods } : {}) });
