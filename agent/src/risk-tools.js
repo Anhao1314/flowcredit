@@ -128,7 +128,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, priceFeed = null, research = null, predictionLedger = null, computeGraph = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, hkex = null, priceFeed = null, research = null, predictionLedger = null, computeGraph = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -490,6 +490,46 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
           });
         } catch (error) {
           return { ok: false, code: error.code || "FTS_FAILED", message: String(error.message || error) };
+        }
+      }
+    },
+    {
+      name: "query_hkex_filings",
+      description: "HKEX disclosure connector (非美股目标)：discover a HK-listed stock by name prefix (e.g. MiniMax → MINIMAX-W 00100), list its announcements with dates and PDF links (sha256 on download), and screen titles against the frozen event-keyword table (業績/盈警/退市/重組/收購…). Titles are candidate markers, NOT verified credit events; financial-number extraction from PDF is a separate, not-yet-wired engineering item — never quote numbers this tool did not return.",
+      parameters: {
+        name: { type: "string", required: false, description: "Stock name prefix for discovery, e.g. MiniMax" },
+        stockId: { type: "integer", required: false, description: "HKEX stockId (from discovery) to list announcements" },
+        from: { type: "string", required: false, description: "Window start YYYY-MM-DD" },
+        to: { type: "string", required: false, description: "Window end YYYY-MM-DD" },
+        events: { type: "boolean", required: false, description: "Screen announcement titles against the frozen event-keyword table" }
+      },
+      async execute(args) {
+        assertArgs(args, ["name", "stockId", "from", "to", "events"]);
+        if (!hkex) return { ok: false, code: "HKEX_CONNECTOR_UNAVAILABLE", message: "HKEX connector is not configured on this server" };
+        if (args.name !== undefined && (typeof args.name !== "string" || !args.name.trim() || args.name.length > 60)) throw new TypeError("name must be a short stock-name prefix");
+        const wantsDiscovery = args.name !== undefined;
+        const wantsList = args.stockId !== undefined;
+        if (!wantsDiscovery && !wantsList) throw new TypeError("provide name (discovery) or stockId (announcement list)");
+        const out = { ok: true };
+        try {
+          if (wantsDiscovery) {
+            const discovered = await hkex.discoverStock({ name: args.name.trim() });
+            out.discovery = discovered;
+            if (!wantsList && discovered.stocks.length === 1) {
+              const listed = await hkex.listAnnouncements({ stockId: discovered.stocks[0].stockId, ...(args.from ? { from: args.from } : {}), ...(args.to ? { to: args.to } : {}) });
+              out.announcements = listed.announcements;
+              out.eventCandidates = args.events ? hkex.screenEvents(listed.announcements) : undefined;
+            }
+          }
+          if (wantsList) {
+            const listed = await hkex.listAnnouncements({ stockId: args.stockId, ...(args.from ? { from: args.from } : {}), ...(args.to ? { to: args.to } : {}) });
+            out.announcements = listed.announcements;
+            out.eventCandidates = args.events ? hkex.screenEvents(listed.announcements) : undefined;
+          }
+          out.note = "HKEX 发现/监控/下载与标题筛查（冻结关键词表）；PDF 数字提取未接线——不要引用本工具未返回的数字；标题候选不是已核实信用事件。";
+          return out;
+        } catch (error) {
+          return { ok: false, code: error.code || "HKEX_QUERY_FAILED", message: String(error.message || error) };
         }
       }
     },

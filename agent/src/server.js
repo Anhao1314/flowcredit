@@ -28,6 +28,7 @@ import { createChatPipeline } from "./chat-pipeline.js";
 import { createRiskToolRegistry } from "./risk-tools.js";
 import { createSecEdgarConnector } from "./connectors/sec-edgar.js";
 import { createSecFilingsConnector } from "./connectors/sec-filings.js";
+import { createHkexConnector } from "./connectors/hkex.js";
 import { createPriceFeed } from "./connectors/prices.js";
 import { createResearchService } from "./research/panel.js";
 import { loadPredictionLedgerFile, DEFAULT_PREDICTIONS_FILE } from "./research/predictions.js";
@@ -506,6 +507,10 @@ export function createFlowCreditServer(options = {}) {
     userAgent: options.secUserAgent,
     ...(options.now ? { now: options.now } : {})
   });
+  const hkex = options.hkexConnector || createHkexConnector({
+    transport: options.hkexTransport,
+    ...(options.now ? { now: options.now } : {})
+  });
   // 显式标签文件（可选）：{version, events:[{ticker, periodEnd, label}]}；键 = TICKER|periodEnd。
   // 文件缺失 → null（走市场代理标签）；存在但非法 → 启动即失败（fail-fast）。
   const researchLabels = options.researchLabels ?? loadResearchLabelsFile(options.env || process.env);
@@ -521,7 +526,7 @@ export function createFlowCreditServer(options = {}) {
   });
   const riskAgent = options.riskAssistant || createRiskAssistant({
     client: options.riskAgentClient || createRiskClient({ env: options.env || process.env }),
-    registry: createRiskToolRegistry({ connectors, secEdgar, filings, priceFeed, research, predictionLedger, computeGraph }),
+    registry: createRiskToolRegistry({ connectors, secEdgar, filings, hkex, priceFeed, research, predictionLedger, computeGraph }),
     audit: options.riskAudit || createRiskAuditLogger(),
     deterministicChat: ({ prompt, sessionId, requestId }) =>
       chatPipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)
