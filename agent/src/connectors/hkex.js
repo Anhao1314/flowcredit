@@ -13,8 +13,9 @@
  */
 
 import { createHash } from "node:crypto";
+import { extractPdfText } from "./pdf-text.js";
 
-export const HKEX_VERSION = "hkex-disclosure/v0.1.0";
+export const HKEX_VERSION = "hkex-disclosure/v0.2.0";
 export const HKEX_ALLOWED_HOSTS = Object.freeze(["www1.hkexnews.hk"]);
 export const HKEX_BASE = "https://www1.hkexnews.hk";
 export const HKEX_DOC_CAP = 50 * 1024 * 1024;
@@ -170,6 +171,23 @@ export function createHkexConnector({ transport, userAgent, timeoutMs = 15_000, 
     return { ok: true, url, sha256: sha256Of(bytes), bytes: bytes.length, retrievedAt: new Date(now()).toISOString(), note: "PDF 已存档（哈希可审计）；内容文本提取是独立工程项，本连接器不解析。" };
   }
 
+  /**
+   * 文档下载 + 文本提取（尽力而为，质量披露）：
+   * 只对含 ToUnicode 的 PDF 有效；无 ToUnicode 的中文 PDF（HKEX 该生成器家族）
+   * 中文不可提取——stats.cjkChars=0 时调用方必须如实声明"数字不可用"。
+   */
+  async function extractDocumentText({ fileLink } = {}) {
+    const downloaded = await fetchDocument({ fileLink });
+    let extraction;
+    try {
+      const buf = Buffer.from(await (await fetch(downloaded.url, { headers: { "User-Agent": agentHeader } })).arrayBuffer());
+      extraction = await extractPdfText(buf);
+    } catch (error) {
+      return { ...downloaded, extraction: { ok: false, code: error.code || "PDF_EXTRACT_FAILED", message: String(error.message || error) } };
+    }
+    return { ...downloaded, extraction: { ok: true, text: extraction.text, stats: extraction.stats, warnings: extraction.warnings, version: extraction.version } };
+  }
+
   /** 标题事件筛查（冻结关键词表）：只标记候选，不产生信用事件。 */
   function screenEvents(announcements) {
     const out = [];
@@ -184,5 +202,5 @@ export function createHkexConnector({ transport, userAgent, timeoutMs = 15_000, 
     return out;
   }
 
-  return Object.freeze({ discoverStock, listAnnouncements, fetchDocument, screenEvents, version: HKEX_VERSION, allowedHosts: HKEX_ALLOWED_HOSTS });
+  return Object.freeze({ discoverStock, listAnnouncements, fetchDocument, extractDocumentText, screenEvents, version: HKEX_VERSION, allowedHosts: HKEX_ALLOWED_HOSTS });
 }

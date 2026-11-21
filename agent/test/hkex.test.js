@@ -87,6 +87,22 @@ test("query_hkex_filings tool: discovery + list + events; unconfigured fails clo
   assert.equal(result.discovery.stocks[0].code, "00100");
   assert.equal(result.announcements.length, 2);
   assert.equal(result.eventCandidates.length, 1);
-  assert.match(result.note, /PDF 数字提取未接线/);
+  assert.match(result.note, /尽力而为/);
   await assert.rejects(() => registry.get("query_hkex_filings").execute({}), /provide name \(discovery\) or stockId/, "configured connector still validates args");
+
+  const extractRegistry = createRiskToolRegistry({
+    connectors,
+    hkex: createHkexConnector({
+      transport: async url => {
+        if (url.includes("company_tickers") || url.includes("prefix.do")) return asResponse(Buffer.from(JSONP_PREFIX));
+        if (url.includes("titleSearchServlet")) return asResponse(Buffer.from(JSON.stringify(ANNOUNCEMENTS)));
+        return asResponse(Buffer.from("%PDF-1.7\n1 0 obj<</Length 45>>stream\n(BT /F1 10 Tf (2026) Tj ET) endstream endobj"));
+      }
+    })
+  });
+  const extracted = await extractRegistry.get("query_hkex_filings").execute({ name: "MiniMax", extractText: true });
+  assert.equal(extracted.ok, true);
+  assert.ok(extracted.extractions.length >= 1, "extraction runs on listed documents");
+  assert.match(extracted.extractions[0].sha256, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(extracted.extractions[0].extraction.ok, true);
 });

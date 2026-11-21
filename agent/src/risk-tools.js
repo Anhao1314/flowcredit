@@ -501,10 +501,11 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
         stockId: { type: "integer", required: false, description: "HKEX stockId (from discovery) to list announcements" },
         from: { type: "string", required: false, description: "Window start YYYY-MM-DD" },
         to: { type: "string", required: false, description: "Window end YYYY-MM-DD" },
-        events: { type: "boolean", required: false, description: "Screen announcement titles against the frozen event-keyword table" }
+        events: { type: "boolean", required: false, description: "Screen announcement titles against the frozen event-keyword table" },
+        extractText: { type: "boolean", required: false, description: "Extract text from the listed documents (best-effort; PDFs without ToUnicode yield no CJK — stats.cjkChars=0 means numbers are UNAVAILABLE, never fabricate)" }
       },
       async execute(args) {
-        assertArgs(args, ["name", "stockId", "from", "to", "events"]);
+        assertArgs(args, ["name", "stockId", "from", "to", "events", "extractText"]);
         if (!hkex) return { ok: false, code: "HKEX_CONNECTOR_UNAVAILABLE", message: "HKEX connector is not configured on this server" };
         if (args.name !== undefined && (typeof args.name !== "string" || !args.name.trim() || args.name.length > 60)) throw new TypeError("name must be a short stock-name prefix");
         const wantsDiscovery = args.name !== undefined;
@@ -526,7 +527,15 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
             out.announcements = listed.announcements;
             out.eventCandidates = args.events ? hkex.screenEvents(listed.announcements) : undefined;
           }
-          out.note = "HKEX 发现/监控/下载与标题筛查（冻结关键词表）；PDF 数字提取未接线——不要引用本工具未返回的数字；标题候选不是已核实信用事件。";
+          if (args.extractText && out.announcements?.length) {
+            out.extractions = [];
+            for (const item of out.announcements.slice(0, 3)) {
+              if (!item.fileLink) continue;
+              const extracted = await hkex.extractDocumentText({ fileLink: item.fileLink });
+              out.extractions.push({ title: item.title, date: item.date, sha256: extracted.sha256, bytes: extracted.bytes, extraction: extracted.extraction });
+            }
+          }
+          out.note = "HKEX 发现/监控/下载与标题筛查（冻结关键词表）。extractText 为尽力而为：stats.cjkChars=0 的文档中文不可提取——数字不可用，绝不编造；标题候选不是已核实信用事件。";
           return out;
         } catch (error) {
           return { ok: false, code: error.code || "HKEX_QUERY_FAILED", message: String(error.message || error) };
