@@ -27,7 +27,9 @@ export const DEFAULT_RESEARCH_UNIVERSE = Object.freeze([
 
 export const PANEL_FACTORS = Object.freeze([
   "netDebtToRevenueX", "cashToDebtPct", "interestCoverageX",
-  "grossMarginPct", "operatingMarginPct", "revenueGrowthQoQ"
+  "grossMarginPct", "operatingMarginPct", "revenueGrowthQoQ",
+  "operatingCashFlowMarginPct", "rdExpenseRatePct", "sbcExpenseRatePct", "assetTurnoverX",
+  "marginSlopePctPerQ", "revenueAccelerationPct"
 ]);
 
 function finite(value) { return typeof value === "number" && Number.isFinite(value); }
@@ -65,6 +67,10 @@ export function observationsForCompany(lookup) {
     const cashUsd = valueAt(lookup.facts, "cashUsd", end);
     const debtUsd = valueAt(lookup.facts, "debtUsd", end);
     const equityUsd = valueAt(lookup.facts, "equityUsd", end);
+    const operatingCashFlowUsd = valueAt(lookup.facts, "operatingCashFlowUsd", end);
+    const rdExpenseUsd = valueAt(lookup.facts, "rdExpenseUsd", end);
+    const sbcExpenseUsd = valueAt(lookup.facts, "sbcExpenseUsd", end);
+    const assetsUsd = valueAt(lookup.facts, "assetsUsd", end);
 
     const grossMarginPct = finite(grossProfitUsd) && revenueUsd > 0
       ? grossProfitUsd / revenueUsd * 100
@@ -93,12 +99,20 @@ export function observationsForCompany(lookup) {
       debtUsd,
       equityUsd,
       netDebtUsd,
+      operatingCashFlowUsd,
+      rdExpenseUsd,
+      sbcExpenseUsd,
+      assetsUsd,
+      operatingCashFlowMarginPct: finite(operatingCashFlowUsd) && revenueUsd > 0 ? round1(operatingCashFlowUsd / revenueUsd * 100) : null,
+      rdExpenseRatePct: finite(rdExpenseUsd) && revenueUsd > 0 ? round1(rdExpenseUsd / revenueUsd * 100) : null,
+      sbcExpenseRatePct: finite(sbcExpenseUsd) && revenueUsd > 0 ? round1(sbcExpenseUsd / revenueUsd * 100) : null,
+      assetTurnoverX: finite(assetsUsd) && assetsUsd > 0 ? round3(annualizedRevenueUsd / assetsUsd) : null,
       grossMarginPct: round1(grossMarginPct),
       operatingMarginPct: finite(operatingIncomeUsd) && revenueUsd > 0 ? round1(operatingIncomeUsd / revenueUsd * 100) : null,
       netMarginPct: finite(netIncomeUsd) && revenueUsd > 0 ? round1(netIncomeUsd / revenueUsd * 100) : null,
       netDebtToRevenueX: finite(netDebtUsd) && annualizedRevenueUsd > 0 ? round3(netDebtUsd / annualizedRevenueUsd) : null,
       cashToDebtPct: finite(debtUsd) && finite(cashUsd) ? round1(debtUsd > 0 ? Math.min(100, cashUsd / debtUsd * 100) : 100) : null,
-      interestCoverageX: finite(interestExpenseUsd) && interestExpenseUsd > 0 && finite(operatingIncomeUsd) ? round3(operatingIncomeUsd / interestExpenseUsd) : null
+      interestCoverageX: finite(interestExpenseUsd) && interestExpenseUsd !== 0 && finite(operatingIncomeUsd) ? round3(operatingIncomeUsd / Math.abs(interestExpenseUsd)) : null
     });
   }
   // 环比增长：仅在同一公司的季度（10-Q）序列内计算，避免年报/季报混算。
@@ -107,6 +121,17 @@ export function observationsForCompany(lookup) {
     const previous = quarters[index - 1];
     const current = quarters[index];
     if (previous.revenueUsd > 0) current.revenueGrowthQoQ = round1((current.revenueUsd - previous.revenueUsd) / previous.revenueUsd * 100);
+  }
+  // 趋势因子（同公司季度序列内派生）：毛利率 3 期斜率 + 收入加速度
+  for (let index = 2; index < quarters.length; index += 1) {
+    const window = quarters.slice(index - 2, index + 1);
+    const margins = window.map(item => item.grossMarginPct).filter(finite);
+    if (margins.length === 3) {
+      quarters[index].marginSlopePctPerQ = round3((margins[2] - margins[0]) / 2);
+    }
+    if (finite(quarters[index].revenueGrowthQoQ) && finite(quarters[index - 1].revenueGrowthQoQ)) {
+      quarters[index].revenueAccelerationPct = round3(quarters[index].revenueGrowthQoQ - quarters[index - 1].revenueGrowthQoQ);
+    }
   }
   return observations;
 }

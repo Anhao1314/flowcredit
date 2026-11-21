@@ -40,7 +40,11 @@ const FACTS = {
       DebtInstrumentCarryingAmount: { units: { USD: [quarter("2026-09-30", 47505000000, "2026-11-05")] } },
       StockholdersEquity: { units: { USD: [quarter("2026-09-30", 2500000000, "2026-11-05")] } },
       CostOfRevenue: { units: { USD: [quarter("2026-09-30", 1183000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
-      InterestExpense: { units: { USD: [quarter("2026-09-30", 120000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } }
+      InterestExpense: { units: { USD: [quarter("2026-09-30", 120000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
+      NetCashProvidedByUsedInOperatingActivities: { units: { USD: [quarter("2026-09-30", 600000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
+      ResearchAndDevelopmentExpense: { units: { USD: [quarter("2026-09-30", 300000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
+      ShareBasedCompensation: { units: { USD: [quarter("2026-09-30", 150000000, "2026-11-05", "10-Q", "Q3", "2026-07-01")] } },
+      Assets: { units: { USD: [quarter("2026-09-30", 16000000000, "2026-11-05")] } }
     }
   }
 };
@@ -83,6 +87,9 @@ test("lookup by ticker returns filed facts with provenance and latest-filed dedu
   const debt = result.facts.find(fact => fact.field === "debtUsd");
   assert.equal(debt.value, 47505000000);
   assert.equal(result.missing.length, 0);
+  const ocf = result.facts.find(fact => fact.field === "operatingCashFlowUsd");
+  assert.equal(ocf.value, 600000000);
+  assert.ok(result.facts.some(fact => fact.field === "assetsUsd" && fact.value === 16000000000));
   assert.equal(result.sources.length, 2);
   assert.match(result.sources[1].sha256, /^[0-9a-f]{64}$/);
   assert.equal(calls[0].options.headers["User-Agent"].length > 0, true);

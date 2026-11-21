@@ -18,7 +18,7 @@
 
 import { createHash } from "node:crypto";
 
-export const SEC_CONNECTOR_VERSION = "sec-edgar/v0.1.0";
+export const SEC_CONNECTOR_VERSION = "sec-edgar/v0.1.1";
 export const SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_FACTS_URL = cik => `https://data.sec.gov/api/xbrl/companyfacts/CIK${String(cik).padStart(10, "0")}.json`;
 export const SEC_ALLOWED_HOSTS = Object.freeze(["www.sec.gov", "data.sec.gov"]);
@@ -39,7 +39,11 @@ const CONCEPT_MAP = Object.freeze([
   { field: "debtUsd", label: "Debt (carrying amount)", kind: "stock", names: ["DebtInstrumentCarryingAmount", "LongTermDebt", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "NotesPayableCurrent", "LongTermNotesPayable", "ConvertibleNotesPayable", "LiabilitiesSubjectToCompromiseDebtAndAccruedInterest"] },
   { field: "equityUsd", label: "Stockholders' equity", kind: "stock", names: ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"] },
   { field: "costOfRevenueUsd", label: "Cost of revenue", kind: "flow", names: ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"] },
-  { field: "interestExpenseUsd", label: "Interest expense", kind: "flow", names: ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestIncomeExpenseNonoperatingNet"] }
+  { field: "interestExpenseUsd", label: "Interest expense", kind: "flow", names: ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestIncomeExpenseNonoperatingNet"] },
+  { field: "operatingCashFlowUsd", label: "Operating cash flow", kind: "flow", names: ["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"] },
+  { field: "rdExpenseUsd", label: "Research & development", "kind": "flow", names: ["ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"] },
+  { field: "sbcExpenseUsd", label: "Stock-based compensation", "kind": "flow", "names": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"] },
+  { field: "assetsUsd", label: "Total assets", "kind": "stock", "names": ["Assets"] }
 ]);
 
 const FAILING_FORMS = new Set(["10-Q", "10-K"]);

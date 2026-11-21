@@ -21,7 +21,7 @@ function companyFacts({ ticker, cik, name, baseRevenue, debt, cash, interest, ma
   PERIODS.forEach((end, index) => {
     const annual = end === "2025-12-31";
     const revenue = Math.round(baseRevenue * (annual ? 4 : 1) * (1 + index * growthStep));
-    const gross = Math.round(revenue * margin);
+    const gross = Math.round(revenue * margin * (1 - index * 0.04));
     const operating = Math.round(revenue * opMargin);
     const net = Math.round(revenue * -0.05);
     const push = (field, value) => facts.push({
@@ -37,6 +37,10 @@ function companyFacts({ ticker, cik, name, baseRevenue, debt, cash, interest, ma
     push("interestExpenseUsd", interest);
     push("cashUsd", cash);
     push("debtUsd", debt);
+    push("operatingCashFlowUsd", Math.round(revenue * (0.05 + margin * 0.15)));
+    push("rdExpenseUsd", Math.round(revenue * (0.32 - margin * 0.2)));
+    push("sbcExpenseUsd", Math.round(revenue * (0.13 - margin * 0.1)));
+    push("assetsUsd", Math.round(revenue * (6 + margin * 4)));
   });
   return { ok: true, company: { name, ticker, cik }, facts, missing: [], sources: [], note: "" };
 }
@@ -238,6 +242,13 @@ test("panel with price feed attaches market cap, DD and proxy labels; report add
   assert.equal(report.labels.source, "proxy-market");
   assert.equal(report.benchmark.factor, "dd");
   assert.ok(report.icSummary.length === PANEL_FACTORS.length);
+  console.log("DEBUG icSummary:", JSON.stringify(report.icSummary.map(i => ({ f: i.factor, p: i.periods }))));
+  const labeledPeriods = [...new Set(panel.observations.filter(o => Number.isFinite(o.labelForwardReturnPct)).map(o => o.periodEnd))];
+  for (const lp of labeledPeriods) {
+    const rows = panel.observations.filter(o => o.periodEnd === lp);
+    console.log("DEBUG period", lp, rows.map(o => o.ticker + ":ocfM=" + o.operatingCashFlowMarginPct + ",at=" + o.assetTurnoverX + ",slope=" + o.marginSlopePctPerQ + ",lbl=" + o.labelForwardReturnPct).join(" | "));
+  }
+  console.log("DEBUG labelStatus:", report.labelStatus);
   assert.ok(report.icSummary.every(item => item.periods > 0), "proxy labels must yield per-period IC");
   assert.match(report.note, /NOT a credit event/);
 });
