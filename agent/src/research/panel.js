@@ -384,7 +384,7 @@ export function computeFactorReport(panel, { labels = null, labelsSource = null 
     benchmark,
     icSeries,
     icSummary: summary,
-    note: "Labels are market-implied proxies and are NOT a credit event unless explicitly provided; Rank IC is per-period cross-section, exploratory and not deflated for multiple testing. DD (Merton) is reported as the structural benchmark: judge factors by incremental IC versus DD, not by raw magnitude."
+    note: "Rank IC is per-period cross-section, exploratory. Multiple-testing correction (Bonferroni × effective family) is in the multipleTesting block — only factors with significantAdjusted=true carry corrected evidence. DD (Merton) is the structural benchmark: judge factors by incremental IC versus DD. Unless labels.source is credit-events-file, labels are market proxies and NOT credit events."
   };
 }
 

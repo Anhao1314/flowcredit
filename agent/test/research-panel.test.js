@@ -250,7 +250,7 @@ test("panel with price feed attaches market cap, DD and proxy labels; report add
   }
   console.log("DEBUG labelStatus:", report.labelStatus);
   assert.ok(report.icSummary.every(item => item.periods > 0 || item.factor === "commitmentCoverageX"), "proxy labels must yield per-period IC (enrichment-gated factors may be 0 until enriched)");
-  assert.match(report.note, /NOT a credit event/);
+  assert.match(report.note, /NOT credit events/);
 });
 
 test("price feed failures surface as marketFailures and keep labelStatus unavailable", async () => {
