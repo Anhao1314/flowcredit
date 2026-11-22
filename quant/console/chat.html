@@ -33,6 +33,15 @@ header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:
 .raw{margin-top:8px;font-size:11px;color:var(--muted)}
 .raw summary{cursor:pointer;user-select:none}
 .raw pre{max-height:220px;overflow:auto;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
+.tool-live{display:flex;align-items:center;gap:8px;padding:6px 10px;margin:6px 0;border:1px solid #e2e2e2;border-radius:8px;font-size:12px;color:#555;background:#fafafa;overflow:hidden}
+.tool-live.running{background:#f4f6f8}
+.tool-live.failed{border-color:#e5b0b0;color:#a33}
+.tool-spinner{width:12px;height:12px;border:2px solid #ccc;border-top-color:#555;border-radius:50%;animation:tspin .8s linear infinite;display:inline-block;flex:none}
+@keyframes tspin{to{transform:rotate(360deg)}}
+.tool-live-name{font-weight:600;font-family:ui-monospace,monospace;flex:none}
+.tool-live-args{max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#999;font-family:ui-monospace,monospace}
+.tool-live-summary{color:#666;margin-left:auto;font-family:ui-monospace,monospace;white-space:nowrap}
+.tool-live-mark{font-weight:700;flex:none}
 .artifacts{display:flex;flex-direction:column;gap:8px;margin-top:10px;width:100%}
 .artifact{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:10px 12px}
 .artifact-head{display:flex;align-items:center;gap:8px;margin-bottom:7px}
@@ -306,7 +315,7 @@ body.has-messages .quick-chips{display:none}
         { label: "观测", value: r.observations || 0 },
         { label: "标签", value: r.labelStatus }
       ];
-      note = r.labelStatus === "available" ? "显式标签 · IC 为探索性，未做多重检验校正"
+      note = r.labelStatus === "available" ? "显式标签 · IC 探索性 · 校正结果见 multipleTesting 块"
         : r.labelStatus === "proxy-market" ? "代理标签（前瞻 90d 收益，filed 对齐）· DD 为结构基准 · IC 探索性"
         : "标签未接入：只报覆盖率与描述统计，不报 IC";
     } else if (call.name === "assess_public_company" && r.company) {
@@ -575,6 +584,7 @@ body.has-messages .quick-chips{display:none}
     setBotMood("think");
     var finalResult = null;
     var thinkCollapsed = false;
+    var pendingBlocks = [];
     controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     function handleEvent(event) {
       if (!event || !event.type) return;
@@ -595,8 +605,51 @@ body.has-messages .quick-chips{display:none}
       } else if (event.type === "reset") {
         text.textContent = "";
         meta.textContent = "工具结果已返回，正在组织回答…";
+      } else if (event.type === "toolStart") {
+        var block = document.createElement("div");
+        block.className = "tool-live running";
+        var spinner = document.createElement("span");
+        spinner.className = "tool-spinner";
+        var liveName = document.createElement("span");
+        liveName.className = "tool-live-name";
+        liveName.textContent = event.name || "tool";
+        var liveArgs = document.createElement("span");
+        liveArgs.className = "tool-live-args";
+        liveArgs.textContent = String(event.argsPreview || "").slice(0, 120);
+        block.appendChild(spinner);
+        block.appendChild(liveName);
+        block.appendChild(liveArgs);
+        live.insertBefore(block, body);
+        pendingBlocks.push({ step: event.step, name: event.name || "tool", block: block, calls: 0 });
+        meta.textContent = "执行 " + (event.name || "工具") + "…";
+        scroll();
       } else if (event.type === "tool") {
-        var names = (event.calls || []).map(function(call) { return (call.name || "tool") + (call.ok === false ? " ✗" : " ✓"); }).join(" · ");
+        var calls = event.calls || [];
+        calls.forEach(function(call) {
+          var pending = null;
+          for (var i = 0; i < pendingBlocks.length; i++) {
+            if (pendingBlocks[i].step === event.step && !pendingBlocks[i].settled && pendingBlocks[i].name === (call.name || "tool")) { pending = pendingBlocks.splice(i, 1)[0]; break; }
+          }
+          if (!pending && pendingBlocks.length) pending = pendingBlocks.shift();
+          if (pending && pending.block) {
+            pending.block.classList.remove("running");
+            pending.block.classList.add(call.ok === false ? "failed" : "done");
+            var spinnerEl = pending.block.querySelector(".tool-spinner");
+            if (spinnerEl) spinnerEl.remove();
+            var mark = document.createElement("span");
+            mark.className = "tool-live-mark";
+            mark.textContent = call.ok === false ? "✗" : "✓";
+            pending.block.insertBefore(mark, pending.block.firstChild);
+            var summary = artifactFromCall({ name: call.name, ok: call.ok, result: call.result, error: call.error });
+            if (summary && summary.metrics && summary.metrics.length) {
+              var line = document.createElement("span");
+              line.className = "tool-live-summary";
+              line.textContent = summary.metrics.slice(0, 4).map(function(m) { return m.label + " " + m.value; }).join(" · ");
+              pending.block.appendChild(line);
+            }
+          }
+        });
+        var names = calls.map(function(call) { return (call.name || "tool") + (call.ok === false ? " ✗" : " ✓"); }).join(" · ");
         meta.textContent = "步骤 " + (event.step || "?") + " · " + (names || "工具");
         scroll();
       } else if (event.type === "done") {
