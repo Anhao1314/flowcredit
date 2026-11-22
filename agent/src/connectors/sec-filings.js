@@ -21,7 +21,7 @@
 
 import { createHash } from "node:crypto";
 
-export const SEC_FILINGS_VERSION = "sec-filings/v0.4.0";
+export const SEC_FILINGS_VERSION = "sec-filings/v0.5.0";
 export const EXTRACTION_PATTERN_VERSION = "commitments-text/v0.2";
 export const SEC_FILINGS_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_SUBMISSIONS_URL = cik => `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;
@@ -336,6 +336,15 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
   }
 
   /** 抓取一份申报主文档并做事件分类（破产/退市/重组），带 sha256 与片段。 */
+  /** 抓取申报主文档全文（HTML→文本，供承诺/事件模式匹配；确定性）。 */
+  async function fetchFilingText({ cik, accession, primaryDocument } = {}) {
+    if (!cik || !accession || !primaryDocument) throw filingError("FILING_ARGS_REQUIRED", "cik, accession and primaryDocument are required");
+    const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${String(accession).replace(/-/g, "")}/${primaryDocument}`;
+    if (!isAllowedFilingUrl(url)) throw filingError("FILING_HOST_NOT_ALLOWED", "URL is outside the SEC filings allowlist");
+    const raw = await fetchText(url);
+    return { text: htmlToText(raw).slice(0, SEC_FILINGS_MAX_TEXT), sha256: sha256(raw), bytes: Buffer.byteLength(raw, "utf8"), url };
+  }
+
   async function verifyEventDocument({ cik, accession, primaryDocument } = {}) {
     if (!cik || !accession || !primaryDocument) throw filingError("FILING_ARGS_REQUIRED", "cik, accession and primaryDocument are required");
     const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${String(accession).replace(/-/g, "")}/${primaryDocument}`;
@@ -408,5 +417,5 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
     };
   }
 
-  return Object.freeze({ fetchPublicCommitments, listFilings, verifyEventDocument, searchFilings, version: SEC_FILINGS_VERSION, allowedHosts: SEC_FILINGS_ALLOWED_HOSTS });
+  return Object.freeze({ fetchPublicCommitments, listFilings, verifyEventDocument, searchFilings, fetchFilingText, version: SEC_FILINGS_VERSION, allowedHosts: SEC_FILINGS_ALLOWED_HOSTS });
 }

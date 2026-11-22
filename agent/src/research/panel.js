@@ -17,6 +17,7 @@ import { forwardMarketLabels } from "./labels.js";
 import { buildReplayReport } from "./replay.js";
 import { annotateObservationsWithCreditEvents, creditEventLabelMap } from "./credit-events.js";
 import { buildCalibrationReport } from "./calibration.js";
+import { extractCommitmentsFromText } from "../connectors/sec-filings.js";
 import { deflateIcEvidence, icSeriesCorrelation } from "./multiple-testing.js";
 
 export const RESEARCH_PANEL_VERSION = "ai-compute-panel/v0.1.0";
@@ -29,7 +30,7 @@ export const PANEL_FACTORS = Object.freeze([
   "netDebtToRevenueX", "cashToDebtPct", "interestCoverageX",
   "grossMarginPct", "operatingMarginPct", "revenueGrowthQoQ",
   "operatingCashFlowMarginPct", "rdExpenseRatePct", "sbcExpenseRatePct", "assetTurnoverX",
-  "marginSlopePctPerQ", "revenueAccelerationPct"
+  "marginSlopePctPerQ", "revenueAccelerationPct", "commitmentCoverageX"
 ]);
 
 function finite(value) { return typeof value === "number" && Number.isFinite(value); }
@@ -594,7 +595,7 @@ export function buildScoringModelDraft(panel, { labels = null, labelsSource = nu
 }
 
 /** 进程内面板存储（TTL + 容量上限；不落盘）。 */
-export function createResearchService({ secEdgar, priceFeed = null, explicitLabels = null, labelsSource = null, creditEvents = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
+export function createResearchService({ secEdgar, priceFeed = null, explicitLabels = null, labelsSource = null, creditEvents = null, filings = null, now = () => Date.now(), ttlMs = 30 * 60 * 1000, maxPanels = 5 } = {}) {
   const store = new Map();
   let sequence = 0;
   const hasCreditEvents = !!(creditEvents && Array.isArray(creditEvents.events) && creditEvents.events.length);
@@ -681,6 +682,53 @@ export function createResearchService({ secEdgar, priceFeed = null, explicitLabe
     return { ok: true, panelId, ...buildReplayReport(entry.panel) };
   }
 
+  /**
+   * 承诺覆盖度逐观测富集（Wave1-①）：
+   * 对每条 10-Q 观测，抓取其对应申报原文，冻结模式抽取 12 个月到期承诺，
+   * CC = 现金 ÷ 12 个月承诺（保守口径；PIT：申报日精确匹配观测 filed）。
+   * bounded：每公司 ≤ maxPerCompany 份、总量 ≤ maxTotal；抽取结果缓存于面板观测。
+   */
+  async function enrichCommitmentCoverage({ panelId, maxPerCompany = 12, maxTotal = 60 } = {}) {
+    evict();
+    const entry = store.get(String(panelId || ""));
+    if (!entry) return { ok: false, code: "PANEL_NOT_FOUND", message: "panel not found or expired; build it again" };
+    if (!filings) return { ok: false, code: "FILINGS_CONNECTOR_UNAVAILABLE", message: "filing text connector is not configured on this server" };
+    const panelData = entry.panel;
+    const byTicker = new Map();
+    for (const item of panelData.observations) {
+      if (item.form !== "10-Q" || !Number.isFinite(item.cashUsd) || !item.filed) continue;
+      (byTicker.get(item.ticker) ?? byTicker.set(item.ticker, []).get(item.ticker)).push(item);
+    }
+    let fetched = 0, enriched = 0, noCommitment = 0, skipped = 0;
+    const perCompanyStats = [];
+    for (const [ticker, obs] of byTicker) {
+      let index;
+      try { index = await filings.listFilings({ query: ticker, form: "10-Q", maxResults: 200 }); }
+      catch (error) { perCompanyStats.push({ ticker, error: error.code ?? "LIST_FAILED" }); continue; }
+      const byFiled = new Map(index.filings.map(filing => [filing.filed, filing]));
+      let used = 0;
+      for (const item of obs) {
+        if (used >= maxPerCompany || fetched >= maxTotal) { skipped += 1; continue; }
+        const filing = byFiled.get(item.filed);
+        if (!filing?.primaryDocument) { skipped += 1; continue; }
+        fetched += 1; used += 1;
+        try {
+          const filingText = await filings.fetchFilingText({ cik: item.cik, accession: filing.accession, primaryDocument: filing.primaryDocument });
+          const extracted = extractCommitmentsFromText(filingText.text);
+          const twelveMonth = extracted.twelveMonthCommittedSpendUsd;
+          if (Number.isFinite(twelveMonth) && twelveMonth > 0 && Number.isFinite(item.cashUsd) && item.cashUsd > 0) {
+            item.commitmentCoverageX = Math.round(item.cashUsd / twelveMonth * 1000) / 1000;
+            item.commitmentTwelveMonthUsd = twelveMonth;
+            enriched += 1;
+          } else noCommitment += 1;
+        } catch (error) { noCommitment += 1; }
+      }
+      perCompanyStats.push({ ticker, observations: obs.length, fetched: used, enriched: obs.filter(o => Number.isFinite(o.commitmentCoverageX)).length });
+    }
+    panelData.enrichment = { kind: "commitment-coverage", fetched, enriched, noCommitment, skipped, perCompanyStats, note: "保守口径 CC = 现金 ÷ 12 个月到期承诺（不含短投/授信/经营现金流）；抽取失败如实计数，不插值。" };
+    return { ok: true, ...panelData.enrichment };
+  }
+
   function calibrationReport({ panelId } = {}) {
     evict();
     const entry = store.get(String(panelId || ""));
@@ -688,5 +736,5 @@ export function createResearchService({ secEdgar, priceFeed = null, explicitLabe
     return { ok: true, panelId, ...buildCalibrationReport(entry.panel) };
   }
 
-  return Object.freeze({ buildPanel, factorReport, buildScoringModel, replayReport, calibrationReport, version: RESEARCH_PANEL_VERSION });
+  return Object.freeze({ buildPanel, factorReport, buildScoringModel, replayReport, calibrationReport, enrichCommitmentCoverage, version: RESEARCH_PANEL_VERSION });
 }
