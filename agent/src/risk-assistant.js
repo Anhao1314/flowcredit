@@ -488,6 +488,9 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
           } else {
             try {
               let toolArgs = parseToolArguments(call?.function?.arguments);
+              // 实时渲染：工具开始执行即发出 toolStart（含参数摘要，截断防泄漏大载荷）
+              const argsPreview = JSON.stringify(toolArgs ?? {}).slice(0, 160);
+              emit({ type: "toolStart", step, name: tool.name, argsPreview });
               // assess_prompt 的 text 由服务端注入用户原始 prompt：模型回显可能截断或改写
               // 大 JSON（R/C 数组曾因此丢失），工具输入必须以用户原文为准。
               if (tool.name === "assess_prompt") {
@@ -526,7 +529,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
           });
           messages.push({ role: "tool", tool_call_id: call?.id ?? `call-${step}`, content: JSON.stringify(result) });
         }
-        emit({ type: "tool", step, calls: toolCalls.slice(before) });
+        emit({ type: "tool", step, calls: toolCalls.slice(before), started: Array.isArray(message.tool_calls) ? message.tool_calls.map(c => c?.function?.name ?? null) : [] });
         continue;
       }
 
