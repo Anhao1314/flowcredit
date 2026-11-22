@@ -18,7 +18,7 @@
 
 import { createHash } from "node:crypto";
 
-export const SEC_CONNECTOR_VERSION = "sec-edgar/v0.1.1";
+export const SEC_CONNECTOR_VERSION = "sec-edgar/v0.2.0";
 export const SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_FACTS_URL = cik => `https://data.sec.gov/api/xbrl/companyfacts/CIK${String(cik).padStart(10, "0")}.json`;
 export const SEC_ALLOWED_HOSTS = Object.freeze(["www.sec.gov", "data.sec.gov"]);
@@ -129,6 +129,12 @@ export function createSecEdgarConnector({ transport, userAgent, timeoutMs = 8_00
   async function resolveCompany(query) {
     const needle = String(query ?? "").trim();
     if (!needle) throw secError("QUERY_REQUIRED", "company name or ticker is required");
+    // CIK 直连：死公司/退市公司不在注册表里，FTS 找到 CIK 后按号直取 companyfacts。
+    if (/^\d{1,10}$/.test(needle)) {
+      const cik = Number(needle);
+      const payload = JSON.parse(await fetchText(SEC_FACTS_URL(cik)));
+      return { cik, ticker: String(cik), name: String(payload.entityName ?? `CIK ${cik}`) };
+    }
     const raw = await fetchText(SEC_TICKERS_URL);
     const catalog = JSON.parse(raw);
     const entries = Object.values(catalog).filter(item => item && item.ticker && item.cik_str);

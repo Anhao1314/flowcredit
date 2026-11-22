@@ -114,3 +114,13 @@ test("service wiring: buildPanel annotates credit labels, factor_report and repl
   const toolReplay = registry.get("replay_report").execute({ panelId: built.panelId });
   assert.equal(toolReplay.labelStatus, "credit-events");
 });
+
+test("CIK matching: dead companies without registry tickers still get labeled", () => {
+  const events = loadCreditEvents(LEDGER_TEXT.replace('"ticker":"CORZ"', '"ticker":"SDIG","cik":1856028')).events;
+  const obs = [
+    { ticker: "1856028", cik: 1856028, periodEnd: "2022-03-31", filed: "2022-05-13" },
+    { ticker: "1856028", cik: 1856028, periodEnd: "2023-03-31", filed: "2023-03-28" }
+  ];
+  const annotated = annotateObservationsWithCreditEvents(obs, events);
+  assert.deepEqual(annotated.map(row => row.labelCreditEvent), [1, 0], "CIK-matched event labels the pre-bankruptcy quarter");
+});

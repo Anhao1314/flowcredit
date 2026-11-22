@@ -59,16 +59,25 @@ export function loadCreditEventsFile(path = DEFAULT_CREDIT_EVENTS_FILE) {
  */
 export function annotateObservationsWithCreditEvents(observations, events, { forwardWindowDays = CREDIT_EVENT_FORWARD_WINDOW_DAYS } = {}) {
   const byTicker = new Map();
+  const byCik = new Map();
   for (const event of events || []) {
     const ticker = String(event.ticker).toUpperCase();
     if (!byTicker.has(ticker)) byTicker.set(ticker, []);
     byTicker.get(ticker).push(event);
+    if (Number.isFinite(Number(event.cik))) {
+      const cikKey = String(Number(event.cik));
+      if (!byCik.has(cikKey)) byCik.set(cikKey, []);
+      byCik.get(cikKey).push(event);
+    }
   }
   const windowMs = forwardWindowDays * 86_400_000;
   return (observations || []).map(observation => {
     const filedMs = observation?.filed ? Date.parse(observation.filed) : NaN;
     if (!Number.isFinite(filedMs)) return { ...observation, labelCreditEvent: null };
-    const candidates = byTicker.get(String(observation.ticker || "").toUpperCase()) || [];
+    let candidates = byTicker.get(String(observation.ticker || "").toUpperCase()) || [];
+    if (!candidates.length && Number.isFinite(Number(observation.cik))) {
+      candidates = byCik.get(String(Number(observation.cik))) || [];
+    }
     const hit = candidates.some(event => {
       const eventMs = Date.parse(event.eventDate);
       return Number.isFinite(eventMs) && eventMs > filedMs && eventMs <= filedMs + windowMs;
