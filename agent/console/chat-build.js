@@ -1,10 +1,23 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>FlowCredit · Business Risk Intelligence</title>
-<style>
+/*
+ * agent/console/chat-build.js — 独立对话前端生成器（只有一个对话区）。
+ *
+ * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
+ *   1. 单文件静态页：无框架、无 CDN、无构建依赖；JS 全内联 ES5 风格。
+ *   2. 页面只有对话区：无仪表盘、无导航、无 Paper、无历史侧栏。
+ *   3. 后端端点 = 业务 agent 同源（/chat 与 API 同在 8790）：确定性走
+ *      /api/finch/assess（一次性 JSON），agent 模式走 /api/v1/agent/ask/stream
+ *      （SSE：delta/tool/reset/done）；不接触公网凭证。
+ *      （2026-11-18 前端归一后修订：原先的 console 代理已随重复页删除。）
+ *   4. 与 index.html 共用同一套 Kimi 设计令牌，但独立生成（byte-stable：无时钟）。
+ * 输出：agent/console/chat.html
+ */
+import { writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+const css = `
 :root{--bg:#f7f7f8;--card:#fff;--card2:#f2f2f4;--text:#1a1a1e;--muted:#6e6e73;--faint:#8e8e93;--border:#e6e6ea;--border-strong:#d8d8de;--track:#e8e8ec;--hover:#f0f0f2;--user-bubble:#e8e8ec;--accent:#2e5cf6;--good:#2e9e5b;--bad:#dd4b4f;--warn:#d99118;--shadow:0 1px 3px rgba(20,21,26,.08);--shadow-lg:0 10px 30px rgba(20,21,26,.06)}
 @media (prefers-color-scheme:dark){:root{--bg:#0d0d0f;--card:#17171a;--card2:#1f1f23;--text:#f2f2f4;--muted:#a0a0a8;--faint:#6e6e76;--border:#2a2a2f;--border-strong:#3a3a41;--track:#2a2a2f;--hover:#1f1f23;--user-bubble:#2a2a2f;--shadow:0 1px 3px rgba(0,0,0,.4);--shadow-lg:0 10px 30px rgba(0,0,0,.35)}}
 *{box-sizing:border-box}
@@ -74,6 +87,31 @@ header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:
 .think{margin:0 0 7px;color:var(--muted)}
 .think summary{cursor:pointer;user-select:none;font-size:10.5px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .think pre{white-space:pre-wrap;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:10.5px;line-height:1.55;max-height:200px;overflow:auto;margin:6px 0 0;color:var(--muted)}
+.think-body{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin:6px 0 0;max-height:240px;overflow:auto}
+.think-line{font-size:10.5px;line-height:1.55;white-space:pre-wrap;color:var(--muted)}
+.think-line + .think-line{margin-top:4px}
+.think-line.research{color:var(--text);border-left:2px solid var(--accent);padding-left:8px;margin:4px 0}
+.think-tag{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:9.5px;color:var(--accent);letter-spacing:.03em;margin-right:4px}
+/* Agent trace：Codex / Claude Code 风格执行轨迹 */
+.trace-body{max-height:280px;overflow:auto;padding:2px 0}
+.trace-step{display:flex;gap:8px;align-items:flex-start;padding:5px 0;position:relative}
+.trace-step + .trace-step{border-top:1px dashed var(--border)}
+.trace-rail{width:14px;display:flex;justify-content:center;flex:none;padding-top:2px}
+.trace-icon{width:13px;height:13px;border-radius:50%;border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1;color:var(--faint);background:var(--card);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.trace-step.running .trace-icon{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px rgba(46,92,246,.10)}
+.trace-step.done .trace-icon{background:rgba(46,158,91,.10);border-color:rgba(46,158,91,.35);color:var(--good)}
+.trace-step.failed .trace-icon{background:rgba(221,75,79,.08);border-color:rgba(221,75,79,.35);color:var(--bad)}
+.trace-spinner{width:9px;height:9px;border:1.5px solid rgba(46,92,246,.25);border-top-color:var(--accent);border-radius:50%;animation:tspin .8s linear infinite;display:inline-block}
+.trace-main{flex:1;min-width:0}
+.trace-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.4}
+.trace-kind{font-size:9px;font-weight:400;color:var(--faint);letter-spacing:.04em;text-transform:uppercase}
+.trace-time{margin-left:auto;font-size:9.5px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:400;white-space:nowrap}
+.trace-detail{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:2px;white-space:pre-wrap;word-break:break-word;max-height:110px;overflow:auto}
+.trace-step.research .trace-label{color:var(--accent)}
+.trace-step.research .trace-main{border-left:2px solid rgba(46,92,246,.5);padding-left:8px;margin-left:-2px}
+.trace-step.route .trace-label{color:var(--muted)}
+.trace-step.reasoning .trace-detail{color:var(--muted)}
+.trace-step.answer .trace-label{color:var(--text)}
 .caret{display:inline-block;width:6px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:fc-blink 1s steps(2,start) infinite}
 @keyframes fc-blink{to{visibility:hidden}}
 /* Q 版助手（与 console 同一套生成器与状态机；每实例独立渐变 id，避免冲突） */
@@ -94,13 +132,75 @@ header{display:flex;align-items:center;gap:10px;padding:14px 24px;border-bottom:
 .msg-row{display:flex;gap:9px;align-items:flex-start;width:100%}
 .msg-row .msg{max-width:78%;min-width:0}
 body.has-messages .quick-chips{display:none}
-</style>
+/* Markdown 渲染（答案专用；用户消息仍按纯文本） */
+.md{white-space:normal}
+.md p{margin:0 0 8px}
+.md p:last-child{margin-bottom:0}
+.md h1,.md h2,.md h3,.md h4{margin:10px 0 6px;line-height:1.35;font-weight:700}
+.md h1{font-size:17px}.md h2{font-size:15.5px}.md h3{font-size:14px}.md h4{font-size:13.5px}
+.md ul,.md ol{margin:4px 0 8px;padding-left:20px}
+.md li{margin:2px 0}
+.md code{background:var(--card2);border:1px solid var(--border);border-radius:5px;padding:1px 4px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.md pre{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;overflow:auto;margin:6px 0 8px}
+.md pre code{border:none;background:none;padding:0;font-size:11.5px;line-height:1.55;white-space:pre}
+.md blockquote{margin:6px 0;padding:2px 0 2px 10px;border-left:2px solid var(--border-strong);color:var(--muted)}
+.md .md-table{overflow:auto;margin:6px 0 8px}
+.md table{border-collapse:collapse;width:100%;font-size:12px}
+.md th,.md td{border:1px solid var(--border);padding:5px 8px;text-align:left;vertical-align:top}
+.md th{background:var(--card2);font-weight:600}
+.md a{color:var(--accent);text-decoration:none}
+.md hr{border:none;border-top:1px solid var(--border);margin:10px 0}
+/* 裁决卡 */
+.verdict-card{padding:14px 16px;border-color:var(--border-strong);box-shadow:var(--shadow)}
+.verdict-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.verdict-title{font-size:12px;font-weight:600}
+.verdict-hero{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:12px}
+.verdict-stat{display:flex;flex-direction:column;gap:3px}
+.verdict-stat-label{font-size:10px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.05em}
+.verdict-cci{font-size:36px;line-height:1;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.verdict-tai{font-size:18px;font-weight:650;font-variant-numeric:tabular-nums}
+.verdict-grade{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:44px;border-radius:13px;font-size:21px;font-weight:750;border:1px solid var(--border);background:var(--card2)}
+.verdict-grade.grade-a{color:#1f7a45;border-color:rgba(46,158,91,.35);background:rgba(46,158,91,.10)}
+.verdict-grade.grade-b{color:#a16c0c;border-color:rgba(217,145,24,.35);background:rgba(217,145,24,.10)}
+.verdict-grade.grade-c,.verdict-grade.grade-d{color:var(--bad);border-color:rgba(221,75,79,.35);background:rgba(221,75,79,.08)}
+.verdict-dims{display:flex;flex-direction:column;gap:6px;margin:10px 0 12px}
+.dim-row{display:grid;grid-template-columns:70px 1fr 40px;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
+.dim-name{white-space:nowrap}
+.dim-track{height:6px;border-radius:999px;background:var(--track);overflow:hidden}
+.dim-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .35s ease}
+.dim-fill.good{background:var(--good)}
+.dim-fill.warn{background:var(--warn)}
+.dim-fill.bad{background:var(--bad)}
+.dim-score{text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);font-variant-numeric:tabular-nums}
+.verdict-evidence{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
+.verdict-evidence b{color:var(--text);font-variant-numeric:tabular-nums}
+.verdict-decision{margin-left:auto;padding:2px 9px;border-radius:999px;font-size:10.5px;border:1px solid var(--border);background:var(--card2);white-space:nowrap}
+.verdict-decision.warn{color:#a16c0c;border-color:rgba(217,145,24,.35);background:rgba(217,145,24,.10)}
+.verdict-decision.good{color:var(--good);border-color:rgba(46,158,91,.30);background:rgba(46,158,91,.08)}
+.verdict-decision.bad{color:var(--bad);border-color:rgba(221,75,79,.30);background:rgba(221,75,79,.08)}
+.verdict-note{margin-top:8px;font-size:10.5px;color:var(--faint);line-height:1.5}
+.verdict-fp{margin-top:8px;font-size:10.5px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.verdict-fp summary{cursor:pointer;user-select:none}
+.verdict-fp code{display:block;margin-top:4px;word-break:break-all;color:var(--muted)}
+/* 追问 chips */
+.followups{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0 35px}
+.followup{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:5px 12px;font-size:12px;color:var(--text);cursor:pointer;box-shadow:var(--shadow)}
+.followup:hover{background:var(--card2)}
+`;
+
+const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FlowCredit · Business Risk Intelligence</title>
+<style>${css}</style>
 </head>
 <body>
 <header>
   <div class="brand"><span id="brand-avatar"></span>FlowCredit</div>
   <div class="brand-sub">Business Risk Intelligence · 评估 AI 推理 / GPU 算力运营商</div>
-  <span class="mode-label" id="mode-label">deterministic · no model call</span>
+  <span class="mode-label" id="mode-label">确定性模式 · 无模型调用</span>
 </header>
 <div class="thread" id="thread">
   <div class="empty" id="empty">
@@ -109,17 +209,16 @@ body.has-messages .quick-chips{display:none}
   </div>
 </div>
 <div class="quick-chips" id="chips">
-  <button class="quick-chip" data-fq="完整自然语言">完整自然语言</button>
-  <button class="quick-chip" data-fq="官方模板">官方模板</button>
-  <button class="quick-chip" data-fq="纯 JSON 字段">纯 JSON（高级）</button>
-  <button class="quick-chip" data-fq="Arweave 范围外">Arweave 范围外</button>
+  <button class="quick-chip" data-fq="Anthropic 算力承诺">Anthropic 算力承诺</button>
+  <button class="quick-chip" data-fq="示例运营商评估">示例运营商评估</button>
+  <button class="quick-chip" data-fq="NVIDIA 公开财务">NVIDIA 公开财务</button>
 </div>
 <div class="composer-wrap">
   <div class="composer">
     <textarea id="input" rows="2" placeholder="描述你的 AI 推理 / GPU 算力业务，或直接粘贴 JSON…"></textarea>
     <div class="composer-row">
-      <label class="consent-pill" title="开启后 prompt 会经 agent 工具循环编排（需 DEEPSEEK_API_KEY）"><input type="checkbox" id="consent"> agent 模式</label>
-      <span class="model-label" id="consent-label">deterministic · no model call</span>
+      <label class="consent-pill" title="开启后由模型编排工具与解释；所有数字仍由确定性引擎产出"><input type="checkbox" id="consent"> Agent 编排</label>
+      <span class="model-label" id="consent-label">确定性模式 · 无模型调用</span>
       <button id="send" class="send-circle" disabled title="发送">↑</button>
     </div>
   </div>
@@ -141,6 +240,8 @@ body.has-messages .quick-chips{display:none}
   var modeLabel = document.getElementById("mode-label");
   var STORE = "fc.chat.v1";
   var SESSION = "fc.chat.session.v1";
+  var CONSENT = "fc.chat.consent.v1";
+  var demoMode = /(?:^|[?&])demo=1(?:&|$)/.test(location.search);
   var messages = [];
   var sessionId = null;
   var busy = false;
@@ -181,16 +282,22 @@ body.has-messages .quick-chips{display:none}
     return "chat-" + Date.now();
   }
   try {
+    if (demoMode) {
+      localStorage.removeItem(STORE);
+      localStorage.removeItem(SESSION);
+    }
     messages = JSON.parse(localStorage.getItem(STORE) || "[]");
     if (!Array.isArray(messages)) messages = [];
-    sessionId = localStorage.getItem(SESSION) || newSessionId();
-    if (!localStorage.getItem(SESSION)) localStorage.setItem(SESSION, sessionId);
+    if (demoMode) messages = [];
+    sessionId = demoMode ? newSessionId() : (localStorage.getItem(SESSION) || newSessionId());
+    if (!localStorage.getItem(SESSION) || demoMode) localStorage.setItem(SESSION, sessionId);
   } catch (e) { messages = []; sessionId = newSessionId(); }
+  if (demoMode) document.body.setAttribute("data-demo", "1");
 
   function persist() {
     try {
       localStorage.setItem(STORE, JSON.stringify(messages.slice(-40).map(function(m) {
-        return { role: m.role, text: m.text, diag: m.diag || null, artifacts: m.artifacts || null, cites: m.cites || null, thinking: m.thinking ? String(m.thinking).slice(0, 4000) : null };
+        return { role: m.role, text: m.text, diag: m.diag || null, artifacts: m.artifacts || null, cites: m.cites || null, thinking: m.thinking ? String(m.thinking).slice(0, 4000) : null, trace: m.trace ? m.trace.slice(-24) : null, traceMs: m.traceMs != null ? m.traceMs : null };
       })));
       if (sessionId) localStorage.setItem(SESSION, sessionId); else localStorage.removeItem(SESSION);
     } catch (e) {}
@@ -234,6 +341,107 @@ body.has-messages .quick-chips{display:none}
     out.push([ms + " ms", ""]);
     return out;
   }
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function inlineMarkdown(text) {
+    var s = text;
+    s = s.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*])\\*([^*\\n]+)\\*/g, "$1<em>$2</em>");
+    s = s.replace(new RegExp("\\\\x60([^\\\\x60]+)\\\\x60", "g"), "<code>$1</code>");
+    s = s.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, function(_, label, url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + label + "</a>";
+    });
+    return s;
+  }
+  function splitTableRow(line) {
+    var trimmed = line.trim().replace(/^\\|/, "").replace(/\\|$/, "");
+    return trimmed.split("|").map(function(cell) { return cell.trim(); });
+  }
+  function isTableSeparator(line) {
+    return /^\\s*\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)+\\|?\\s*$/.test(line);
+  }
+  function renderMarkdown(src) {
+    var FENCE = "\\x60\\x60\\x60";
+    var lines = escapeHtml(src).split(/\\r?\\n/);
+    var out = [];
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (!line.trim()) { i += 1; continue; }
+      if (line.indexOf(FENCE) === 0) {
+        var code = [];
+        i += 1;
+        while (i < lines.length && lines[i].indexOf(FENCE) !== 0) { code.push(lines[i]); i += 1; }
+        i += 1;
+        out.push("<pre><code>" + code.join("\\n") + "</code></pre>");
+        continue;
+      }
+      var heading = /^\\s{0,3}(#{1,4})\\s+(.*)$/.exec(line);
+      if (heading) {
+        var level = heading[1].length;
+        out.push("<h" + level + ">" + inlineMarkdown(heading[2]) + "</h" + level + ">");
+        i += 1;
+        continue;
+      }
+      if (/^\\s*---+\\s*$/.test(line)) { out.push("<hr>"); i += 1; continue; }
+      if (line.indexOf("|") !== -1 && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+        var header = splitTableRow(line);
+        i += 2;
+        var rows = [];
+        while (i < lines.length && lines[i].indexOf("|") !== -1 && lines[i].trim()) {
+          rows.push(splitTableRow(lines[i]));
+          i += 1;
+        }
+        var thead = "<thead><tr>" + header.map(function(cell) { return "<th>" + inlineMarkdown(cell) + "</th>"; }).join("") + "</tr></thead>";
+        var tbody = "<tbody>" + rows.map(function(row) {
+          return "<tr>" + header.map(function(_, idx) { return "<td>" + inlineMarkdown(row[idx] || "") + "</td>"; }).join("") + "</tr>";
+        }).join("") + "</tbody>";
+        out.push('<div class="md-table"><table>' + thead + tbody + "</table></div>");
+        continue;
+      }
+      var ul = /^\\s*[-*]\\s+/.test(line);
+      var ol = /^\\s*\\d+\\.\\s+/.test(line);
+      if (ul || ol) {
+        var tag = ul ? "ul" : "ol";
+        var items = [];
+        while (i < lines.length && (ul ? /^\\s*[-*]\\s+/.test(lines[i]) : /^\\s*\\d+\\.\\s+/.test(lines[i]))) {
+          items.push(inlineMarkdown(lines[i].replace(ul ? /^\\s*[-*]\\s+/ : /^\\s*\\d+\\.\\s+/, "")));
+          i += 1;
+        }
+        out.push("<" + tag + ">" + items.map(function(item) { return "<li>" + item + "</li>"; }).join("") + "</" + tag + ">");
+        continue;
+      }
+      if (/^\\s*&gt;\\s?/.test(line)) {
+        var quote = [];
+        while (i < lines.length && /^\\s*&gt;\\s?/.test(lines[i])) {
+          quote.push(inlineMarkdown(lines[i].replace(/^\\s*&gt;\\s?/, "")));
+          i += 1;
+        }
+        out.push("<blockquote>" + quote.join("<br>") + "</blockquote>");
+        continue;
+      }
+      var para = [];
+      while (i < lines.length && lines[i].trim() &&
+        !/^\\s{0,3}#{1,4}\\s+/.test(lines[i]) &&
+        !/^\\s*[-*]\\s+/.test(lines[i]) &&
+        !/^\\s*\\d+\\.\\s+/.test(lines[i]) &&
+        lines[i].indexOf(FENCE) !== 0 &&
+        !(lines[i].indexOf("|") !== -1 && i + 1 < lines.length && isTableSeparator(lines[i + 1])) &&
+        !/^\\s*&gt;\\s?/.test(lines[i]) &&
+        !/^\\s*---+\\s*$/.test(lines[i])) {
+        para.push(inlineMarkdown(lines[i]));
+        i += 1;
+      }
+      out.push("<p>" + para.join("<br>") + "</p>");
+    }
+    return out.join("");
+  }
   function artifactFromCall(call) {
     if (!call) return null;
     if (!call.ok || !call.result) {
@@ -247,7 +455,7 @@ body.has-messages .quick-chips{display:none}
         note: r.message || ""
       };
     }
-    var title = call.name || "tool", metrics = [], note = "";
+    var title = call.name || "tool", metrics = [], note = "", verdictData = null;
     if ((call.name === "assess_draft" || call.name === "assess_prompt") && (r.assessed === false)) {
       title = "评估未通过";
       var errors = (r.validation && r.validation.errors) || [];
@@ -269,6 +477,13 @@ body.has-messages .quick-chips{display:none}
         metrics.push({ label: "Solvency", value: a.capitalStructure.score + (a.capitalStructure.capApplied ? " (cap " + a.capitalStructure.cciCap + ")" : "") });
       }
       note = a.assessmentFingerprint || "";
+      verdictData = {
+        tai: a.TAI, cci: a.CCI, grade: a.riskGrade, decision: a.decisionStatus,
+        label: (r.merged && r.merged.label) || (r.draft && r.draft.label) || null,
+        dimensions: r.dimensionScores || null,
+        evidence: r.evidenceQuality || null,
+        fingerprint: a.assessmentFingerprint || r.assessmentFingerprint || null
+      };
     } else if (call.name === "what_if" && r.assessed) {
       title = "敏感性分析";
       var overrides = Object.entries(r.overrides || {}).map(function(kv) { return kv[0] + "=" + kv[1]; }).join(" ");
@@ -412,6 +627,15 @@ body.has-messages .quick-chips{display:none}
         : [{ label: "节点", value: (r.overview ? r.overview.stats.nodes : "n/a") }, { label: "链", value: (r.overview ? r.overview.chains.length : "n/a") }];
       metrics = kg;
       note = "领域底图 · 事实带出处 · 非评估输入";
+    } else if (call.name === "query_governance_events" && r.events) {
+      title = "治理事件";
+      var latestGovernance = (r.events || [])[r.events.length - 1] || null;
+      metrics = [
+        { label: "公司", value: r.query || "n/a" },
+        { label: "事件", value: (r.events || []).length },
+        { label: "最近", value: latestGovernance ? latestGovernance.eventDate + " · " + latestGovernance.eventType : "n/a" }
+      ];
+      note = "8-K Item 5.02 · 治理/关键人 overlay · 非信用事件标签 · 非股价预测";
     } else if (call.name === "preset_draft" && r.draft) {
       title = "示例草稿";
       metrics = [{ label: "Key", value: r.key }];
@@ -419,12 +643,184 @@ body.has-messages .quick-chips{display:none}
     } else {
       metrics = [{ label: "Status", value: "ok" }];
     }
-    return { tool: call.name || "tool", title: title, ok: true, metrics: metrics, note: note };
+    var artifact = { tool: call.name || "tool", title: title, ok: true, metrics: metrics, note: note };
+    if (verdictData) artifact.verdict = verdictData;
+    return artifact;
+  }
+  function verdictDecisionLabel(status) {
+    var map = {
+      "insufficient-evidence": "证据不足",
+      "enhanced-review": "加强复核",
+      "standard-review": "标准复核",
+      "eligible-for-review": "可进入人工评审",
+      "reject-confirmed-integrity": "拒绝 · 完整性问题",
+      "simulation-only": "仅模拟"
+    };
+    return map[status] || status || "n/a";
+  }
+  function verdictDecisionTone(status) {
+    if (status === "insufficient-evidence") return "warn";
+    if (status === "reject-confirmed-integrity") return "bad";
+    if (status === "eligible-for-review" || status === "standard-review") return "good";
+    return "";
+  }
+  function verdictStrengthLabel(strength) {
+    if (strength === "low") return "低";
+    if (strength === "medium") return "中";
+    if (strength === "high") return "高";
+    return strength || "n/a";
+  }
+  function verdictCap(evidence) {
+    var caps = evidence && evidence.caps;
+    if (!Array.isArray(caps)) return null;
+    for (var i = 0; i < caps.length; i++) {
+      var tail = String(caps[i]).split(":").pop().trim();
+      var value = Number(tail);
+      if (isFinite(value)) return value;
+    }
+    return null;
+  }
+  function renderVerdictCard(a) {
+    var v = a.verdict || {};
+    var card = document.createElement("div");
+    card.className = "artifact verdict-card";
+
+    var head = document.createElement("div");
+    head.className = "verdict-head";
+    var title = document.createElement("span");
+    title.className = "verdict-title";
+    var titleText = a.title || "裁决结果";
+    if (v.label) titleText += " · " + v.label;
+    title.textContent = titleText;
+    var tool = document.createElement("span");
+    tool.className = "artifact-tool";
+    tool.textContent = a.tool || "assess_prompt";
+    head.appendChild(title);
+    head.appendChild(tool);
+    card.appendChild(head);
+
+    var hero = document.createElement("div");
+    hero.className = "verdict-hero";
+
+    var cciBlock = document.createElement("div");
+    cciBlock.className = "verdict-stat";
+    var cciLabel = document.createElement("span");
+    cciLabel.className = "verdict-stat-label";
+    cciLabel.textContent = "CCI";
+    var cciValue = document.createElement("b");
+    cciValue.className = "verdict-cci";
+    cciValue.textContent = v.cci == null ? "n/a" : String(v.cci);
+    cciBlock.appendChild(cciLabel);
+    cciBlock.appendChild(cciValue);
+    hero.appendChild(cciBlock);
+
+    var gradeBlock = document.createElement("div");
+    gradeBlock.className = "verdict-stat";
+    var gradeLabel = document.createElement("span");
+    gradeLabel.className = "verdict-stat-label";
+    gradeLabel.textContent = "GRADE";
+    var grade = document.createElement("span");
+    var gradeKey = String(v.grade || "").replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    grade.className = "verdict-grade" + (gradeKey ? " grade-" + gradeKey : "");
+    grade.textContent = v.grade || "n/a";
+    gradeBlock.appendChild(gradeLabel);
+    gradeBlock.appendChild(grade);
+    hero.appendChild(gradeBlock);
+
+    var taiBlock = document.createElement("div");
+    taiBlock.className = "verdict-stat";
+    var taiLabel = document.createElement("span");
+    taiLabel.className = "verdict-stat-label";
+    taiLabel.textContent = "TAI";
+    var taiValue = document.createElement("b");
+    taiValue.className = "verdict-tai";
+    taiValue.textContent = v.tai == null ? "n/a" : String(v.tai);
+    taiBlock.appendChild(taiLabel);
+    taiBlock.appendChild(taiValue);
+    hero.appendChild(taiBlock);
+
+    card.appendChild(hero);
+
+    var dims = v.dimensions || {};
+    var order = [
+      ["tokenActivity", "Token 活动"],
+      ["repayment", "回款"],
+      ["customer", "客户"],
+      ["economics", "经济性"],
+      ["continuity", "连续性"]
+    ];
+    var dimsBox = document.createElement("div");
+    dimsBox.className = "verdict-dims";
+    order.forEach(function(pair) {
+      var value = dims[pair[0]];
+      if (value == null || !isFinite(value)) return;
+      var row = document.createElement("div");
+      row.className = "dim-row";
+      var name = document.createElement("span");
+      name.className = "dim-name";
+      name.textContent = pair[1];
+      var track = document.createElement("div");
+      track.className = "dim-track";
+      var fill = document.createElement("div");
+      fill.className = "dim-fill" + (value >= 85 ? " good" : value >= 70 ? " warn" : " bad");
+      fill.style.width = Math.max(0, Math.min(100, value)) + "%";
+      track.appendChild(fill);
+      var score = document.createElement("span");
+      score.className = "dim-score";
+      score.textContent = String(value);
+      row.appendChild(name);
+      row.appendChild(track);
+      row.appendChild(score);
+      dimsBox.appendChild(row);
+    });
+    if (dimsBox.children.length) card.appendChild(dimsBox);
+
+    var ev = v.evidence || {};
+    var evBox = document.createElement("div");
+    evBox.className = "verdict-evidence";
+    var evLabel = document.createElement("span");
+    evLabel.textContent = "证据质量";
+    var evScore = document.createElement("b");
+    evScore.textContent = (ev.score == null ? "n/a" : String(ev.score)) + "/100";
+    var evMeta = document.createElement("span");
+    var cap = verdictCap(ev);
+    evMeta.textContent = "· " + verdictStrengthLabel(ev.strength) + (cap == null ? "" : " · 上限 " + cap);
+    var decision = document.createElement("span");
+    decision.className = "verdict-decision " + verdictDecisionTone(v.decision);
+    decision.textContent = verdictDecisionLabel(v.decision);
+    evBox.appendChild(evLabel);
+    evBox.appendChild(evScore);
+    evBox.appendChild(evMeta);
+    evBox.appendChild(decision);
+    card.appendChild(evBox);
+
+    var note = document.createElement("div");
+    note.className = "verdict-note";
+    note.textContent = "经营评分与证据质量分开呈现：decision 由证据强度决定，不由分数决定。";
+    card.appendChild(note);
+
+    if (v.fingerprint) {
+      var fp = document.createElement("details");
+      fp.className = "verdict-fp";
+      var fpSummary = document.createElement("summary");
+      fpSummary.textContent = "指纹 " + String(v.fingerprint).slice(0, 12);
+      var fpCode = document.createElement("code");
+      fpCode.textContent = String(v.fingerprint);
+      fp.appendChild(fpSummary);
+      fp.appendChild(fpCode);
+      card.appendChild(fp);
+    }
+
+    return card;
   }
   function renderArtifacts(artifacts) {
     var box = document.createElement("div");
     box.className = "artifacts";
     (artifacts || []).forEach(function(a) {
+      if (a.verdict) {
+        box.appendChild(renderVerdictCard(a));
+        return;
+      }
       var card = document.createElement("div");
       card.className = "artifact";
       var head = document.createElement("div");
@@ -463,23 +859,118 @@ body.has-messages .quick-chips{display:none}
     });
     return box;
   }
+  function formatTraceDuration(ms) {
+    if (typeof ms !== "number" || !isFinite(ms) || ms < 0) return "";
+    if (ms < 100) return "<0.1s";
+    return (ms / 1000).toFixed(1) + "s";
+  }
+  function traceStepIcon(step) {
+    if (step.status === "failed") return "✗";
+    if (step.kind === "tool" || step.kind === "answer") return "✓";
+    if (step.kind === "reasoning") return "…";
+    return "›";
+  }
+  function renderTraceBody(steps) {
+    var box = document.createElement("div");
+    box.className = "trace-body";
+    (steps || []).forEach(function(step) {
+      var row = document.createElement("div");
+      row.className = "trace-step " + (step.kind || "") + " " + (step.status || "");
+      var rail = document.createElement("div");
+      rail.className = "trace-rail";
+      var icon = document.createElement("span");
+      icon.className = "trace-icon";
+      if (step.status === "running") {
+        var spinner = document.createElement("span");
+        spinner.className = "trace-spinner";
+        icon.appendChild(spinner);
+      } else {
+        icon.textContent = traceStepIcon(step);
+      }
+      rail.appendChild(icon);
+      var main = document.createElement("div");
+      main.className = "trace-main";
+      var label = document.createElement("div");
+      label.className = "trace-label";
+      var name = document.createElement("span");
+      name.textContent = step.label || step.kind || "step";
+      label.appendChild(name);
+      if (step.kindTag) {
+        var kind = document.createElement("span");
+        kind.className = "trace-kind";
+        kind.textContent = step.kindTag;
+        label.appendChild(kind);
+      }
+      if (step.durationMs != null && isFinite(step.durationMs)) {
+        var time = document.createElement("span");
+        time.className = "trace-time";
+        time.textContent = formatTraceDuration(step.durationMs);
+        label.appendChild(time);
+      }
+      main.appendChild(label);
+      if (step.detail) {
+        var detail = document.createElement("div");
+        detail.className = "trace-detail";
+        detail.textContent = String(step.detail).slice(0, 800);
+        main.appendChild(detail);
+      }
+      row.appendChild(rail);
+      row.appendChild(main);
+      box.appendChild(row);
+    });
+    return box;
+  }
   function renderMessage(m) {
     var div = document.createElement("div");
     div.className = "msg " + (m.role === "user" ? "user" : "assistant");
-    if (m.thinking) {
+    if (m.trace && m.trace.length) {
       var think = document.createElement("details");
       think.className = "think";
       var thinkSummary = document.createElement("summary");
-      thinkSummary.textContent = "思考链 · 模型注记（非权威）";
-      var thinkPre = document.createElement("pre");
-      thinkPre.textContent = m.thinking;
+      var traceMs = m.traceMs != null ? m.traceMs : 0;
+      thinkSummary.textContent = "思考链 · " + m.trace.length + " 步" + (traceMs ? " · " + formatTraceDuration(traceMs) : "") + "（模型注记非权威）";
       think.appendChild(thinkSummary);
-      think.appendChild(thinkPre);
+      think.appendChild(renderTraceBody(m.trace));
+      div.appendChild(think);
+    } else if (m.thinking) {
+      var think = document.createElement("details");
+      think.className = "think";
+      var thinkSummary = document.createElement("summary");
+      thinkSummary.textContent = "思考链 · 推理与研究底稿（模型注记非权威）";
+      var thinkBody = document.createElement("div");
+      thinkBody.className = "think-body";
+      String(m.thinking).split("\\n").forEach(function(line) {
+        if (!line) return;
+        var row = document.createElement("div");
+        if (line.indexOf("研究底稿｜") === 0) {
+          row.className = "think-line research";
+          var tag = document.createElement("span");
+          tag.className = "think-tag";
+          tag.textContent = "研究底稿";
+          row.appendChild(tag);
+          var note = document.createElement("span");
+          note.textContent = line.replace(/^研究底稿｜/, "");
+          row.appendChild(note);
+        } else {
+          row.className = "think-line model";
+          row.textContent = line;
+        }
+        thinkBody.appendChild(row);
+      });
+      think.appendChild(thinkSummary);
+      think.appendChild(thinkBody);
       div.appendChild(think);
     }
-    var textSpan = document.createElement("span");
-    textSpan.textContent = m.text;
-    div.appendChild(textSpan);
+    if (m.role === "assistant") {
+      var textDiv = document.createElement("div");
+      textDiv.className = "md";
+      textDiv.innerHTML = renderMarkdown(m.text);
+      div.appendChild(textDiv);
+    } else {
+      var textSpan = document.createElement("span");
+      textSpan.textContent = m.text;
+      div.appendChild(textSpan);
+    }
     if (m.artifacts && m.artifacts.length) div.appendChild(renderArtifacts(m.artifacts));
     if (m.cites && m.cites.length) {
       var cites = document.createElement("div");
@@ -535,7 +1026,27 @@ body.has-messages .quick-chips{display:none}
     controller = null;
     updateSend();
   }
-  function renderAgentResult(result, started) {
+  function renderFollowups() {
+    Array.prototype.slice.call(thread.querySelectorAll(".followups")).forEach(function(node) {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+    var row = document.createElement("div");
+    row.className = "followups";
+    [
+      "回款率从 96% 降到 90%，CCI 会怎么变？",
+      "还缺什么证据？"
+    ].forEach(function(text) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "followup";
+      btn.textContent = text;
+      btn.addEventListener("click", function() { sendPrompt(text); });
+      row.appendChild(btn);
+    });
+    thread.appendChild(row);
+    scroll();
+  }
+  function renderAgentResult(result, started, traceSteps, traceMs) {
     var answer = result && typeof result.answer === "string" ? result.answer : "";
     if (!answer && result && result.code) answer = "ERROR " + result.code + (result.note ? "：" + result.note : "");
     if (!answer) answer = "（无 answer 字段）";
@@ -543,7 +1054,8 @@ body.has-messages .quick-chips{display:none}
     var artifacts = ((result && result.toolCalls) || []).map(function(call) { return artifactFromCall(call); }).filter(Boolean);
     var cites = (result && result.citations) || [];
     if (result && result.sessionId) sessionId = result.sessionId;
-    append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: result || null, thinking: (result && result.reasoning) || null });
+    append({ role: "assistant", text: answer, diag: diag, artifacts: artifacts, cites: cites, raw: result || null, thinking: (result && result.reasoning) || null, trace: traceSteps || null, traceMs: traceMs != null ? traceMs : null });
+    if (artifacts.some(function(a) { return a.verdict; })) renderFollowups();
   }
   function streamAgentTurn(prompt, started) {
     var payload = { prompt: prompt, modelConsent: true };
@@ -553,18 +1065,41 @@ body.has-messages .quick-chips{display:none}
     var meta = document.createElement("div");
     meta.className = "live-meta";
     meta.textContent = "正在连接模型…";
+    var traceSteps = [];
+    var traceStarted = started || Date.now();
+    var traceTimer = null;
+    var traceAnswerStep = null;
     var think = document.createElement("details");
     think.className = "think";
-    think.open = false;
+    think.open = true;
     var thinkSummary = document.createElement("summary");
-    thinkSummary.textContent = "思考链";
-    var thinkText = document.createElement("pre");
+    thinkSummary.textContent = "思考链 · 执行中 · 0.0s";
+    var traceHost = document.createElement("div");
     think.appendChild(thinkSummary);
-    think.appendChild(thinkText);
+    think.appendChild(traceHost);
+    function traceRender() {
+      while (traceHost.firstChild) traceHost.removeChild(traceHost.firstChild);
+      traceHost.appendChild(renderTraceBody(traceSteps));
+    }
+    function traceHead() {
+      thinkSummary.textContent = "思考链 · 执行中 · " + formatTraceDuration(Date.now() - traceStarted);
+    }
+    function tracePush(step) {
+      traceSteps.push(step);
+      traceRender();
+    }
+    function stopTrace() {
+      if (traceTimer) { clearInterval(traceTimer); traceTimer = null; }
+      traceSteps.forEach(function(step) { if (step.status === "running") step.status = "failed"; });
+      thinkSummary.textContent = "思考链 · " + traceSteps.length + " 步 · " + formatTraceDuration(Date.now() - traceStarted);
+    }
+    traceRender();
+    traceTimer = setInterval(traceHead, 250);
     var body = document.createElement("div");
     body.className = "live-body";
     var text = document.createElement("span");
-    text.className = "live-text";
+    text.className = "live-text md";
+    var rawText = "";
     var caret = document.createElement("span");
     caret.className = "caret";
     body.appendChild(text);
@@ -583,77 +1118,87 @@ body.has-messages .quick-chips{display:none}
     scroll();
     setBotMood("think");
     var finalResult = null;
-    var thinkCollapsed = false;
-    var pendingBlocks = [];
     controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     function handleEvent(event) {
       if (!event || !event.type) return;
       if (event.type === "thinking") {
         if (typeof event.text === "string" && event.text) {
-          thinkText.textContent += (thinkText.textContent ? "\n" : "") + event.text;
+          if (event.text.indexOf("[route]") === 0) {
+            tracePush({ kind: "route", label: "路由", detail: event.text.replace(/^\\[route\\]\\s*/, ""), status: "done" });
+          } else if (event.source === "research") {
+            tracePush({ kind: "research", label: "研究底稿", detail: event.text.replace(/^研究底稿｜/, ""), status: "done" });
+          } else {
+            var last = traceSteps[traceSteps.length - 1];
+            if (!last || last.kind !== "reasoning" || last.status !== "running") {
+              last = { kind: "reasoning", label: "推理", detail: "", status: "running" };
+              traceSteps.push(last);
+            }
+            last.detail = String(last.detail + event.text).slice(0, 1600);
+            traceRender();
+          }
           think.open = true;
           meta.textContent = "思考中…";
           scroll();
         }
       } else if (event.type === "delta") {
         if (typeof event.text === "string" && event.text) {
-          if (!thinkCollapsed) { think.open = false; thinkCollapsed = true; }
-          text.textContent += event.text;
+          traceSteps.forEach(function(step) { if (step.kind === "reasoning" && step.status === "running") step.status = "done"; });
+          if (!traceAnswerStep) {
+            traceAnswerStep = { kind: "answer", label: "回答", status: "running", detail: "生成中…", startedAt: Date.now() };
+            traceSteps.push(traceAnswerStep);
+          } else {
+            traceAnswerStep.status = "running";
+            traceAnswerStep.detail = "生成中…";
+          }
+          rawText += event.text;
+          text.innerHTML = renderMarkdown(rawText);
           meta.textContent = "正在生成…";
+          traceRender();
           scroll();
         }
       } else if (event.type === "reset") {
-        text.textContent = "";
+        rawText = "";
+        text.innerHTML = "";
         meta.textContent = "工具结果已返回，正在组织回答…";
+        if (traceAnswerStep) { traceAnswerStep.detail = "重新组织回答…"; traceRender(); }
       } else if (event.type === "toolStart") {
-        var block = document.createElement("div");
-        block.className = "tool-live running";
-        var spinner = document.createElement("span");
-        spinner.className = "tool-spinner";
-        var liveName = document.createElement("span");
-        liveName.className = "tool-live-name";
-        liveName.textContent = event.name || "tool";
-        var liveArgs = document.createElement("span");
-        liveArgs.className = "tool-live-args";
-        liveArgs.textContent = String(event.argsPreview || "").slice(0, 120);
-        block.appendChild(spinner);
-        block.appendChild(liveName);
-        block.appendChild(liveArgs);
-        live.insertBefore(block, body);
-        pendingBlocks.push({ step: event.step, name: event.name || "tool", block: block, calls: 0 });
+        tracePush({ kind: "tool", label: event.name || "tool", kindTag: "tool", status: "running", detail: "参数 " + String(event.argsPreview || "").slice(0, 120), startedAt: Date.now(), step: event.step });
         meta.textContent = "执行 " + (event.name || "工具") + "…";
         scroll();
       } else if (event.type === "tool") {
         var calls = event.calls || [];
         calls.forEach(function(call) {
           var pending = null;
-          for (var i = 0; i < pendingBlocks.length; i++) {
-            if (pendingBlocks[i].step === event.step && !pendingBlocks[i].settled && pendingBlocks[i].name === (call.name || "tool")) { pending = pendingBlocks.splice(i, 1)[0]; break; }
+          for (var i = traceSteps.length - 1; i >= 0; i -= 1) {
+            if (traceSteps[i].kind === "tool" && traceSteps[i].status === "running" && traceSteps[i].step === event.step && traceSteps[i].label === (call.name || "tool")) { pending = traceSteps[i]; break; }
           }
-          if (!pending && pendingBlocks.length) pending = pendingBlocks.shift();
-          if (pending && pending.block) {
-            pending.block.classList.remove("running");
-            pending.block.classList.add(call.ok === false ? "failed" : "done");
-            var spinnerEl = pending.block.querySelector(".tool-spinner");
-            if (spinnerEl) spinnerEl.remove();
-            var mark = document.createElement("span");
-            mark.className = "tool-live-mark";
-            mark.textContent = call.ok === false ? "✗" : "✓";
-            pending.block.insertBefore(mark, pending.block.firstChild);
+          if (!pending) {
+            for (var j = traceSteps.length - 1; j >= 0; j -= 1) {
+              if (traceSteps[j].kind === "tool" && traceSteps[j].status === "running") { pending = traceSteps[j]; break; }
+            }
+          }
+          if (pending) {
+            pending.status = call.ok === false ? "failed" : "done";
+            pending.endedAt = Date.now();
+            pending.durationMs = pending.startedAt ? pending.endedAt - pending.startedAt : null;
             var summary = artifactFromCall({ name: call.name, ok: call.ok, result: call.result, error: call.error });
             if (summary && summary.metrics && summary.metrics.length) {
-              var line = document.createElement("span");
-              line.className = "tool-live-summary";
-              line.textContent = summary.metrics.slice(0, 4).map(function(m) { return m.label + " " + m.value; }).join(" · ");
-              pending.block.appendChild(line);
+              pending.detail = summary.metrics.slice(0, 4).map(function(m) { return m.label + " " + m.value; }).join(" · ");
+            } else {
+              pending.detail = call.ok === false ? "失败" : "完成";
             }
           }
         });
         var names = calls.map(function(call) { return (call.name || "tool") + (call.ok === false ? " ✗" : " ✓"); }).join(" · ");
         meta.textContent = "步骤 " + (event.step || "?") + " · " + (names || "工具");
+        traceRender();
         scroll();
       } else if (event.type === "done") {
         finalResult = event.result || null;
+        traceSteps.forEach(function(step) { if (step.status === "running") step.status = "done"; });
+        if (traceAnswerStep) { traceAnswerStep.detail = "生成完成"; traceAnswerStep.durationMs = Date.now() - (traceAnswerStep.startedAt || traceStarted); }
+        stopTrace();
+        traceRender();
       }
     }
     fetch("/api/v1/agent/ask/stream", {
@@ -683,11 +1228,11 @@ body.has-messages .quick-chips{display:none}
       var decoder = new TextDecoder();
       var buffer = "";
       function drain() {
-        var frames = buffer.split("\n\n");
+        var frames = buffer.split("\\n\\n");
         buffer = frames.pop();
         frames.forEach(function(frame) {
           var data = "";
-          frame.split("\n").forEach(function(line) {
+          frame.split("\\n").forEach(function(line) {
             if (line.indexOf("data:") === 0) data += line.slice(5).trim();
           });
           if (!data) return;
@@ -697,7 +1242,7 @@ body.has-messages .quick-chips{display:none}
       function pump() {
         return reader.read().then(function(chunk) {
           if (chunk.done) {
-            if (buffer.trim()) { buffer += "\n\n"; drain(); }
+            if (buffer.trim()) { buffer += "\\n\\n"; drain(); }
             return;
           }
           buffer += decoder.decode(chunk.value, { stream: true });
@@ -708,25 +1253,39 @@ body.has-messages .quick-chips{display:none}
       return pump();
     }).then(function() {
       if (!finalResult) throw new Error("流式响应未返回 done 事件");
+      stopTrace();
       if (row.parentNode) row.parentNode.removeChild(row);
       setBotMood("idle"); // 先释放 think（think 有优先级保护，直接切 happy 会被挡）
       setBotMood(finalResult && finalResult.harnessStatus === "ok" ? "happy" : "idle", 1600);
-      renderAgentResult(finalResult, started);
+      renderAgentResult(finalResult, started, traceSteps, Date.now() - traceStarted);
     }).catch(function(error) {
+      stopTrace();
       if (row.parentNode) row.parentNode.removeChild(row);
       setBotMood("idle");
       setBotMood("alert", 1600);
       if (error && error.name === "AbortError") {
-        var partial = text.textContent;
-        append({ role: "assistant", text: (partial ? partial + "\n\n" : "") + "（已停止）", diag: [["stopped", "badge-warn"]] });
+        var partial = rawText;
+        append({ role: "assistant", text: (partial ? partial + "\\n\\n" : "") + "（已停止）", diag: [["stopped", "badge-warn"]], trace: traceSteps, traceMs: Date.now() - traceStarted });
         return;
       }
-      append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)) });
-    }).finally(finishTurn);
+      append({ role: "assistant", text: "请求失败：" + (error && error.message ? error.message : String(error)), trace: traceSteps, traceMs: Date.now() - traceStarted });
+    }).finally(function() {
+      if (traceTimer) { clearInterval(traceTimer); traceTimer = null; }
+      finishTurn();
+    });
+  }
+  function sendPrompt(text) {
+    if (busy) return;
+    input.value = text;
+    updateSend();
+    send();
   }
   function send() {
     var prompt = input.value.trim();
     if (!prompt || busy) return;
+    Array.prototype.slice.call(thread.querySelectorAll(".followups")).forEach(function(node) {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
     append({ role: "user", text: prompt });
     input.value = "";
     busy = true;
@@ -773,10 +1332,14 @@ body.has-messages .quick-chips{display:none}
   }
 
   var samples = {
-    "完整自然语言": "我们是一家 AI 推理服务商，评估周期 2026-08-01 到 2026-08-31，主卡 H100。近六个月：3月 token 72M、有效率 92%、收入 94000 美元、支出 55000 美元；4月 75M、93%、96000、56000；5月 77M、93%、97000、56500；6月 79M、94%、99000、57500；7月 81M、94%、101000、59000；8月 80M、94%、100000、58000。本月输入 token 64M、输出 16M、有效率 94%。GPU 4200 小时。月收入 100000 美元，算力支出 58000 美元。回款率 96%，30 天逾期 2%，付费客户 168 家，前五大占 36%。经营 720 天，数据覆盖率 100%。申报序列 R 是 64,65,63,67,68,66,70,71；可信序列 C 是 62,63,62,65,66,65,68,69。",
+    "示例运营商评估": "公司名称：Acme Inference（示例）。这是一家示例公司（非真实主体）。我们是一家 AI 推理服务商，评估周期 2026-08-01 到 2026-08-31，主卡 H100。近六个月：3月 token 72M、有效率 92%、收入 94000 美元、支出 55000 美元；4月 75M、93%、96000、56000；5月 77M、93%、97000、56500；6月 79M、94%、99000、57500；7月 81M、94%、101000、59000；8月 80M、94%、100000、58000。本月输入 token 64M、输出 16M、有效率 94%。GPU 4200 小时。月收入 100000 美元，算力支出 58000 美元。回款率 96%，30 天逾期 2%，付费客户 168 家，前五大占 36%。经营 720 天，数据覆盖率 100%。申报序列 R 是 64,65,63,67,68,66,70,71；可信序列 C 是 62,63,62,65,66,65,68,69。",
     "官方模板": "请帮我评估一家 AI 推理服务商的交易对手风险。这家公司主要使用 H100 GPU，最近一个月 GPU 使用量约 4200 小时，月收入约 10 万美元，算力支出约 5.8 万美元。历史还款率约 96%，30 天以上逾期率约 2%，目前有 168 个付费客户，前 5 大客户贡献约 36% 的收入。请根据这些信息给出风险评估，如果信息不足，请明确告诉我还缺哪些数据，不要自行编造",
     "纯 JSON 字段": '{"taskType":"inference","gpuModel":"h100-equivalent","periodStart":"2026-08-01","periodEnd":"2026-08-31","inputTokensM":64,"outputTokensM":16,"validRatePct":94,"gpuHours":4200,"revenueUsd":100000,"computeSpendUsd":58000,"repaymentRatePct":96,"overdue30Pct":2,"payingCustomers":168,"top5ConcentrationPct":36,"operatingHistoryDays":720,"dataCoveragePct":100,"monthlySeries":[{"period":"2026-03","rawTokensM":72,"validRatePct":92,"revenueUsd":94000,"computeSpendUsd":55000},{"period":"2026-04","rawTokensM":75,"validRatePct":93,"revenueUsd":96000,"computeSpendUsd":56000},{"period":"2026-05","rawTokensM":77,"validRatePct":93,"revenueUsd":97000,"computeSpendUsd":56500},{"period":"2026-06","rawTokensM":79,"validRatePct":94,"revenueUsd":99000,"computeSpendUsd":57500},{"period":"2026-07","rawTokensM":81,"validRatePct":94,"revenueUsd":101000,"computeSpendUsd":59000},{"period":"2026-08","rawTokensM":80,"validRatePct":94,"revenueUsd":100000,"computeSpendUsd":58000}],"R":[64,65,63,67,68,66,70,71],"C":[62,63,62,65,66,65,68,69]}',
     "问候": "你好，你能做什么？",
+    "Anthropic 算力承诺": "查一下 Anthropic 的公开算力承诺和流动性：总承诺、12 个月内到期、流动性、保守覆盖度分别是多少？这些数字意味着什么？",
+    "NVIDIA 公开财务": "查一下 NVIDIA 的公开财务：收入、毛利、经营利润、现金和债务，并说明这些数据能支持什么、不能支持什么。",
+    "查一家上市算力公司": "查一下 CoreWeave 的公开财务：收入、毛利、经营利润、现金和债务，并说明这些数据能支持什么、不能支持什么。",
+    "算力体系的接缝风险": "用算力知识图谱解释：需求断裂和资本到期墙这两个接缝风险分别是什么？它们怎么传导到算力运营商的偿债能力？",
     "Arweave 范围外": "Arweave 过去 30 天存储收入 1,200,000 美元，付费用户 4,800 个，协议收入环比增长 12%"
   };
   chips.addEventListener("click", function(event) {
@@ -794,10 +1357,19 @@ body.has-messages .quick-chips{display:none}
       send();
     }
   });
-  consent.addEventListener("change", function() {
-    var label = consent.checked ? "agent loop · tools+LLM" : "deterministic · no model call";
+  function updateModeLabel() {
+    var label = consent.checked ? "Agent 编排 · 引擎裁决" : "确定性模式 · 无模型调用";
     consentLabel.textContent = label;
     modeLabel.textContent = label;
+  }
+  try {
+    var savedConsent = localStorage.getItem(CONSENT);
+    consent.checked = demoMode || savedConsent === "1";
+  } catch (e) { consent.checked = demoMode; }
+  updateModeLabel();
+  consent.addEventListener("change", function() {
+    updateModeLabel();
+    try { localStorage.setItem(CONSENT, consent.checked ? "1" : "0"); } catch (e) {}
   });
   sendBtn.addEventListener("click", function() {
     if (busy) stopStream(); else send();
@@ -820,4 +1392,7 @@ body.has-messages .quick-chips{display:none}
 })();
 </script>
 </body>
-</html>
+</html>`;
+
+writeFileSync(join(HERE, "chat.html"), html);
+process.stdout.write(`console chat built: agent/console/chat.html (${(html.length / 1024).toFixed(1)} KB)\n`);

@@ -1,5 +1,5 @@
 /*
- * agent/src/connectors/sec-filings.js — SEC 申报全文抽取连接器 v0.2.0（documented 级）
+ * agent/src/connectors/sec-filings.js — SEC 申报全文抽取连接器 v0.5.1（documented 级）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 只读白名单域名（www.sec.gov / data.sec.gov）：submissions 索引、Archives 主文档、
@@ -21,7 +21,7 @@
 
 import { createHash } from "node:crypto";
 
-export const SEC_FILINGS_VERSION = "sec-filings/v0.5.0";
+export const SEC_FILINGS_VERSION = "sec-filings/v0.5.1";
 export const EXTRACTION_PATTERN_VERSION = "commitments-text/v0.2";
 export const SEC_FILINGS_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 export const SEC_SUBMISSIONS_URL = cik => `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;
@@ -196,7 +196,7 @@ export function commitmentCoverageFrom(extracted) {
 }
 
 /**
- * 事件文档核实（纯函数）：识别破产/退市/重组三类一手披露，提取事件日期与原文片段。
+ * 事件文档核实（纯函数）：识别破产/交易所合规通知/重组三类一手披露，提取事件日期与原文片段。
  * verified=false 时必须带 reason——机器只提议，入库由人工评审决定。
  */
 export function classifyEventDocument(text) {
@@ -204,7 +204,7 @@ export function classifyEventDocument(text) {
   if (!source) return { verified: false, eventType: null, eventDate: null, snippet: null, reason: "empty document" };
   const markers = [
     { eventType: "bankruptcy", pattern: /Item\s*1\.03|Bankruptcy or Receivership/i },
-    { eventType: "delisting", pattern: /Item\s*3\.01|Notice of Delisting/i },
+    { eventType: "listing-deficiency", pattern: /Item\s*3\.01|Notice of Delisting/i },
     { eventType: "restructuring", pattern: /Restructuring Support Agreement|debt.?for.?equity|debt exchange|recapitalization/i }
   ];
   for (const marker of markers) {
@@ -224,7 +224,7 @@ export function classifyEventDocument(text) {
       snippet: window.slice(0, 300)
     };
   }
-  return { verified: false, eventType: null, eventDate: null, snippet: null, reason: "no bankruptcy/delisting/restructuring marker in the document" };
+  return { verified: false, eventType: null, eventDate: null, snippet: null, reason: "no bankruptcy/listing-deficiency/restructuring marker in the document" };
 }
 
 /**
@@ -335,7 +335,7 @@ export function createSecFilingsConnector({ transport, userAgent, timeoutMs = 15
     return { company, filings: out };
   }
 
-  /** 抓取一份申报主文档并做事件分类（破产/退市/重组），带 sha256 与片段。 */
+  /** 抓取一份申报主文档并做事件分类（破产/交易所合规通知/重组），带 sha256 与片段。 */
   /** 抓取申报主文档全文（HTML→文本，供承诺/事件模式匹配；确定性）。 */
   async function fetchFilingText({ cik, accession, primaryDocument } = {}) {
     if (!cik || !accession || !primaryDocument) throw filingError("FILING_ARGS_REQUIRED", "cik, accession and primaryDocument are required");

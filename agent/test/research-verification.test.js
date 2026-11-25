@@ -58,16 +58,16 @@ test("deflate: Bonferroni over the effective family can strip a borderline raw s
   assert.match(deflated.method.note, /declared honestly/);
 });
 
-test("classifyEventDocument detects bankruptcy/delisting/restructuring with dates and snippets", () => {
+test("classifyEventDocument detects bankruptcy/listing-deficiency/restructuring with dates and snippets", () => {
   const bankruptcy = classifyEventDocument("Item 1.03 Bankruptcy or Receivership Chapter 11 Filing On December 21, 2022, Core Scientific, Inc. and certain of its affiliates filed voluntary petitions for relief.");
   assert.equal(bankruptcy.verified, true);
   assert.equal(bankruptcy.eventType, "bankruptcy");
   assert.equal(bankruptcy.eventDate, "2022-12-21");
   assert.match(bankruptcy.snippet, /Core Scientific/);
 
-  const delisting = classifyEventDocument("Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule; Date of Report: December 16, 2022");
-  assert.equal(delisting.eventType, "delisting");
-  assert.equal(delisting.eventDate, "2022-12-16");
+  const listingDeficiency = classifyEventDocument("Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule; Date of Report: December 16, 2022");
+  assert.equal(listingDeficiency.eventType, "listing-deficiency");
+  assert.equal(listingDeficiency.eventDate, "2022-12-16");
 
   const restructuring = classifyEventDocument("Item 1.01 Entry into a Material Definitive Agreement — the Restructuring Support Agreement dated February 7, 2023 provides for a debt-for-equity exchange.");
   assert.equal(restructuring.eventType, "restructuring");
@@ -75,7 +75,7 @@ test("classifyEventDocument detects bankruptcy/delisting/restructuring with date
 
   const none = classifyEventDocument("Quarterly results were announced today with record revenue.");
   assert.equal(none.verified, false);
-  assert.match(none.reason, /no bankruptcy\/delisting\/restructuring marker/);
+  assert.match(none.reason, /no bankruptcy\/listing-deficiency\/restructuring marker/);
 });
 
 const recent = { filings: { recent: { form: ["8-K", "10-Q", "8-K"], filingDate: ["2026-10-01", "2026-11-01", "2025-06-01"], accessionNumber: ["a-recent-1", "a-recent-2", "a-old-2"], primaryDocument: ["r1.htm", "q1.htm", "o2.htm"], items: ["7.01", null, "2.02"] }, files: [{ name: "CIK0000000001-submissions-001.json" }] } };

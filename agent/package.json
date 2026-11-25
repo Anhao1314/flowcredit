@@ -15,7 +15,7 @@
     "smoke:external-alpha": "node scripts/external-alpha-smoke.js",
     "eval:agent": "node eval/run-eval.js",
     "eval": "node ../quant/eval/run-eval.js",
-    "console": "node ../quant/console/build.js && node ../quant/console/chat-build.js",
+    "console": "node ../quant/console/build.js && node console/chat-build.js",
     "serve": "node ../quant/agent/server.js",
     "paper": "node ../quant/paper/runner.js",
     "test:quant": "node --test ../quant/test/*.test.js",

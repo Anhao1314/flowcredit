@@ -26,6 +26,7 @@ import { TtlSessionStore } from "../core/session-store.js";
 import { RunRecord } from "../core/run-record.js";
 import { INTAKE_SCHEMA_V03 } from "./intake-v03.js";
 import { classifyDeterministicIntent, isToolAllowed, allowedFamiliesFor, intentFromTools } from "./risk-intents.js";
+import { researchNotesFor } from "./research/research-notes.js";
 
 export const MAX_STEPS_RISK = 4;
 export const RETRY_BUDGET_RISK = 1;
@@ -61,6 +62,7 @@ export const SYSTEM_PROMPT_RISK = [
   "- The prompt names a public company/ticker and asks for its public financials, filings or debt: call lookup_public_company FIRST with the name or ticker. Report only the returned facts with their form/filing date; never invent numbers. This source has no token activity, GPU hours, repayment or customer concentration — say so and list what operator data is still required.",
   "- The prompt names a public company and asks for a risk/leverage/solvency view: call assess_public_company (SEC facts → capital-structure overlay). Report the solvency score, CCI cap and the missing operator fields; do not claim a full TAI/CCI grade from public data alone.",
   "- The user asks about off-balance-sheet compute/lease commitments, committed spend or next-12-month obligations of a public company (算力承诺, 承诺覆盖, committed spend): call fetch_public_commitments with the name or ticker. It also extracts shares outstanding and (when the price feed is up) market cap. Report extracted figures WITH the caveat that they are text-extracted (documented tier, weaker than XBRL) and filing sentences are included for verification; a null means not found, never zero.",
+  "- The prompt asks about management changes, CEO/CFO departures, appointments or reinstatements of a public company (管理层变动/辞任/复任/治理事件): call query_governance_events with the name or ticker. Report only verified events with dates/persons/sources; this is a governance overlay, NOT a credit-event label and NOT a stock prediction.",
   "- The target is a HK-listed / non-SEC company (港股, MiniMax, 港交所代码): call query_hkex_filings (name=<前缀> for discovery, or stockId to list announcements; events=true screens titles). HKEX announcements are PDFs — report titles/dates/links only; financial-number extraction is not wired, so never quote numbers this tool did not return. SEC tools (lookup_public_company etc.) do not cover HK-listed names.",
   "- The prompt already contains business facts (a JSON object, or two or more concrete figures): call assess_prompt ONCE with the raw user text. Never pre-extract or pre-validate first.",
   "- CSV payload: import_csv, then assess_draft on its draft.",
@@ -370,13 +372,14 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const run = beginRun("ask-stream", startedAt);
     const requestId = `risk-${startedAt}-${runSequence}`;
     const intentInfo = typeof prompt === "string" ? classifyDeterministicIntent(prompt) : { intent: "unclear" };
+    const researchMode = intentInfo.intent === "what-if" ? "what-if" : "assessment";
     const emit = event => { try { onEvent(event); } catch { /* 观察者异常不污染主流程 */ } };
     // 思考链：确定性路由说明 + 模型 reasoning_content（如有）。全部是注记层，非权威。
     let reasoning = "";
-    const think = text => {
+    const think = (text, source) => {
       if (!text) return;
       reasoning += (reasoning ? "\n" : "") + text;
-      emit({ type: "thinking", text });
+      emit({ type: "thinking", text, ...(source ? { source } : {}) });
     };
     const finish = result => {
       if (reasoning) result.reasoning = reasoning;
@@ -421,7 +424,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
       return finish(result);
     }
 
-    think("[route] modelConsent=true → agent 循环：4 步工具轮预算，工具输出权威，模型只做编排与叙述；思考链=模型 reasoning_content（如有）+ 确定性路由说明");
+    think("[route] modelConsent=true → agent 循环：4 步工具轮预算，工具输出权威，模型只做编排与叙述；思考链=路由说明 + 研究底稿 + 模型 reasoning（如有）");
     if (typeof client.chatStream !== "function") {
       // 无流式能力的 client：退化为一次性 askRisk（自身写审计），此处不再重复写。
       const result = await askRisk({ prompt, modelConsent: true, sessionId });
@@ -437,6 +440,7 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
     const toolCalls = [];
     let steps = 0;
     let totalUsage = null;
+    let researchNotesEmitted = false;
 
     for (let step = 1; step <= MAX_STEPS_RISK; step += 1) {
       let message = null;
@@ -528,6 +532,18 @@ export function createRiskAssistant({ client, registry, audit, deterministicChat
             error: result.ok ? null : { code: result.error, message: result.message ?? null }
           });
           messages.push({ role: "tool", tool_call_id: call?.id ?? `call-${step}`, content: JSON.stringify(result) });
+        }
+        if (!researchNotesEmitted) {
+          const completed = toolCalls.slice(before);
+          const assessmentCall = completed.find(call => (call.name === "assess_prompt" || call.name === "assess_draft") && call.ok && call.result && (call.result.assessed === true || call.result.authoritative));
+          const whatIfCall = completed.find(call => call.name === "what_if" && call.ok && call.result && call.result.assessed === true);
+          if (researchMode === "assessment" && assessmentCall) {
+            for (const note of researchNotesFor("facts")) think(note, "research");
+            researchNotesEmitted = true;
+          } else if (researchMode === "what-if" && whatIfCall) {
+            for (const note of researchNotesFor("what-if")) think(note, "research");
+            researchNotesEmitted = true;
+          }
         }
         emit({ type: "tool", step, calls: toolCalls.slice(before), started: Array.isArray(message.tool_calls) ? message.tool_calls.map(c => c?.function?.name ?? null) : [] });
         continue;

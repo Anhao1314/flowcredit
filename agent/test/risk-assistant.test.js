@@ -257,7 +257,10 @@ test("stream path emits delta/tool/done with identical authority semantics", asy
   const { assistant } = buildAssistant(scenarios);
   const events = [];
   const result = await assistant.askRiskStream({ prompt: "评估 healthy", modelConsent: true, sessionId: "sess-stream-1", onEvent: event => events.push(event) });
-  assert.deepEqual(events.map(event => event.type), ["thinking", "delta", "reset", "toolStart", "tool", "done"], "toolStart precedes tool for live rendering");
+  assert.deepEqual(events.map(event => event.type), ["thinking", "delta", "reset", "toolStart", "thinking", "thinking", "thinking", "tool", "done"], "toolStart precedes tool for live rendering; research notes follow the tool result");
+  const researchEvents = events.filter(event => event.type === "thinking" && event.source === "research");
+  assert.equal(researchEvents.length, 3, "assessment emits three research notes");
+  assert.ok(researchEvents.every(event => event.text.startsWith("研究底稿｜")), "research notes are provenance-labeled");
   assert.equal(events.find(e => e.type === "toolStart").name, "assess_draft");
   assert.ok(events.find(e => e.type === "toolStart").argsPreview.includes("healthy"));
   assert.equal(events[0].text.startsWith("[route] modelConsent=true"), true, "the deterministic route is disclosed first");

@@ -33,6 +33,7 @@ import { createPriceFeed } from "./connectors/prices.js";
 import { createResearchService } from "./research/panel.js";
 import { loadPredictionLedgerFile, DEFAULT_PREDICTIONS_FILE } from "./research/predictions.js";
 import { loadCreditEventsFile, DEFAULT_CREDIT_EVENTS_FILE } from "./research/credit-events.js";
+import { loadGovernanceEventsFile, DEFAULT_GOVERNANCE_EVENTS_FILE } from "./research/governance-events.js";
 import { loadComputeGraphFile, DEFAULT_COMPUTE_GRAPH_FILE } from "./knowledge/compute-graph.js";
 import { createRiskAssistant } from "./risk-assistant.js";
 import { createRiskClient } from "./risk-client.js";
@@ -46,7 +47,7 @@ const FINCH_AGENT_PATH = "/api/finch/agent";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SITE_ROOT = resolve(process.env.FC_SITE_ROOT || "/site");
-const CHAT_HTML_PATH = process.env.FC_CHAT_HTML || join(ROOT, "..", "quant", "console", "chat.html");
+const CHAT_HTML_PATH = process.env.FC_CHAT_HTML || join(ROOT, "console", "chat.html");
 const RUNTIME_ROOT = resolve(process.env.FC_RUNTIME_ROOT || join(ROOT, "..", "..", "fc-agent", "runtime"));
 const BODY_LIMIT = 64 * 1024;
 const sessions = new SessionStore();
@@ -382,7 +383,7 @@ async function route(req, res, requestId, context = {}) {
       res.end(html);
       return null; // 与静态服务一致：已自行写响应，不把 res 交给日志哈希
     } catch {
-      return sendJson(res, 503, { ok: false, errorCode: "CHAT_PAGE_NOT_INSTALLED", error: "chat page not installed — mount quant/console/chat.html or set FC_CHAT_HTML" }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 });
+      return sendJson(res, 503, { ok: false, errorCode: "CHAT_PAGE_NOT_INSTALLED", error: "chat page not installed — mount agent/console/chat.html or set FC_CHAT_HTML" }, requestId, { canonical: true, apiVersion: PUBLIC_API_VERSION, schemaVersion: PRODUCT_VERSION_V03 });
     }
   }
   if (req.method === "POST" && url.pathname === FINCH_ASSESS_PATH) {
@@ -476,6 +477,12 @@ function creditEventsForServer(env) {
   return loadCreditEventsFile(env?.FC_CREDIT_EVENTS_FILE || DEFAULT_CREDIT_EVENTS_FILE);
 }
 
+/** 治理事件 overlay：默认 agent/research/governance-events.json，FC_GOVERNANCE_EVENTS_FILE 可覆盖；缺失 → null，非法 → 抛错。 */
+function governanceEventsForServer(env) {
+  const loaded = loadGovernanceEventsFile(env?.FC_GOVERNANCE_EVENTS_FILE || DEFAULT_GOVERNANCE_EVENTS_FILE);
+  return loaded ? loaded.events : null;
+}
+
 /** 算力知识图谱：默认 agent/knowledge/compute-graph.json，FC_COMPUTE_GRAPH_FILE 可覆盖；缺失 → null，非法 → 抛错。 */
 function computeGraphForServer(env) {
   return loadComputeGraphFile(env?.FC_COMPUTE_GRAPH_FILE || DEFAULT_COMPUTE_GRAPH_FILE);
@@ -516,6 +523,7 @@ export function createFlowCreditServer(options = {}) {
   const researchLabels = options.researchLabels ?? loadResearchLabelsFile(options.env || process.env);
   const predictionLedger = options.predictionLedger ?? predictionLedgerForServer(options.env || process.env);
   const creditEvents = options.creditEvents ?? creditEventsForServer(options.env || process.env);
+  const governanceEvents = options.governanceEvents ?? governanceEventsForServer(options.env || process.env);
   const computeGraph = options.computeGraph ?? computeGraphForServer(options.env || process.env);
   const research = options.researchService || createResearchService({
     secEdgar,
@@ -526,7 +534,7 @@ export function createFlowCreditServer(options = {}) {
   });
   const riskAgent = options.riskAssistant || createRiskAssistant({
     client: options.riskAgentClient || createRiskClient({ env: options.env || process.env }),
-    registry: createRiskToolRegistry({ connectors, secEdgar, filings, hkex, priceFeed, research, predictionLedger, computeGraph }),
+    registry: createRiskToolRegistry({ connectors, secEdgar, filings, hkex, priceFeed, research, predictionLedger, computeGraph, governanceEvents }),
     audit: options.riskAudit || createRiskAuditLogger(),
     deterministicChat: ({ prompt, sessionId, requestId }) =>
       chatPipeline.buildChatPayload({ prompt, ...(sessionId ? { sessionId } : {}) }, requestId)

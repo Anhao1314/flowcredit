@@ -125,7 +125,9 @@ test("standalone chat page is served by the business agent", async () => {
     assert.match(html, /text\/event-stream/);
     assert.match(html, /event\.type === "delta"/, "stream deltas append to the live bubble");
     assert.match(html, /event\.type === "thinking"/, "chain-of-thought events render in the live bubble");
-    assert.match(html, /思考链 · 模型注记（非权威）/, "persisted messages expose the thinking chain as a collapsed note");
+    assert.match(html, /思考链 · 推理与研究底稿（模型注记非权威）/, "persisted messages expose the thinking chain as a collapsed note");
+    assert.match(html, /event\.source === "research"/, "research notes render as a distinct thinking line");
+    assert.match(html, /研究底稿/, "research provenance is visible in the thinking chain");
     assert.doesNotMatch(html, /\/api\/finch\/agent/, "agent mode no longer uses the unary finch route");
     assert.match(html, /\/api\/finch\/assess/, "deterministic mode stays on the unary assess route");
     assert.match(html, /bot-avatar/, "Q-style assistant avatar generator present");

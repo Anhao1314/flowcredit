@@ -17,7 +17,7 @@ const CSV = [
 test("risk tool registry is closed, schema-safe and exposes the deterministic tools plus the SEC lookup", () => {
   const registry = createRiskToolRegistry({ connectors });
   assert.deepEqual(registry.list.map(tool => tool.name).sort(), [
-    "assess_draft", "assess_prompt", "assess_public_company", "attach_evidence", "build_research_panel", "build_scoring_model", "calibration_report", "check_predictions", "extract_from_text", "factor_report", "fetch_public_commitments", "import_csv", "lookup_public_company", "preset_draft", "query_compute_knowledge", "query_hkex_filings", "replay_report", "search_filing_texts", "validate_draft", "verify_credit_events", "what_if"
+    "assess_draft", "assess_prompt", "assess_public_company", "attach_evidence", "build_research_panel", "build_scoring_model", "calibration_report", "check_predictions", "extract_from_text", "factor_report", "fetch_public_commitments", "import_csv", "lookup_public_company", "preset_draft", "query_compute_knowledge", "query_governance_events", "query_hkex_filings", "replay_report", "search_filing_texts", "validate_draft", "verify_credit_events", "what_if"
   ]);
   for (const schema of registry.schemas) {
     assert.equal(schema.type, "function");
@@ -25,6 +25,20 @@ test("risk tool registry is closed, schema-safe and exposes the deterministic to
     assert.ok(typeof schema.function.description === "string" && schema.function.description.length > 10);
   }
   assert.equal(registry.get("assess_frozen_dataset"), null);
+});
+
+test("query_governance_events reads the verified overlay and never calls it a credit event", () => {
+  const governanceEvents = [{ ticker: "NVDA", cik: 1045810, eventType: "ceo-departure", eventDate: "2026-11-11", person: "Jen-Hsun Huang", role: "CEO", source: "8-K accession 0001045810-26-000082" }];
+  const registry = createRiskToolRegistry({ connectors, governanceEvents });
+  const result = registry.get("query_governance_events").execute({ query: "NVDA" });
+  assert.equal(result.ok, true);
+  assert.equal(result.count, 1);
+  assert.equal(result.events[0].eventType, "ceo-departure");
+  assert.match(result.note, /not a credit-event label/);
+  assert.equal(registry.get("query_governance_events").execute({ query: "AMD" }).count, 0);
+  const unconfigured = createRiskToolRegistry({ connectors }).get("query_governance_events").execute({ query: "NVDA" });
+  assert.equal(unconfigured.ok, false);
+  assert.equal(unconfigured.code, "GOVERNANCE_EVENTS_UNAVAILABLE");
 });
 
 test("assess_draft golden: healthy fixture reaches Grade A with TAI/CCI and fingerprints", () => {

@@ -198,7 +198,7 @@ export function createQuantConsoleServer(options = {}) {
   }
 
   const consolePath = join(QUANT, "console", "index.html");
-  const chatPath = join(QUANT, "console", "chat.html");
+  const chatPath = join(QUANT, "..", "agent", "console", "chat.html");
 
   const server = createServer(async (req, res) => {
     const startedAt = nowMs();
@@ -237,7 +237,7 @@ export function createQuantConsoleServer(options = {}) {
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" });
           return res.end(html);
         } catch {
-          return send(500, { ok: false, error: "chat artifact missing — run node quant/console/chat-build.js" });
+          return send(500, { ok: false, error: "chat artifact missing — run node agent/console/chat-build.js" });
         }
       }
 

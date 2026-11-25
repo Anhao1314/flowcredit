@@ -1,5 +1,5 @@
 /*
- * agent/src/research/credit-events.js — 显式信用事件标签库 v0.2（纯确定性，零网络）
+ * agent/src/research/credit-events.js — 显式信用事件标签库 v0.3（纯确定性，零网络）
  *
  * 不做什么（硬约束，违反即架构破坏；本文件任何后续修改不得删除或弱化本段）：
  *   1. 事件必须带出处（source 引用 = 申报文件 accession 或可核查的公开记录）；
@@ -9,15 +9,20 @@
  *   3. 无申报日（filed 缺失）的观测 → 标签 null（既不算正例也不算负例）。
  *   4. 本文件不做任何网络请求、不读时钟；"现在"由调用方持有（标签映射不需要时钟）。
  *   5. 事件类型受白名单约束；扩类型 = 版本升级 + 人工评审。
+ *   6. 双标签：labelCreditEvent = 严格信用事件（破产/重组/实际退市/违约/困境出售）；
+ *      labelDistressEvent = 广义困境信号（额外包含 listing-deficiency 交易所合规通知）。
+ *      校准/回放使用严格标签；通知类事件不得冒充信用事件正例。
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const CREDIT_EVENTS_VERSION = "flowcredit.credit-events/v0.2";
+export const CREDIT_EVENTS_VERSION = "flowcredit.credit-events/v0.3";
 export const DEFAULT_CREDIT_EVENTS_FILE = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "research", "credit-events.json");
-export const CREDIT_EVENT_TYPES = Object.freeze(["bankruptcy", "restructuring", "delisting", "default", "distress-sale"]);
+export const CREDIT_EVENT_TYPES = Object.freeze(["bankruptcy", "restructuring", "delisting", "default", "distress-sale", "listing-deficiency"]);
+/** 严格信用事件：进入 labelCreditEvent / 校准 / 回放。listing-deficiency 只进入 labelDistressEvent。 */
+export const STRICT_CREDIT_EVENT_TYPES = Object.freeze(["bankruptcy", "restructuring", "delisting", "default", "distress-sale"]);
 /** 前瞻窗口（天）：事件发生在申报日之后 N 天内 → 该观测记为信用事件正例。冻结常量。 */
 export const CREDIT_EVENT_FORWARD_WINDOW_DAYS = 365;
 
@@ -71,28 +76,38 @@ export function annotateObservationsWithCreditEvents(observations, events, { for
     }
   }
   const windowMs = forwardWindowDays * 86_400_000;
+  const strictTypes = new Set(STRICT_CREDIT_EVENT_TYPES);
   return (observations || []).map(observation => {
     const filedMs = observation?.filed ? Date.parse(observation.filed) : NaN;
-    if (!Number.isFinite(filedMs)) return { ...observation, labelCreditEvent: null };
+    if (!Number.isFinite(filedMs)) return { ...observation, labelCreditEvent: null, labelDistressEvent: null };
     let candidates = byTicker.get(String(observation.ticker || "").toUpperCase()) || [];
     if (!candidates.length && Number.isFinite(Number(observation.cik))) {
       candidates = byCik.get(String(Number(observation.cik))) || [];
     }
-    const hit = candidates.some(event => {
+    const inWindow = event => {
       const eventMs = Date.parse(event.eventDate);
       return Number.isFinite(eventMs) && eventMs > filedMs && eventMs <= filedMs + windowMs;
-    });
-    return { ...observation, labelCreditEvent: hit ? 1 : 0 };
+    };
+    const creditHit = candidates.some(event => strictTypes.has(event.eventType) && inWindow(event));
+    const distressHit = candidates.some(event => inWindow(event));
+    return { ...observation, labelCreditEvent: creditHit ? 1 : 0, labelDistressEvent: distressHit ? 1 : 0 };
   });
 }
 
-/** 因子报告用的标签映射：键 = TICKER|periodEnd，值 = 1|0（仅含有标签的观测）。 */
+/** 因子报告用的标签映射：键 = TICKER|periodEnd，值 = 1|0（仅含有标签的观测）。
+ * 默认严格信用事件；传 { labelField: "labelDistressEvent" } 可取广义困境标签。 */
 export function creditEventLabelMap(observations, events, options = {}) {
+  const labelField = options.labelField === "labelDistressEvent" ? "labelDistressEvent" : "labelCreditEvent";
   const annotated = annotateObservationsWithCreditEvents(observations, events, options);
   const labels = {};
   for (const observation of annotated) {
-    if (observation.labelCreditEvent === null || observation.labelCreditEvent === undefined) continue;
-    labels[`${String(observation.ticker).toUpperCase()}|${observation.periodEnd}`] = observation.labelCreditEvent;
+    if (observation[labelField] === null || observation[labelField] === undefined) continue;
+    labels[`${String(observation.ticker).toUpperCase()}|${observation.periodEnd}`] = observation[labelField];
   }
   return labels;
+}
+
+/** 广义困境标签映射（区分于严格信用事件；显式调用，避免被误用于校准）。 */
+export function creditDistressLabelMap(observations, events, options = {}) {
+  return creditEventLabelMap(observations, events, { ...options, labelField: "labelDistressEvent" });
 }

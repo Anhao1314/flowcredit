@@ -78,6 +78,7 @@ export const TOOL_FAMILIES = Object.freeze({
   assess_public_company: "public-data",
   fetch_public_commitments: "public-data",
   query_hkex_filings: "public-data",
+  query_governance_events: "public-data",
   build_research_panel: "research",
   factor_report: "research",
   build_scoring_model: "research",

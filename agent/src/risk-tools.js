@@ -23,6 +23,7 @@ import { observationsForCompany } from "./research/panel.js";
 import { buildPredictionReport } from "./research/predictions.js";
 import { commitmentCoverageFrom } from "./connectors/sec-filings.js";
 import { queryComputeKnowledge } from "./knowledge/compute-graph.js";
+import { governanceEventsFor } from "./research/governance-events.js";
 import { getPresetV021 } from "./presets.js";
 import { addFinchIdentity, deterministicFingerprintPayload, finchAssessmentFingerprint, finchInputFingerprint } from "./finch-contract.js";
 import { createCoreToolRegistry } from "../core/tool-registry.js";
@@ -128,7 +129,7 @@ function publicDraftFromLookup(lookup) {
   };
 }
 
-export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, hkex = null, priceFeed = null, research = null, predictionLedger = null, computeGraph = null, nowMs = () => new Date().toISOString() } = {}) {
+export function createRiskToolRegistry({ connectors, secEdgar = null, filings = null, hkex = null, priceFeed = null, research = null, predictionLedger = null, computeGraph = null, governanceEvents = null, nowMs = () => new Date().toISOString() } = {}) {
   const tools = [
     {
       name: "assess_draft",
@@ -416,7 +417,7 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
     },
     {
       name: "verify_credit_events",
-      description: "The event-verification pipeline (machine proposes, human approves): scan a company's 8-K filings in a date window, fetch each primary document and deterministically verify bankruptcy/delisting/restructuring disclosures (Item 1.03/3.01 markers, RSA/debt-exchange keywords), extracting the event date and an original-text snippet. Verified candidates come with citations (accession + sha256) but are PROPOSALS — adding one to the credit-event label file requires human review; nothing is written automatically.",
+      description: "The event-verification pipeline (machine proposes, human approves): scan a company's 8-K filings in a date window, fetch each primary document and deterministically verify bankruptcy/listing-deficiency/restructuring disclosures (Item 1.03/3.01 markers, RSA/debt-exchange keywords), extracting the event date and an original-text snippet. Item 3.01 notices are listing-deficiency signals, NOT actual delistings. Verified candidates come with citations (accession + sha256) but are PROPOSALS — adding one to the credit-event label file requires human review; nothing is written automatically.",
       parameters: {
         query: { type: "string", required: true, description: "Company name or ticker, e.g. CORZ" },
         from: { type: "string", required: false, description: "Window start YYYY-MM-DD" },
@@ -462,6 +463,26 @@ export function createRiskToolRegistry({ connectors, secEdgar = null, filings = 
           verifiedCount,
           candidates,
           note: "verified candidates are PROPOSALS with citations (accession + sha256) — human review is required before any is added to agent/research/credit-events.json; nothing is written automatically"
+        };
+      }
+    },
+    {
+      name: "query_governance_events",
+      description: "Read the verified governance/key-person event overlay for a US-listed company: 8-K Item 5.02 management changes (CEO/CFO/board departures, appointments, reinstatements), with event dates, persons, roles and source citations. This is NOT a credit-event label, NOT a calibration input and NOT a stock prediction; it never changes TAI/CCI. An empty result means no verified event in the overlay, not that no event occurred.",
+      parameters: {
+        query: { type: "string", required: true, description: "Company name or ticker, e.g. NVIDIA or NVDA" }
+      },
+      execute(args) {
+        assertArgs(args, ["query"]);
+        if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 120) throw new TypeError("query must be a company name or ticker (1-120 chars)");
+        if (!governanceEvents) return { ok: false, code: "GOVERNANCE_EVENTS_UNAVAILABLE", message: "governance event overlay is not configured on this server" };
+        const events = governanceEventsFor(governanceEvents, args.query.trim());
+        return {
+          ok: true,
+          query: args.query.trim(),
+          count: events.length,
+          events,
+          note: "verified 8-K Item 5.02 overlay; not a credit-event label, not a calibration input, not a stock prediction — empty means no verified event in the overlay"
         };
       }
     },

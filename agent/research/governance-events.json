@@ -1,0 +1,29 @@
+{
+  "version": "flowcredit.governance-events/v0.1",
+  "events": [
+    {
+      "ticker": "NVDA",
+      "companyName": "NVIDIA Corporation",
+      "aliases": ["NVIDIA", "英伟达", "Nvidia"],
+      "cik": 1045810,
+      "eventType": "ceo-departure",
+      "eventDate": "2026-11-11",
+      "person": "Jen-Hsun Huang",
+      "role": "President, CEO and director",
+      "source": "SEC 8-K Item 5.02, accession 0001045810-26-000082, filed 2026-11-12（原文核实：\"On November 11, 2026, the Board of Directors ... accepted the resignation of Jen-Hsun Huang, as NVIDIA's President, Chief Executive Officer and member of the Board, effective immediately.\"；CFO Colette M. Kress 任临时 CEO；Harvey C. Jones 任董事长）",
+      "note": "治理/关键人事件 overlay，不是信用事件标签；不参与 TAI/CCI、校准或回放。"
+    },
+    {
+      "ticker": "NVDA",
+      "companyName": "NVIDIA Corporation",
+      "aliases": ["NVIDIA", "英伟达", "Nvidia"],
+      "cik": 1045810,
+      "eventType": "ceo-reinstatement",
+      "eventDate": "2026-11-22",
+      "person": "Jen-Hsun Huang",
+      "role": "President, CEO and director",
+      "source": "SEC 8-K Item 5.02, accession 0001045810-26-000090, filed 2026-11-23（原文核实：\"On November 22, 2026, the Board of Directors of NVIDIA Corporation reinstated Jen-Hsun Huang as NVIDIA's President, Chief Executive Officer and member of the Board of Directors, effective immediately.\"；Colette M. Kress 继续担任 EVP 与 CFO）",
+      "note": "治理/关键人事件 overlay，不是信用事件标签；不参与 TAI/CCI、校准或回放。"
+    }
+  ]
+}
