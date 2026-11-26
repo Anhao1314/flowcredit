@@ -684,6 +684,7 @@ const html = `<!doctype html>
     var v = a.verdict || {};
     var card = document.createElement("div");
     card.className = "artifact verdict-card";
+    card.setAttribute("data-tool", a.tool || "assess_prompt");
 
     var head = document.createElement("div");
     head.className = "verdict-head";
@@ -823,6 +824,7 @@ const html = `<!doctype html>
       }
       var card = document.createElement("div");
       card.className = "artifact";
+      card.setAttribute("data-tool", a.tool || "tool");
       var head = document.createElement("div");
       head.className = "artifact-head";
       var dot = document.createElement("span");
